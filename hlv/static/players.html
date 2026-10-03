@@ -1,0 +1,308 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Player Profiles</title>
+<style>
+:root {
+  --bg: #0f1113; --panel: #171a1d; --panel-2: #1e2226; --line: #2a2f35;
+  --text: #e6e8ea; --dim: #8b939b; --faint: #5a626a;
+  --ok: #3ecf6e; --bad: #ff5c5c; --warn: #f5b942; --accent: #4aa3ff;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, "Segoe UI", sans-serif; }
+button, input, select { font: inherit; color: inherit; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+.app { display: grid; grid-template-columns: 260px 1fr; min-height: 100vh; }
+
+aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+.brand { padding: 14px 16px; border-bottom: 1px solid var(--line); display: grid; gap: 6px; }
+.brand h1 { margin: 0; font-size: 15px; font-weight: 600; }
+.list { padding: 6px 0; flex: 1; overflow-y: auto; }
+.item { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 16px; border: 0; background: none; text-align: left;
+  cursor: pointer; border-left: 3px solid transparent; }
+.item:hover { background: var(--panel-2); }
+.item.active { background: var(--panel-2); border-left-color: var(--accent); }
+.swatch { width: 14px; height: 14px; border-radius: 3px; flex: none; border: 1px solid rgba(255,255,255,.2); }
+.item .num { margin-left: auto; font: 12px var(--mono); color: var(--dim); }
+.add { margin: 8px 16px 16px; }
+
+main { padding: 18px 24px 48px; display: grid; gap: 16px; align-content: start; max-width: 1200px; }
+.topbar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.topbar h2 { margin: 0; font-size: 18px; }
+.spacer { flex: 1; }
+.status { font-size: 12px; color: var(--dim); }
+.status.ok { color: var(--ok); } .status.err { color: var(--bad); }
+.cols { display: grid; grid-template-columns: minmax(320px, 1fr) minmax(320px, 1fr); gap: 16px; align-items: start; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 14px 16px; display: grid; gap: 12px; }
+.card h3 { margin: 0; font-size: 12px; color: var(--dim); font-weight: 600; text-transform: uppercase; letter-spacing: .06em; }
+.grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 12px; }
+label.f { display: grid; gap: 4px; font-size: 12px; color: var(--dim); }
+label.f.wide { grid-column: 1 / -1; }
+input[type=text], select { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; color: var(--text); width: 100%; }
+input[type=text]:focus, select:focus { outline: none; border-color: var(--accent); }
+.color { display: flex; align-items: center; gap: 8px; }
+.color input[type=color] { width: 40px; height: 32px; padding: 0; border: 1px solid var(--line); border-radius: 6px; background: none; cursor: pointer; }
+.color input[type=text] { font-family: var(--mono); width: 110px; }
+.btn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 12px; cursor: pointer; }
+.btn:hover { border-color: var(--faint); }
+.btn.primary { background: #1d3b2a; border-color: #2f6b47; }
+.btn.danger { color: var(--bad); }
+.row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+.logo-box { width: 120px; height: 120px; border-radius: 8px; border: 1px dashed var(--line); display: grid; place-items: center;
+  background: repeating-conic-gradient(#22262a 0% 25%, #1a1d20 0% 50%) 50% / 16px 16px; overflow: hidden; color: var(--faint); font-size: 12px; }
+.logo-box img { max-width: 100%; max-height: 100%; }
+.file { font: 12px var(--mono); color: var(--dim); word-break: break-all; }
+audio { width: 100%; height: 36px; }
+.previews { display: grid; gap: 10px; }
+.previews img { width: 100%; border-radius: 6px; border: 1px solid var(--line); background: #000; display: block; }
+.previews .cap { font-size: 12px; color: var(--dim); margin-bottom: 4px; }
+.note { font-size: 12px; color: var(--dim); }
+.note b { color: var(--warn); font-weight: 600; }
+.empty { color: var(--dim); padding: 40px; text-align: center; }
+input[type=file] { display: none; }
+@media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
+@media (max-width: 700px) { .app { grid-template-columns: 1fr; } aside { border-right: 0; border-bottom: 1px solid var(--line); } .grid2 { grid-template-columns: 1fr; } }
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand">
+      <h1>Player profiles</h1>
+      <a href="/">← Back to review</a>
+    </div>
+    <div class="list" id="list"></div>
+    <button class="btn add" id="add">+ Add player</button>
+  </aside>
+
+  <main id="main">
+    <div class="empty">Loading…</div>
+  </main>
+</div>
+
+<input type="file" id="logoFile" accept=".png,.jpg,.jpeg,.webp">
+<input type="file" id="musicFile" accept=".mp3,.m4a,.wav,.aac,.flac,.ogg,audio/*">
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const slug = s => (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+let info = null, players = [], sel = 0, saveTimer = null, previewTimer = null, stamp = Date.now();
+
+async function load() {
+  info = await (await fetch('/api/players')).json();
+  players = info.players;
+  const i = players.findIndex(p => p.id === info.selected);
+  sel = i >= 0 ? i : 0;
+  render();
+}
+
+function renderList() {
+  $('list').innerHTML = players.map((p, i) => `
+    <button class="item ${i === sel ? 'active' : ''}" data-i="${i}">
+      <span class="swatch" style="background:${esc(p.color)}"></span>
+      <span>${esc(p.name || 'New player')}</span>
+      <span class="num">${p.number ? '#' + esc(p.number) : ''}</span>
+    </button>`).join('');
+}
+
+function field(key, label, ph = '', wide = false) {
+  const p = players[sel];
+  return `<label class="f ${wide ? 'wide' : ''}">${label}
+    <input type="text" data-k="${key}" value="${esc(p[key])}" placeholder="${esc(ph)}" autocomplete="off"></label>`;
+}
+function colorField(key, label) {
+  const p = players[sel];
+  return `<label class="f">${label}<span class="color">
+    <input type="color" data-k="${key}" value="${esc(p[key])}">
+    <input type="text" data-k="${key}" value="${esc(p[key])}" maxlength="7"></span></label>`;
+}
+const fileName = rel => (rel || '').split(/[\\/]/).pop();
+
+function render() {
+  renderList();
+  const p = players[sel];
+  if (!p) {
+    $('main').innerHTML = '<div class="empty">No players yet. Click <b>+ Add player</b>.</div>';
+    return;
+  }
+  const st = (info.status && info.status[p.id]) || {};
+  const songOpts = info.assets.audio.map(a => `<option value="${esc(a)}" ${a === p.music ? 'selected' : ''}>${esc(fileName(a))}</option>`).join('');
+  const logoOpts = info.assets.images.map(a => `<option value="${esc(a)}" ${a === p.logo ? 'selected' : ''}>${esc(fileName(a))}</option>`).join('');
+  $('main').innerHTML = `
+    <div class="topbar">
+      <h2>${esc(p.name || 'New player')}${p.number ? ' <span style="color:var(--dim)">#' + esc(p.number) + '</span>' : ''}</h2>
+      <span class="spacer"></span>
+      <span class="status" id="status">${p.id ? 'saved' : 'type a name to save'}</span>
+    </div>
+    <div class="cols">
+      <div style="display:grid;gap:16px">
+        <div class="card">
+          <h3>Player</h3>
+          <div class="grid2">
+            ${field('name', 'Name', 'Caleb Scott', true)}
+            ${field('number', 'Jersey number', '22')}
+            ${field('position', 'Position', 'LB / RB')}
+            ${field('class_year', 'Class of (year)', '2029')}
+            ${field('height_weight', 'Height / weight', '6\'0" 180')}
+            ${field('school', 'School', 'Example High School', true)}
+            ${field('contact', 'Contact line (end card)', 'email, phone or Hudl link', true)}
+          </div>
+        </div>
+        <div class="card">
+          <h3>Colours</h3>
+          <div class="grid2">
+            ${colorField('color', 'Team colour (cards, name banner)')}
+            ${colorField('accent', 'Accent (number, ring/arrow highlight)')}
+          </div>
+        </div>
+        <div class="card">
+          <h3>Logo</h3>
+          <div class="row">
+            <div class="logo-box">${st.logo ? `<img src="/media/player/${esc(p.id)}/logo?t=${stamp}" alt="logo">` : 'no logo'}</div>
+            <div style="display:grid;gap:8px;flex:1;min-width:180px">
+              <button class="btn" id="pickLogo">Choose image…</button>
+              ${info.assets.images.length ? `<select id="logoSel"><option value="">or pick one already in assets…</option>${logoOpts}</select>` : ''}
+              ${p.logo ? `<button class="btn danger" id="noLogo">Remove logo</button>` : ''}
+              <span class="file">${st.logo ? esc(fileName(p.logo)) : (p.logo ? '<span style="color:var(--warn)">file not found: ' + esc(p.logo) + '</span>' : 'PNG with a transparent background looks best')}</span>
+            </div>
+          </div>
+        </div>
+        <div class="card">
+          <h3>Song</h3>
+          ${st.music ? `<audio controls preload="none" src="/media/player/${esc(p.id)}/music?t=${stamp}"></audio>
+            <span class="file">${esc(fileName(p.music))}</span>`
+            : `<span class="file">${p.music ? '<span style="color:var(--warn)">file not found: ' + esc(p.music) + '</span>' : 'no song yet: the reel will use game audio only'}</span>`}
+          <div class="row">
+            <button class="btn" id="pickMusic">Choose song…</button>
+            ${info.assets.audio.length ? `<select id="musicSel" style="flex:1;min-width:160px"><option value="">or pick one already in assets…</option>${songOpts}</select>` : ''}
+          </div>
+          <div class="note">The song is copied into <span class="file">${esc(info.assets_dir)}</span>. Set where it starts and the game-audio level in the Build reel panel.</div>
+        </div>
+        <div class="row">
+          <button class="btn danger" id="del">Delete this player</button>
+        </div>
+      </div>
+      <div class="card previews">
+        <h3>Preview</h3>
+        <div><div class="cap">Title card</div><img id="pvTitle" alt=""></div>
+        <div><div class="cap">Name banner (freeze frame at the snap)</div><img id="pvBanner" alt=""></div>
+        <div><div class="cap">End card</div><img id="pvEnd" alt=""></div>
+        <div class="note"><b>Heads-up:</b> the name banner is baked into the plays that show it (by default just the first play), so name/number/position/class edits re-render only those. Changing the <b>accent colour</b> re-renders every play, since it colours the highlight ring. Logo, school, contact and song only affect the cards and music, which rebuild quickly.</div>
+      </div>
+    </div>`;
+  wire();
+  refreshPreviews(true);
+}
+
+// Always edit the *current* player object: saving swaps in fresh objects from the server,
+// so a reference captured at render time would silently go stale.
+const cur = () => players[sel];
+
+function wire() {
+  document.querySelectorAll('[data-k]').forEach(el => {
+    el.addEventListener('input', () => {
+      const p = cur();
+      let v = el.value;
+      if (el.type === 'color' || el.dataset.k === 'color' || el.dataset.k === 'accent') {
+        if (!/^#[0-9a-fA-F]{6}$/.test(v)) return;            // wait for a full hex value
+        document.querySelectorAll(`[data-k="${el.dataset.k}"]`).forEach(o => { if (o !== el) o.value = v; });
+      }
+      p[el.dataset.k] = v;
+      if (el.dataset.k === 'name' && !p.id && v.trim()) p.id = slug(v) || 'player';
+      if (el.dataset.k === 'name' || el.dataset.k === 'number' || el.dataset.k === 'color') renderList();
+      queueSave();
+    });
+  });
+  $('pickLogo').onclick = () => $('logoFile').click();
+  $('pickMusic').onclick = () => $('musicFile').click();
+  if ($('logoSel')) $('logoSel').onchange = e => { if (e.target.value) { cur().logo = e.target.value; saveNow(true); } };
+  if ($('musicSel')) $('musicSel').onchange = e => { if (e.target.value) { cur().music = e.target.value; saveNow(true); } };
+  if ($('noLogo')) $('noLogo').onclick = () => { cur().logo = ''; saveNow(true); };
+  $('del').onclick = () => {
+    if (!confirm(`Delete ${cur().name || 'this player'}? Their logo and song files stay in the assets folder.`)) return;
+    players.splice(sel, 1); sel = Math.max(0, sel - 1); saveNow(true);
+  };
+}
+
+function setStatus(msg, cls = '') { const s = $('status'); if (s) { s.textContent = msg; s.className = 'status ' + cls; } }
+
+function queueSave() {
+  setStatus('editing…');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => saveNow(false), 600);
+}
+async function saveNow(rerender) {
+  clearTimeout(saveTimer);
+  const named = players.filter(p => (p.name || '').trim());
+  if (players[sel] && !(players[sel].name || '').trim()) { setStatus('type a name to save'); }
+  try {
+    const res = await fetch('/api/players', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+                                              body: JSON.stringify({ players: named }) });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || res.status);
+    const curId = players[sel] && players[sel].id;
+    const unsaved = players.filter(p => !(p.name || '').trim());   // keep a blank "new player" open
+    // Keep the local objects (they may hold edits typed while this save was in flight);
+    // only take ids the server assigned.
+    const byId = Object.fromEntries(j.players.map(p => [p.id, p]));
+    named.forEach((p, i) => { if (j.players[i]) p.id = j.players[i].id; });
+    info = j; players = named.filter(p => byId[p.id]).concat(unsaved);
+    const i = players.findIndex(p => p.id && p.id === curId);
+    if (i >= 0) sel = i;
+    stamp = Date.now();
+    if (rerender) render(); else { renderList(); setStatus('saved ✓', 'ok'); refreshPreviews(); }
+  } catch (e) { setStatus('save failed: ' + e.message, 'err'); }
+}
+
+function refreshPreviews(now) {
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => {
+    const p = players[sel];
+    if (!p || !p.id || !$('pvTitle')) return;
+    const t = Date.now();
+    $('pvTitle').src = `/api/players/${p.id}/title.png?t=${t}`;
+    $('pvBanner').src = `/api/players/${p.id}/banner.png?t=${t}`;
+    $('pvEnd').src = `/api/players/${p.id}/end.png?t=${t}`;
+  }, now ? 0 : 250);
+}
+
+async function upload(kind, file) {
+  if (!file) return;
+  const p = players[sel];
+  if (!(p.name || '').trim()) { alert('Give the player a name first.'); return; }
+  setStatus(`uploading ${file.name}…`);
+  try {
+    const res = await fetch('/api/upload/' + kind, { method: 'POST',
+      headers: { 'X-Filename': encodeURIComponent(file.name) }, body: file });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || res.status);
+    cur()[kind] = j.path;
+    await saveNow(true);
+  } catch (e) { setStatus('upload failed: ' + e.message, 'err'); }
+}
+$('logoFile').onchange = e => { upload('logo', e.target.files[0]); e.target.value = ''; };
+$('musicFile').onchange = e => { upload('music', e.target.files[0]); e.target.value = ''; };
+
+$('list').addEventListener('click', e => {
+  const b = e.target.closest('.item'); if (!b) return;
+  sel = +b.dataset.i; render();
+});
+$('add').onclick = () => {
+  const team = players[0] || {};
+  players.push({ id: '', name: '', number: '', position: '', class_year: '', school: team.school || '',
+                 height_weight: '', contact: '', logo: team.logo || '', music: team.music || '',
+                 color: team.color || '#1f4fd1', accent: team.accent || '#ffd23f' });
+  sel = players.length - 1; render();
+  document.querySelector('[data-k="name"]').focus();
+};
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveNow(false); } });
+
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+.hlv_cache/
+debug/
+normalized/
+.pytest_cache/
+TestClips/
+assets/
+reel/
+previews/
+*.mp4
+*.mov
+*.mp3
