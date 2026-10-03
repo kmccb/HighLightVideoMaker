@@ -1,7 +1,9 @@
 """Player profiles: who the reel is about and how it's branded.
 
-players.json lives next to the clips; logo/music paths are relative to that folder
-(drop them in assets/). Several players are supported (Caleb and his friends).
+Functions take the folder that holds players.json. That's the shared app folder
+(library.home()); logo paths are relative to it (uploads go in its assets/). Older
+projects kept a players.json next to their clips - library.migrate() reads those.
+The song is per project now (highlights.json settings.music), not per player.
 """
 from __future__ import annotations
 

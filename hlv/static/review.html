@@ -45,6 +45,9 @@ aside { background: var(--panel); border-right: 1px solid var(--line); display: 
 /* ---------- main ---------- */
 main { display: flex; flex-direction: column; min-width: 0; min-height: 0; padding: 14px 18px; gap: 12px; overflow-y: auto; }
 main > * { flex: none; }  /* never squash the video; the column scrolls instead */
+.projlink { font-size: 12px; color: var(--dim); text-decoration: none; }
+.projlink:hover { color: var(--text); }
+.projlink.off { pointer-events: none; opacity: .5; }
 .titlebar { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; }
 .titlebar h2 { margin: 0; font-size: 17px; font-weight: 600; }
 .titlebar .meta { color: var(--dim); font-size: 12px; }
@@ -178,7 +181,8 @@ video { display: block; max-width: 100%; max-height: 58vh; }
 <div class="app">
   <aside>
     <div class="brand">
-      <h1>Play Review</h1>
+      <a href="/projects" id="toProjects" class="projlink">◂ Projects</a>
+      <h1 id="projName">Play Review</h1>
       <div class="progress"><div id="prog"></div></div>
       <div class="progress-label" id="progLabel"></div>
       <button class="btn reelbtn" id="openReel">Build reel ▸</button>
@@ -277,7 +281,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
       <div class="card">
         <label class="row"><span class="lbl">Player</span><select id="rPlayer"></select></label>
         <div id="rAssets" class="hint"></div>
-        <div class="hint">Name, number, school, colours, logo and song: <a href="/players" style="color:var(--accent)">edit player profiles ▸</a><span hidden><code id="rProfile"></code><code id="rAssetsDir"></code></span></div>
+        <div class="hint">Name, number, school, colours and logo: <a href="/players" style="color:var(--accent)">edit player profiles ▸</a><span hidden><code id="rProfile"></code><code id="rAssetsDir"></code></span></div>
       </div>
       <div class="card">
         <label class="row"><span class="lbl">Transition</span>
@@ -337,7 +341,13 @@ const STYLE_NAMES = { ring: 'ring', arrow: 'arrow', shadow: 'spot shadow', off: 
 const fmt = t => t == null ? '–' : t.toFixed(2);
 
 async function load() {
-  data = await (await fetch('/api/clips')).json();
+  const res = await fetch('/api/clips');
+  if (res.status === 409) { location = '/'; return; }   // no project open
+  data = await res.json();
+  fetch('/api/projects').then(r => r.json()).then(pi => {
+    const p = pi.projects.find(x => x.current);
+    if (p) { $('projName').textContent = p.player ? p.player.name : p.name; $('projName').title = p.folder; document.title = $('projName').textContent + ' · Play Review'; }
+  });
   const first = data.clips.findIndex(c => !c.review.labeled);
   renderList();
   select(first < 0 ? 0 : first);
@@ -845,7 +855,7 @@ async function loadReel() {
   $('rPlayer').innerHTML = reelInfo.players.map(p =>
     `<option value="${esc(p.id)}" ${reelInfo.player && p.id === reelInfo.player.id ? 'selected' : ''}>${esc(p.name || p.id)}${p.number ? ' #' + esc(p.number) : ''}</option>`).join('');
   const a = reelInfo.assets;
-  $('rAssets').innerHTML = !reelInfo.player ? '<span class="bad">No player profile yet. Fill in players.json.</span>' :
+  $('rAssets').innerHTML = !reelInfo.player ? '<span class="bad">No player profile yet. Add one on the Player profiles page.</span>' :
     `Logo: ${a.logo ? '<span class="ok">found</span>' : '<span class="bad">missing (plain title card)</span>'} · ` +
     `Music: ${a.music ? '<span class="ok">found</span>' : '<span class="bad">missing (game audio only)</span>'}`;
   document.querySelectorAll('#rTrans button').forEach(b => b.classList.toggle('on', b.dataset.v === s.transition));
@@ -955,6 +965,9 @@ async function previewSegment(id, name, btn) {
 }
 
 function showJob(j) {
+  const busy = !!j && j.state === 'running';
+  $('toProjects').classList.toggle('off', busy);
+  $('toProjects').title = busy ? "A reel is building: switch projects when it's finished" : '';
   if (!j || j.state === 'idle') { $('rProg').style.width = '0'; $('rStep').textContent = ''; $('rBuild').disabled = false; return; }
   $('rProg').style.width = (100 * (j.done || 0) / (j.total || 1)) + '%';
   $('rBuild').disabled = j.state === 'running';

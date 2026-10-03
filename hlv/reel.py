@@ -18,7 +18,7 @@ from xml.sax.saxutils import escape
 
 import numpy as np
 
-from . import graphics, profiles, project, segment
+from . import graphics, library, profiles, project, segment
 
 # Beat choice: per second away from the play's natural timing, and extra per second of
 # stretching. With beats ~0.5 s apart, a beat one step further must be ~0.5 stronger.
@@ -89,9 +89,10 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     transition = transition or settings.get("transition", "crossfade")
     if transition not in TRANSITIONS:
         raise ValueError(f"transition must be one of {list(TRANSITIONS)}")
-    pl = profiles.get(root, player_id or settings.get("player"))
+    lib = library.home()
+    pl = profiles.get(lib, player_id or settings.get("player"))
     if pl is None:
-        raise ValueError(f"no player profile - fill in {profiles.FILENAME} first")
+        raise ValueError("no player profile yet - add one on the Player profiles page")
     clips = [c for c in ordered_clips(proj) if included(c)]
     if not clips:
         raise ValueError("no plays to include (all skipped?)")
@@ -117,8 +118,8 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     if seg_dir.exists():
         shutil.rmtree(seg_dir)
     seg_dir.mkdir(parents=True)
-    title = segment.card(seg_dir / "00_title.mp4", graphics.title_card(root, pl), TITLE_S, fade_in=True)
-    endc = segment.card(seg_dir / f"{len(clips) + 1:02d}_end.mp4", graphics.end_card(root, pl), END_S, fade_in=False)
+    title = segment.card(seg_dir / "00_title.mp4", graphics.title_card(lib, pl), TITLE_S, fade_in=True)
+    endc = segment.card(seg_dir / f"{len(clips) + 1:02d}_end.mp4", graphics.end_card(lib, pl), END_S, fade_in=False)
     done += 1
     say("cards", done, total)
     plays = []
@@ -129,7 +130,7 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         plays.append(dst)
 
     # 3) timing: nominal, or fitted so each hit lands on a strong beat
-    music = profiles.asset(root, pl.get("music", ""))
+    music = project.music_path(root, settings)
     music_start = float(settings.get("music_start") or 0)
     _, d = TRANSITIONS[transition]
     grid = None

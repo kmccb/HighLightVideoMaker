@@ -115,14 +115,17 @@ def player_track(cache: Path, clip: dict, need_runs: bool = False) -> np.ndarray
     return track.smooth_track(res, FPS)
 
 
-def warm(cache: Path, clips: list[dict], busy=lambda: False, log=print) -> None:
+def warm(cache: Path, clips: list[dict], busy=lambda: False, log=print, stop=lambda: False) -> None:
     """Track every clip that has spotlight clicks ahead of time, so opening one is instant.
-    Waits while `busy()` (a reel build is using the CPU and memory)."""
+    Waits while `busy()` (a reel build is using the CPU and memory); ends when `stop()`
+    (another project was opened)."""
     for clip in clips:
         if not anchors_of(clip):
             continue
-        while busy():
+        while busy() and not stop():
             time.sleep(5)
+        if stop():
+            return
         t = time.time()
         try:
             player_track(cache, clip, need_runs=True)

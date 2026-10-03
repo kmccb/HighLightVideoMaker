@@ -9,11 +9,12 @@ import json
 import re
 import threading
 import webbrowser
+from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import profiles, project, proxy, reel, score, segment
+from . import library, profiles, project, proxy, reel, score, segment
 from .config import DetectConfig
 from .pipeline import CACHE_DIRNAME
 
@@ -22,17 +23,102 @@ EDITABLE = {"snap", "end", "labeled", "keep", "notes", "spotlight", "zoom", "hit
 ZOOM_LEVELS = (0, 1.25, 1.5, 1.8)
 
 
+class NoProject(Exception):
+    """A project page/API was used before a project was opened."""
+
+
 class ReviewApp:
-    def __init__(self, root: Path, cfg: DetectConfig):
-        self.root, self.cfg = root, cfg
+    """The running app. Starts on the project list; open_project() points it at one folder."""
+
+    def __init__(self, jobs: int = 4):
         self.lock = threading.Lock()
-        self.cache = root / CACHE_DIRNAME
-        if not (root / project.FILENAME).exists():
-            raise SystemExit(f"No {project.FILENAME} in {root} - run `detect` first.")
-        profiles.ensure_template(root)
+        self.root: Path | None = None
+        self.cache: Path | None = None
+        self.cfg: DetectConfig | None = None
+        self.jobs = jobs
         self.job = {"state": "idle"}
+        self._gen = 0          # bumps on every project switch; background work for older ones stops
+
+    def _need(self) -> None:
+        if self.root is None:
+            raise NoProject()
+
+    # ---------------- projects ----------------
+    def building(self) -> bool:
+        return self.job.get("state") == "running"
+
+    def open_project(self, folder: Path) -> dict:
+        from .cli import CONFIG_FILENAME
+        folder = Path(folder).resolve()
+        if self.building():
+            raise ValueError("a reel is building - switch projects when it's finished")
+        if not folder.is_dir():
+            raise ValueError(f"folder not found: {folder}")
+        if not (folder / project.FILENAME).exists():
+            raise ValueError(f"{folder.name} hasn't been set up as a project yet")
+        library.migrate(folder)
+        cfg = DetectConfig.load(folder / CONFIG_FILENAME)
+        with self.lock:
+            self.root, self.cache, self.cfg = folder, folder / CACHE_DIRNAME, cfg
+            self.job = {"state": "idle"}
+            self._gen += 1
+            gen = self._gen
+        library.touch(folder)
+        self._background(folder, gen)
+        return {"folder": str(folder)}
+
+    def _background(self, root: Path, gen: int) -> None:
+        """Preview copies for any new clips, then pre-track clicked clips."""
+        from . import camera
+        from .probe import find_clips
+        from .signals import clip_id
+        stop = lambda: self._gen != gen          # noqa: E731
+        busy = lambda: self.building()           # noqa: E731
+        cache = root / CACHE_DIRNAME
+
+        def run():
+            todo = [(p, proxy.proxy_path(cache, clip_id(root, p))) for p in find_clips(root)]
+            todo = [t for t in todo if not t[1].exists()]
+            if todo and not stop():
+                proxy.make_all(todo, self.jobs)
+            if not stop():
+                camera.warm(cache, project.load(root)["clips"], busy, stop=stop)
+        threading.Thread(target=run, daemon=True).start()
+
+    def projects_info(self) -> dict:
+        lib = library.home()
+        players = {p["id"]: p for p in profiles.load(lib)}
+        out = []
+        for x in library.projects():
+            f = Path(x["folder"])
+            ready = (f / project.FILENAME).exists()
+            pid, clips, confirmed, last = x.get("player"), 0, 0, None
+            if ready:
+                proj = project.load(f)
+                clips = len(proj["clips"])
+                confirmed = sum(1 for c in proj["clips"] if (c.get("review") or {}).get("labeled"))
+                pid = project.settings(proj).get("player") or pid
+                reels = sorted((f / reel.OUT_DIRNAME).glob("*.mp4"), key=lambda r: r.stat().st_mtime)
+                if reels:
+                    last = datetime.fromtimestamp(reels[-1].stat().st_mtime).isoformat(timespec="minutes")
+            pl = players.get(pid)
+            out.append({
+                "folder": str(f), "name": f.name, "exists": f.is_dir(), "ready": ready,
+                "clips": clips, "confirmed": confirmed, "last_reel": last,
+                "player": {k: pl[k] for k in ("id", "name", "number", "position", "color")} if pl else None,
+                "logo": bool(pl and profiles.asset(lib, pl["logo"])),
+                "current": self.root is not None and f == self.root,
+            })
+        return {"current": str(self.root) if self.root else None, "building": self.building(), "projects": out}
+
+    def remove_project(self, folder: Path) -> dict:
+        if self.root is not None and Path(folder).resolve() == self.root:
+            raise ValueError("that project is open - switch to another one first")
+        library.remove_project(Path(folder))
+        return self.projects_info()
 
     def clips(self) -> dict:
+        self._need()
         with self.lock:
             proj = project.load(self.root)
         out = []
@@ -50,11 +136,13 @@ class ReviewApp:
 
     # ---------------- reel ----------------
     def reel_info(self) -> dict:
+        self._need()
+        lib = library.home()
         with self.lock:
             proj = project.load(self.root)
         s = project.settings(proj)
-        players = profiles.load(self.root)
-        pl = profiles.get(self.root, s.get("player"))
+        players = profiles.load(lib)
+        pl = profiles.get(lib, s.get("player"))
         rows = []
         for c in reel.ordered_clips(proj):
             r = {**project.empty_review(), **(c.get("review") or {})}
@@ -68,46 +156,53 @@ class ReviewApp:
             })
         return {
             "settings": s, "players": players, "player": pl,
-            "assets": profiles.status(self.root, pl) if pl else None,
-            "profile_path": str(profiles.path(self.root)), "assets_dir": str(self.root / profiles.ASSETS),
+            "assets": {**profiles.status(lib, pl), "music": str(project.music_path(self.root, s) or ""),
+                       "music_missing": bool(s.get("music")) and project.music_path(self.root, s) is None}
+            if pl else None,
+            "profile_path": str(profiles.path(lib)), "assets_dir": str(lib / profiles.ASSETS),
             "transitions": list(reel.TRANSITIONS), "card_s": reel.TITLE_S + reel.END_S,
             "clips": rows, "job": self.job,
         }
 
     # ---------------- player profiles ----------------
     def players_info(self) -> dict:
-        players = profiles.load(self.root)
-        with self.lock:
-            s = project.settings(project.load(self.root))
+        lib = library.home()
+        players = profiles.load(lib)
+        s = {}
+        if self.root is not None:
+            with self.lock:
+                s = project.settings(project.load(self.root))
         return {"players": players, "selected": s.get("player") or (players[0]["id"] if players else None),
-                "status": {p["id"]: profiles.status(self.root, p) for p in players},
-                "assets": profiles.asset_files(self.root), "fields": profiles.FIELDS,
-                "assets_dir": str(self.root / profiles.ASSETS)}
+                "status": {p["id"]: profiles.status(lib, p) for p in players},
+                "assets": profiles.asset_files(lib), "fields": profiles.FIELDS,
+                "assets_dir": str(lib / profiles.ASSETS), "project_open": self.root is not None}
 
     def save_players(self, players: list) -> dict:
         if not isinstance(players, list):
             raise ValueError("players must be a list")
         with self.lock:
-            clean = profiles.save(self.root, [p for p in players if isinstance(p, dict)])
-            proj = project.load(self.root)
-            s = project.settings(proj)
-            if s.get("player") not in {p["id"] for p in clean}:
-                s["player"] = clean[0]["id"] if clean else None
-                proj["settings"] = s
-                project.save(self.root, proj)
+            clean = profiles.save(library.home(), [p for p in players if isinstance(p, dict)])
+            if self.root is not None:
+                proj = project.load(self.root)
+                s = project.settings(proj)
+                if s.get("player") not in {p["id"] for p in clean}:
+                    s["player"] = clean[0]["id"] if clean else None
+                    proj["settings"] = s
+                    project.save(self.root, proj)
         return self.players_info()
 
     def card_png(self, player_id: str, which: str) -> bytes:
         import cv2
         import numpy as np
         from . import graphics
-        pl = profiles.get(self.root, player_id)
+        lib = library.home()
+        pl = profiles.get(lib, player_id)
         if pl is None:
             raise KeyError(player_id)
         if which == "title":
-            img = graphics.title_card(self.root, pl)
+            img = graphics.title_card(lib, pl)
         elif which == "end":
-            img = graphics.end_card(self.root, pl)
+            img = graphics.end_card(lib, pl)
         else:   # banner over a dim field-ish background, cropped to the lower third
             img = np.full((graphics.H, graphics.W, 3), (40, 70, 45), np.uint8)
             graphics.composite(img, graphics.name_banner(pl), 1.0)
@@ -116,10 +211,37 @@ class ReviewApp:
         return cv2.imencode(".png", img)[1].tobytes()
 
     def asset_path(self, player_id: str, kind: str) -> Path | None:
-        pl = profiles.get(self.root, player_id)
-        return profiles.asset(self.root, pl[kind]) if pl and kind in ("logo", "music") else None
+        if kind == "music":    # the song belongs to the open project now
+            if self.root is None:
+                return None
+            with self.lock:
+                return project.music_path(self.root, project.settings(project.load(self.root)))
+        pl = profiles.get(library.home(), player_id)
+        return profiles.asset(library.home(), pl["logo"]) if pl else None
+
+    def store_music(self, filename: str, data: bytes) -> str:
+        """Save a song into <project>/music/ and make it the project's music."""
+        self._need()
+        ext = Path(filename).suffix.lower()
+        if ext not in profiles.AUDIO_EXTS:
+            raise ValueError(f"music must be one of: {', '.join(sorted(profiles.AUDIO_EXTS))}")
+        d = self.root / "music"
+        d.mkdir(exist_ok=True)
+        stem = profiles.slug(Path(filename).stem)[:60]
+        dst, n = d / f"{stem}{ext}", 2
+        while dst.exists() and dst.read_bytes() != data:
+            dst, n = d / f"{stem}-{n}{ext}", n + 1
+        if not dst.exists():
+            dst.write_bytes(data)
+        rel = f"music/{dst.name}"
+        with self.lock:
+            proj = project.load(self.root)
+            proj["settings"] = {**project.settings(proj), "music": rel}
+            project.save(self.root, proj)
+        return rel
 
     def set_order(self, order: list) -> dict:
+        self._need()
         with self.lock:
             proj = project.load(self.root)
             ids = {c["id"] for c in proj["clips"]}
@@ -130,20 +252,23 @@ class ReviewApp:
         return {"order": s["order"]}
 
     def render_segment(self, clip_id: str) -> str:
+        self._need()
         with self.lock:
             proj = project.load(self.root)
         clip = next((c for c in proj["clips"] if c["id"] == clip_id), None)
         if clip is None:
             raise KeyError(clip_id)
         s = project.settings(proj)
-        pl = profiles.get(self.root, s.get("player"))
+        pl = profiles.get(library.home(), s.get("player"))
         banner = clip_id in reel.banner_ids([c for c in reel.ordered_clips(proj) if reel.included(c)], s)
         return segment.render(self.root, clip, pl, {**s, "_banner": banner}).name
 
     def start_build(self) -> dict:
+        self._need()
         if self.job.get("state") == "running":
             return self.job
         self.job = {"state": "running", "step": "starting", "done": 0, "total": 1, "result": None, "error": None}
+        root = self.root
 
         def progress(step, done, total):
             self.job.update(step=step, done=done, total=total)
@@ -151,8 +276,8 @@ class ReviewApp:
         def run():
             try:
                 with self.lock:
-                    s = project.settings(project.load(self.root))
-                res = reel.build(self.root, s.get("player"), s.get("transition"), progress=progress)
+                    s = project.settings(project.load(root))
+                res = reel.build(root, s.get("player"), s.get("transition"), progress=progress)
                 self.job.update(state="done", result=res, step="done")
             except Exception as e:  # noqa: BLE001 - report any failure to the page
                 self.job.update(state="error", error=str(e))
@@ -160,6 +285,7 @@ class ReviewApp:
         return self.job
 
     def update_settings(self, patch: dict) -> dict:
+        self._need()
         with self.lock:
             proj = project.load(self.root)
             s = project.settings(proj)
@@ -178,7 +304,7 @@ class ReviewApp:
                 s["music_start"] = max(0.0, float(patch["music_start"] or 0))
             if "game_audio" in patch:
                 s["game_audio"] = float(min(max(float(patch["game_audio"]), 0.0), 1.0))
-            if "player" in patch and any(p["id"] == patch["player"] for p in profiles.load(self.root)):
+            if "player" in patch and any(p["id"] == patch["player"] for p in profiles.load(library.home())):
                 s["player"] = patch["player"]
             if patch.get("highlight") in project.HIGHLIGHT_STYLES:
                 s["highlight"] = patch["highlight"]
@@ -189,6 +315,7 @@ class ReviewApp:
             return s
 
     def hit_suggestion(self, clip_id: str) -> dict:
+        self._need()
         from . import hits
         with self.lock:
             proj = project.load(self.root)
@@ -197,16 +324,9 @@ class ReviewApp:
             raise KeyError(clip_id)
         return hits.suggest(self.root, clip)
 
-    def start_warmup(self) -> None:
-        """Track all clicked clips in the background (paused while a reel builds)."""
-        from . import camera
-        with self.lock:
-            clips = project.load(self.root)["clips"]
-        busy = lambda: self.job.get("state") == "running"   # noqa: E731
-        threading.Thread(target=camera.warm, args=(self.cache, clips, busy), daemon=True).start()
-
     def plan(self, clip_id: str) -> dict:
         from . import camera
+        self._need()
         with self.lock:
             proj = project.load(self.root)
         clip = next((c for c in proj["clips"] if c["id"] == clip_id), None)
@@ -215,6 +335,7 @@ class ReviewApp:
         return camera.plan(self.cache, clip)
 
     def update(self, clip_id: str, patch: dict) -> dict:
+        self._need()
         patch = {k: v for k, v in patch.items() if k in EDITABLE}
         with self.lock:
             proj = project.load(self.root)
@@ -279,9 +400,35 @@ def make_handler(app: ReviewApp):
             self.wfile.write(body)
 
         def do_GET(self):
+            try:
+                return self._get()
+            except NoProject:
+                return self._json({"error": "no project open"}, HTTPStatus.CONFLICT)
+
+        def do_POST(self):
+            try:
+                return self._post()
+            except NoProject:
+                return self._json({"error": "no project open"}, HTTPStatus.CONFLICT)
+
+        def _redirect(self, to: str):
+            self.send_response(HTTPStatus.FOUND)
+            self.send_header("Location", to)
+            self.end_headers()
+
+        def _get(self):
             path = self.path.split("?", 1)[0]
             if path in ("/", "/index.html"):
+                page = "review.html" if app.root is not None else "start.html"
+                return self._file(STATIC / page, "text/html; charset=utf-8")
+            if path == "/projects":
+                return self._file(STATIC / "start.html", "text/html; charset=utf-8")
+            if path == "/review":
+                if app.root is None:
+                    return self._redirect("/")
                 return self._file(STATIC / "review.html", "text/html; charset=utf-8")
+            if path == "/api/projects":
+                return self._json(app.projects_info())
             if path == "/api/clips":
                 return self._json(app.clips())
             if path in ("/players", "/players.html"):
@@ -321,17 +468,30 @@ def make_handler(app: ReviewApp):
                 return self._json(app.job)
             m = re.fullmatch(r"/media/segment/([a-z0-9-]+\.mp4)", path)
             if m:
+                app._need()
                 return self._file(app.cache / "segments" / m.group(1), "video/mp4")
             m = re.fullmatch(r"/media/reel/([A-Za-z0-9_.-]+\.mp4)", path)
             if m:
+                app._need()
                 return self._file(app.root / reel.OUT_DIRNAME / m.group(1), "video/mp4")
             m = re.fullmatch(r"/proxy/([a-z0-9-]+)\.mp4", path)
             if m:
+                app._need()
                 return self._file(proxy.proxy_path(app.cache, m.group(1)), "video/mp4")
             self.send_error(HTTPStatus.NOT_FOUND)
 
-        def do_POST(self):
+        def _post(self):
             n = int(self.headers.get("Content-Length", 0) or 0)
+            if self.path in ("/api/projects/open", "/api/projects/remove"):
+                folder = (json.loads(self.rfile.read(n) or b"{}") or {}).get("folder")
+                if not isinstance(folder, str) or not folder:
+                    return self._json({"error": "folder missing"}, HTTPStatus.BAD_REQUEST)
+                try:
+                    if self.path.endswith("open"):
+                        return self._json(app.open_project(Path(folder)))
+                    return self._json(app.remove_project(Path(folder)))
+                except ValueError as e:
+                    return self._json({"error": str(e)}, HTTPStatus.CONFLICT)
             if self.path == "/api/reel/order":
                 return self._json(app.set_order(json.loads(self.rfile.read(n) or b"{}").get("order", [])))
             if self.path == "/api/reel/build":
@@ -358,10 +518,15 @@ def make_handler(app: ReviewApp):
                             Image.open(BytesIO(data)).verify()     # reject non-images early
                         except Exception:  # noqa: BLE001
                             raise ValueError("that file isn't an image I can read - use a PNG, JPG or WEBP")
-                    rel = profiles.store_upload(app.root, name, data, m.group(1))
+                    if m.group(1) == "music":
+                        rel = app.store_music(name, data)
+                    else:
+                        rel = profiles.store_upload(library.home(), name, data, "logo")
+                except NoProject:
+                    raise
                 except Exception as e:  # noqa: BLE001 - tell the page what was wrong
                     return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
-                return self._json({"path": rel, "assets": profiles.asset_files(app.root)})
+                return self._json({"path": rel, "assets": profiles.asset_files(library.home())})
             m = re.fullmatch(r"/api/clips/([a-z0-9-]+)/segment", self.path)
             if m:
                 try:
@@ -434,14 +599,15 @@ def make_handler(app: ReviewApp):
     return Handler
 
 
-def serve(root: Path, cfg: DetectConfig, port: int = 8765, open_browser: bool = True,
-          jobs: int = 4) -> None:
-    from .probe import find_clips
-    from .signals import clip_id
-    app = ReviewApp(root, cfg)
-    proxy.make_all([(p, proxy.proxy_path(app.cache, clip_id(root, p))) for p in find_clips(root)], jobs)
+def serve(root: Path | None, port: int = 8765, open_browser: bool = True, jobs: int = 4) -> None:
+    """root: open this project straight away; None starts on the project list."""
+    app = ReviewApp(jobs)
+    if root is not None:
+        try:
+            app.open_project(root)
+        except ValueError as e:
+            raise SystemExit(f"{e} - run `detect` on it first.")
     httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(app))
-    app.start_warmup()
     url = f"http://127.0.0.1:{port}/"
     print(f"review page: {url}   (Ctrl+C to stop)")
     if open_browser:

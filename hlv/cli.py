@@ -185,11 +185,11 @@ def cmd_zoom_preview(a) -> None:
 
 def cmd_reel(a) -> None:
     """Build the finished reel (same as the Build button in the review page)."""
-    from . import profiles, reel
+    from . import library, profiles, reel
     root = Path(a.dir).resolve()
-    if not profiles.load(root):
-        p = profiles.ensure_template(root)
-        sys.exit(f"Fill in your player profile first: {p}  (logo/music go in {root / profiles.ASSETS})")
+    library.migrate(root)
+    if not profiles.load(library.home()):
+        sys.exit("Add a player profile first (Player profiles page in the review app).")
     res = reel.build(root, a.player, a.transition, jobs=a.jobs)
     print(f"\nreel: {res['output']}  ({res['plays']} plays, {res['duration']}s, built in {res['seconds']}s)")
     print(f"Resolve timeline: {res['fcpxml']}")
@@ -197,8 +197,7 @@ def cmd_reel(a) -> None:
 
 def cmd_review(a) -> None:
     from .review_server import serve
-    root = Path(a.dir).resolve()
-    serve(root, _cfg(root, a.config), port=a.port, open_browser=not a.no_browser)
+    serve(Path(a.dir).resolve() if a.dir else None, port=a.port, open_browser=not a.no_browser)
 
 
 def main(argv=None) -> None:
@@ -223,9 +222,8 @@ def main(argv=None) -> None:
     s.add_argument("--sweep", action="store_true", help="grid-search parameters, save best")
     s.set_defaults(fn=cmd_score)
 
-    r = sub.add_parser("review", help="open the review page to confirm/correct snap & end")
-    r.add_argument("dir")
-    r.add_argument("--config")
+    r = sub.add_parser("review", help="open the app (project list, or straight into a project folder)")
+    r.add_argument("dir", nargs="?")
     r.add_argument("--port", type=int, default=8765)
     r.add_argument("--no-browser", action="store_true")
     r.set_defaults(fn=cmd_review)

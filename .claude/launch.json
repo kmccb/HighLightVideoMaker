@@ -4,7 +4,7 @@
     {
       "name": "review",
       "runtimeExecutable": ".venv/Scripts/python.exe",
-      "runtimeArgs": ["-m", "hlv", "review", "TestClips/Caleb_Footbal", "--no-browser"],
+      "runtimeArgs": ["-m", "hlv", "review", "--no-browser"],
       "port": 8765
     }
   ]

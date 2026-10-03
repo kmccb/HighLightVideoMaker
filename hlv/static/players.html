@@ -73,7 +73,7 @@ input[type=file] { display: none; }
   <aside>
     <div class="brand">
       <h1>Player profiles</h1>
-      <a href="/">← Back to review</a>
+      <a href="/" id="back">← Back</a>
     </div>
     <div class="list" id="list"></div>
     <button class="btn add" id="add">+ Add player</button>
@@ -85,7 +85,6 @@ input[type=file] { display: none; }
 </div>
 
 <input type="file" id="logoFile" accept=".png,.jpg,.jpeg,.webp">
-<input type="file" id="musicFile" accept=".mp3,.m4a,.wav,.aac,.flac,.ogg,audio/*">
 
 <script>
 const $ = id => document.getElementById(id);
@@ -131,7 +130,6 @@ function render() {
     return;
   }
   const st = (info.status && info.status[p.id]) || {};
-  const songOpts = info.assets.audio.map(a => `<option value="${esc(a)}" ${a === p.music ? 'selected' : ''}>${esc(fileName(a))}</option>`).join('');
   const logoOpts = info.assets.images.map(a => `<option value="${esc(a)}" ${a === p.logo ? 'selected' : ''}>${esc(fileName(a))}</option>`).join('');
   $('main').innerHTML = `
     <div class="topbar">
@@ -172,17 +170,6 @@ function render() {
             </div>
           </div>
         </div>
-        <div class="card">
-          <h3>Song</h3>
-          ${st.music ? `<audio controls preload="none" src="/media/player/${esc(p.id)}/music?t=${stamp}"></audio>
-            <span class="file">${esc(fileName(p.music))}</span>`
-            : `<span class="file">${p.music ? '<span style="color:var(--warn)">file not found: ' + esc(p.music) + '</span>' : 'no song yet: the reel will use game audio only'}</span>`}
-          <div class="row">
-            <button class="btn" id="pickMusic">Choose song…</button>
-            ${info.assets.audio.length ? `<select id="musicSel" style="flex:1;min-width:160px"><option value="">or pick one already in assets…</option>${songOpts}</select>` : ''}
-          </div>
-          <div class="note">The song is copied into <span class="file">${esc(info.assets_dir)}</span>. Set where it starts and the game-audio level in the Build reel panel.</div>
-        </div>
         <div class="row">
           <button class="btn danger" id="del">Delete this player</button>
         </div>
@@ -192,7 +179,7 @@ function render() {
         <div><div class="cap">Title card</div><img id="pvTitle" alt=""></div>
         <div><div class="cap">Name banner (freeze frame at the snap)</div><img id="pvBanner" alt=""></div>
         <div><div class="cap">End card</div><img id="pvEnd" alt=""></div>
-        <div class="note"><b>Heads-up:</b> the name banner is baked into the plays that show it (by default just the first play), so name/number/position/class edits re-render only those. Changing the <b>accent colour</b> re-renders every play, since it colours the highlight ring. Logo, school, contact and song only affect the cards and music, which rebuild quickly.</div>
+        <div class="note"><b>Heads-up:</b> the name banner is baked into the plays that show it (by default just the first play), so name/number/position/class edits re-render only those. Changing the <b>accent colour</b> re-renders every play, since it colours the highlight ring. Logo, school and contact only affect the cards, which rebuild quickly. The song is set per project in the Build reel panel.</div>
       </div>
     </div>`;
   wire();
@@ -219,12 +206,10 @@ function wire() {
     });
   });
   $('pickLogo').onclick = () => $('logoFile').click();
-  $('pickMusic').onclick = () => $('musicFile').click();
   if ($('logoSel')) $('logoSel').onchange = e => { if (e.target.value) { cur().logo = e.target.value; saveNow(true); } };
-  if ($('musicSel')) $('musicSel').onchange = e => { if (e.target.value) { cur().music = e.target.value; saveNow(true); } };
   if ($('noLogo')) $('noLogo').onclick = () => { cur().logo = ''; saveNow(true); };
   $('del').onclick = () => {
-    if (!confirm(`Delete ${cur().name || 'this player'}? Their logo and song files stay in the assets folder.`)) return;
+    if (!confirm(`Delete ${cur().name || 'this player'}? Their logo file stays in the assets folder.`)) return;
     players.splice(sel, 1); sel = Math.max(0, sel - 1); saveNow(true);
   };
 }
@@ -286,7 +271,6 @@ async function upload(kind, file) {
   } catch (e) { setStatus('upload failed: ' + e.message, 'err'); }
 }
 $('logoFile').onchange = e => { upload('logo', e.target.files[0]); e.target.value = ''; };
-$('musicFile').onchange = e => { upload('music', e.target.files[0]); e.target.value = ''; };
 
 $('list').addEventListener('click', e => {
   const b = e.target.closest('.item'); if (!b) return;
@@ -295,7 +279,7 @@ $('list').addEventListener('click', e => {
 $('add').onclick = () => {
   const team = players[0] || {};
   players.push({ id: '', name: '', number: '', position: '', class_year: '', school: team.school || '',
-                 height_weight: '', contact: '', logo: team.logo || '', music: team.music || '',
+                 height_weight: '', contact: '', logo: team.logo || '',
                  color: team.color || '#1f4fd1', accent: team.accent || '#ffd23f' });
   sel = players.length - 1; render();
   document.querySelector('[data-k="name"]').focus();
