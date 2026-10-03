@@ -259,10 +259,37 @@ def fit_anchor(frame: np.ndarray, a: dict) -> dict:
     return refine_anchor(frame, a) if is_click(a) else tighten_box(frame, a)
 
 
+def _cached_run(run_cache: dict | None, frames: np.ndarray, start: int, stop: int,
+                box_px: tuple, step: int, cam: np.ndarray | None) -> dict[int, tuple]:
+    """_run, reusing an earlier run from the same click when it already covers `stop`.
+
+    A run is deterministic, so a run toward a nearer stop is just a prefix of a longer one.
+    Adding a click between two others then only tracks the frames between its neighbours
+    instead of re-tracking the whole clip (CSRT is ~25 ms a frame).
+    """
+    if run_cache is None or cam is not None:
+        return _run(frames, start, stop, box_px, step, cam)
+    key = (start, step, tuple(round(float(v), 2) for v in box_px))
+    hit = run_cache.get(key)
+    if hit is not None:
+        done_stop, run = hit
+        last = max(run) if step > 0 else min(run)
+        broke = last != done_stop - step           # tracker gave up before its stop
+        covers = (stop <= done_stop) if step > 0 else (stop >= done_stop)
+        if covers or broke:
+            return {i: v for i, v in run.items() if (i < stop if step > 0 else i > stop)}
+    run = _run(frames, start, stop, box_px, step, cam)
+    run_cache[key] = (stop, run)
+    return run
+
+
 def track_player(frames: np.ndarray, fps: float, anchors: list[dict],
-                 cam: np.ndarray | None = None) -> np.ndarray:
+                 cam: np.ndarray | None = None, run_cache: dict | None = None,
+                 span: tuple[int, int] | None = None) -> np.ndarray:
     """frames: (N, h, w, 3) BGR. anchors: [{t, x, y, w, h}] normalised box (x, y = top-left).
-    Returns (N, 5): cx, cy, w, h, conf - normalised, NaN where unknown."""
+    Returns (N, 5): cx, cy, w, h, conf - normalised, NaN where unknown.
+    run_cache: optional dict kept per clip between calls, so a new click is cheap.
+    span: (first, last) frame worth tracking; runs beyond the outer clicks stop there."""
     n, H, W = frames.shape[:3]
     res = np.full((n, 5), np.nan, np.float32)
     if not anchors or n == 0:
@@ -273,10 +300,11 @@ def track_player(frames: np.ndarray, fps: float, anchors: list[dict],
     runs = []  # (dict, anchor_idx)
     for j, (a, i0) in enumerate(zip(ks, idx)):
         box = (a["x"] * W, a["y"] * H, max(a["w"] * W, 6), max(a["h"] * H, 10))
-        fwd_stop = idx[j + 1] + 1 if j + 1 < len(idx) else n
-        bwd_stop = idx[j - 1] - 1 if j > 0 else -1
-        runs.append(_run(frames, i0, fwd_stop, box, +1, cam))
-        runs.append(_run(frames, i0, bwd_stop, box, -1, cam))
+        lo, hi = (-1, n) if span is None else (min(span[0], i0) - 1, max(span[1], i0) + 1)
+        fwd_stop = idx[j + 1] + 1 if j + 1 < len(idx) else min(n, hi)
+        bwd_stop = idx[j - 1] - 1 if j > 0 else max(-1, lo)
+        runs.append(_cached_run(run_cache, frames, i0, fwd_stop, box, +1, cam))
+        runs.append(_cached_run(run_cache, frames, i0, bwd_stop, box, -1, cam))
 
     # The tracker's own size estimate drifts (boxes balloon in pile-ups), which drags the
     # "feet" down. Keep size within +-25% of what was marked, interpolated between clicks.

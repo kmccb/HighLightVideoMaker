@@ -20,6 +20,7 @@ from .probe import probe
 FPS = 30.0
 TRACK_W = 960
 _frames_cache: OrderedDict = OrderedDict()
+_run_cache: dict[str, dict] = {}     # clip id -> tracker runs per click (see track._cached_run)
 _lock = threading.Lock()
 
 
@@ -62,13 +63,19 @@ def player_track(cache: Path, clip: dict) -> np.ndarray | None:
     anchors = anchors_of(clip)
     if not anchors:
         return None
-    key = hashlib.sha1(("v11" + json.dumps(anchors, sort_keys=True)).encode()).hexdigest()[:12]
+    from . import segment   # (segment imports this module)
+    win = segment._window(clip)   # only the footage a render can use is worth tracking
+    key = hashlib.sha1(("v12" + json.dumps([anchors, win], sort_keys=True)).encode()).hexdigest()[:12]
     f = cache / "track" / f"{clip['id']}-{key}.npy"
     if f.exists():
         res = np.load(f)
     else:
         fr = _proxy_frames(cache, clip["id"])
-        res = track.track_player(fr, FPS, anchors)
+        t0, t1 = segment.extents(clip, len(fr) / FPS)
+        with _lock:
+            runs = _run_cache.setdefault(clip["id"], {})
+        res = track.track_player(fr, FPS, anchors, run_cache=runs,
+                                 span=(int(t0 * FPS), int(np.ceil(t1 * FPS))))
         f.parent.mkdir(parents=True, exist_ok=True)
         np.save(f, res)   # raw track cached; smoothing is cheap and tweakable
     return track.smooth_track(res, FPS)

@@ -64,6 +64,13 @@ video { display: block; max-width: 100%; max-height: 58vh; }
 .pickhint { position: absolute; right: 10px; top: 8px; font: 600 12px system-ui; background: rgba(245,185,66,.92); color: #111;
   padding: 4px 9px; border-radius: 4px; pointer-events: none; }
 .pickhint[hidden] { display: none; }
+.trackbadge { position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%); font: 600 13px system-ui;
+  background: rgba(0,0,0,.75); color: #ffd23f; border: 1px solid #ffd23f; padding: 5px 12px; border-radius: 14px;
+  pointer-events: none; line-height: 1.2; }
+.trackbadge[hidden] { display: none; }
+.trackbadge::before { content: ''; display: inline-block; width: 10px; height: 10px; margin-right: 8px; vertical-align: -1px;
+  border: 2px solid #ffd23f; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 #loupe { position: fixed; width: 220px; height: 220px; border: 2px solid var(--spot); border-radius: 50%;
   pointer-events: none; z-index: 20; box-shadow: 0 4px 18px rgba(0,0,0,.6); background: #000; }
 #loupe[hidden] { display: none; }
@@ -196,6 +203,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
       </div>
       <div class="pickhint" id="pickhint" hidden>Click your player, or drag a tight box around him (the magnifier helps) · Esc to cancel</div>
       <canvas id="loupe" width="220" height="220" hidden></canvas>
+      <div class="trackbadge" id="trk" hidden>Tracking your player…</div>
       <div class="overlay"><span id="tc">0.00</span><span class="rate" id="rate"></span></div>
       <div class="loading" id="loading" hidden>Proxy not ready yet. Reload in a moment.</div>
     </div>
@@ -321,7 +329,7 @@ const FPS = 30, STEP = 1 / FPS;
 const $ = id => document.getElementById(id);
 const video = $('video');
 let data = null, idx = 0, cur = null, windowStop = null, saveTimer = null, userMoved = false;
-let plan = null, picking = false, zoomedView = false, drawBox = null, planSeq = 0, hitSuggest = null;
+let plan = null, tracking = false, picking = false, zoomedView = false, drawBox = null, planSeq = 0, hitSuggest = null;
 const ZOOMS = [0, 1.25, 1.5, 1.8];
 const STYLES = ['ring', 'arrow', 'shadow', 'off'];
 const STYLE_NAMES = { ring: 'ring', arrow: 'arrow', shadow: 'spot shadow', off: 'off' };
@@ -548,7 +556,8 @@ const ov = $('ov'), octx = ov.getContext('2d');
 
 async function refreshPlan() {
   const c = data.clips[idx], seq = ++planSeq;
-  if (!cur.zoom && !cur.spotlight.length) { plan = null; drawConfStrip(); return; }
+  if (!cur.zoom && !cur.spotlight.length) { plan = null; setTracking(false); drawConfStrip(); return; }
+  setTracking(cur.spotlight.length > 0);
   setStatus(cur.spotlight.length ? 'tracking player… (a few seconds)' : 'planning camera…');
   try {
     const res = await fetch('/api/clips/' + c.id + '/plan', { method: 'POST' });
@@ -560,8 +569,17 @@ async function refreshPlan() {
             : p.mode === 'play' ? 'zoom frames the play gently (spotlight a player for tighter framing)'
             : 'tracking ready · press Z to zoom', 'saved');
   } catch (e) { setStatus('camera plan failed: ' + e.message, 'err'); }
+  if (seq !== planSeq) return;
+  setTracking(false);
   drawConfStrip();
   try { redraw(); } catch (e) { console.error(e); }
+}
+
+// While a new track is computed the old ring is in the wrong place: hide it, and say so on the video.
+function setTracking(on) {
+  tracking = on;
+  $('trk').hidden = !on;
+  drawConfStrip();
 }
 
 const frameAt = (t, arr) => arr ? arr[Math.max(0, Math.min(arr.length - 1, Math.round(t * plan.fps)))] : null;
@@ -571,7 +589,7 @@ function drawConfStrip() {
   cv.width = w; cv.height = h;
   const g = cv.getContext('2d');
   g.clearRect(0, 0, w, h);
-  if (!plan || !plan.player) return;
+  if (!plan || !plan.player || tracking) return;
   const n = plan.player.length;
   for (let x = 0; x < w; x++) {
     const p = plan.player[Math.min(n - 1, Math.floor(x / w * n))];
@@ -600,7 +618,7 @@ function drawOverlay(t) {
     octx.strokeRect(rect[0] * vw, rect[1] * vh, rect[2] * vw, rect[3] * vh);
   }
   const p = plan && plan.player ? frameAt(t, plan.player) : null;
-  if (p && p[0] >= 0) drawHighlight(data.settings.highlight, p, vw, vh, k, t);
+  if (p && p[0] >= 0 && !tracking) drawHighlight(data.settings.highlight, p, vw, vh, k, t);
   for (const a of cur ? cur.spotlight : []) {   // the box you clicked, when at that moment
     if (Math.abs(a.t - t) < 0.12) {
       octx.strokeStyle = '#ffd23f'; octx.lineWidth = 2 * k; octx.setLineDash([6 * k, 4 * k]);
@@ -766,6 +784,7 @@ ov.addEventListener('pointerup', () => {
   sp.push({ t, x: +x0.toFixed(4), y: +y0.toFixed(4), w: +(x1 - x0).toFixed(4), h: +(y1 - y0).toFixed(4) });
   sp.sort((a, b) => a.t - b.t);
   setPicking(false);
+  setTracking(true);
   queueSave({ spotlight: sp }, true).then(refreshPlan);
 });
 
@@ -775,6 +794,7 @@ function removeNearestAnchor() {
   let best = 0;
   cur.spotlight.forEach((a, i) => { if (Math.abs(a.t - t) < Math.abs(cur.spotlight[best].t - t)) best = i; });
   if (Math.abs(cur.spotlight[best].t - t) > 1.0) { setStatus('no spotlight click within 1 s of the playhead', 'err'); return; }
+  setTracking(true);
   queueSave({ spotlight: cur.spotlight.filter((_, i) => i !== best) }, true).then(refreshPlan);
 }
 function cycleZoom() {

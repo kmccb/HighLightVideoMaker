@@ -302,6 +302,24 @@ def test_clicks_act_as_keyframes_when_tracker_strays():
     assert abs(mid[0] - 0.43) < 0.08 and abs(mid[1] - 0.475) < 0.05
 
 
+def test_adding_a_click_reuses_runs_and_matches_fresh_track():
+    from hlv import track
+    # A moving square on grass. Adding a click between two others must give exactly the
+    # same track as tracking from scratch (runs are reused as prefixes, not approximated).
+    n, H, W = 60, 120, 200
+    frames = np.full((n, H, W, 3), 60, np.uint8)
+    frames[..., 1] = 140
+    for i in range(n):
+        x = 20 + 2 * i
+        frames[i, 50:70, x:x + 10] = (230, 230, 230)
+    box = lambda t: {"t": t, "x": (20 + 60 * t) / W, "y": 48 / H, "w": 14 / W, "h": 24 / H}
+    cache = {}
+    track.track_player(frames, 30, [box(0.2), box(1.6)], run_cache=cache)
+    three = [box(0.2), box(0.9), box(1.6)]
+    assert np.array_equal(track.track_player(frames, 30, three, run_cache=cache),
+                          track.track_player(frames, 30, three), equal_nan=True)
+
+
 def test_no_hit_play_keeps_natural_timing():
     from hlv import reel, segment
     grid = {"beats": [0.25 + 0.5 * k for k in range(200)], "strength": [1.0] * 200}
