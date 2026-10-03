@@ -302,6 +302,22 @@ def test_clicks_act_as_keyframes_when_tracker_strays():
     assert abs(mid[0] - 0.43) < 0.08 and abs(mid[1] - 0.475) < 0.05
 
 
+def test_runs_that_meet_are_followed_off_the_straight_path():
+    from hlv import track
+    # On screen a player curves away from the line between two clicks (the camera pans).
+    # When the forward and backward runs agree, follow them instead of gliding the line.
+    n, H, W = 31, 200, 200
+    frames = np.full((n, H, W, 3), 60, np.uint8)
+    frames[..., 1] = 140
+    pos = [(40 + 20 * i / (n - 1), 150 - 110 * np.sin(np.pi * i / (n - 1))) for i in range(n)]
+    for i, (x, y) in enumerate(pos):
+        frames[i, int(y) - 10:int(y) + 10, int(x) - 5:int(x) + 5] = (230, 230, 230)
+    box = lambda i: {"t": i / 30, "x": (pos[i][0] - 7) / W, "y": (pos[i][1] - 12) / H, "w": 14 / W, "h": 24 / H}
+    res = track.track_player(frames, 30, [box(0), box(n - 1)])
+    mid = res[n // 2]
+    assert abs(mid[1] * H - pos[n // 2][1]) < 10       # up at the top of the arc, not on the line
+
+
 def test_adding_a_click_reuses_runs_and_matches_fresh_track():
     from hlv import track
     # A moving square on grass. Adding a click between two others must give exactly the

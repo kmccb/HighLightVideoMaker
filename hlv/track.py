@@ -71,6 +71,7 @@ def _similar(a, b) -> float:
     return float(np.clip(1.0 - cv2.compareHist(a, b, cv2.HISTCMP_BHATTACHARYYA), 0, 1))
 
 
+AGREE = 1.0             # runs within this many box widths of each other are on the same player
 KEY_TOL = 0.06          # between two clicks, tracker answers further than this from the path are dropped
 KEY_CONF = 0.6          # confidence when the ring just follows the path between clicks
 STUCK_S = 1.5           # window for the "tracking the scenery" check
@@ -334,14 +335,35 @@ def track_player(frames: np.ndarray, fps: float, anchors: list[dict],
         return px, py, tol
 
     tau = TRUST_S * fps / np.log(2)
+    # Between two clicks there are two runs: forward from the earlier click, backward from the
+    # later one. Where they meet on the same player, both are on him there - so before the
+    # first meeting the forward run is the one to believe, after the last meeting the backward.
+    # Those frames are confirmed and skip the straight-path check: the camera pans, so on
+    # screen he rarely moves in a straight line between clicks (measured on held-out clicks:
+    # within one player-width 64% -> 78% with every third click kept).
+    owner = np.full(n, -1)          # run to believe at this frame, -1 = no confirmed run
+    agree = np.zeros(n, bool)       # both runs on the same player here
+    for j in range(len(ks) - 1):
+        F, B = runs[2 * j], runs[2 * (j + 1) + 1]
+        a, b = idx[j], idx[j + 1]
+        met = [i for i in range(a + 1, b) if i in F and i in B and
+               np.hypot(F[i][0] - B[i][0], F[i][1] - B[i][1]) < AGREE * max(F[i][2], B[i][2])]
+        if met:
+            agree[met] = True
+            owner[a + 1:met[0]] = 2 * j
+            owner[met[-1] + 1:b] = 2 * (j + 1) + 1
     for i in range(n):
         # Trust = slow decay with time since the click. Colour similarity is deliberately
         # NOT used: on real footage (same team colours, white pants on both sides, sunset
         # light) the player scored lower against himself than other players did, so it hid
         # the ring while tracking was fine. Real losses are caught by the tracker failing,
         # sudden jumps, an empty-grass box, or two clicks' runs disagreeing (below).
-        cands = [(r[i][:5], np.exp(-r[i][4] / tau)) for r in runs if i in r]
-        path = on_path(i)
+        owned = owner[i] >= 0 and i in runs[owner[i]]
+        if owned:
+            cands = [(runs[owner[i]][i][:5], 1.0)]
+        else:
+            cands = [(r[i][:5], np.exp(-r[i][4] / tau)) for r in runs if i in r]
+        path = None if owned or agree[i] else on_path(i)
         if path is not None:
             px, py, tol = path
             cands = [c for c in cands if np.hypot(c[0][0] - px, c[0][1] - py) <= tol]

@@ -65,7 +65,7 @@ def player_track(cache: Path, clip: dict) -> np.ndarray | None:
         return None
     from . import segment   # (segment imports this module)
     win = segment._window(clip)   # only the footage a render can use is worth tracking
-    key = hashlib.sha1(("v12" + json.dumps([anchors, win], sort_keys=True)).encode()).hexdigest()[:12]
+    key = hashlib.sha1(("v13" + json.dumps([anchors, win], sort_keys=True)).encode()).hexdigest()[:12]
     f = cache / "track" / f"{clip['id']}-{key}.npy"
     if f.exists():
         res = np.load(f)
