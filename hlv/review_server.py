@@ -197,6 +197,14 @@ class ReviewApp:
             raise KeyError(clip_id)
         return hits.suggest(self.root, clip)
 
+    def start_warmup(self) -> None:
+        """Track all clicked clips in the background (paused while a reel builds)."""
+        from . import camera
+        with self.lock:
+            clips = project.load(self.root)["clips"]
+        busy = lambda: self.job.get("state") == "running"   # noqa: E731
+        threading.Thread(target=camera.warm, args=(self.cache, clips, busy), daemon=True).start()
+
     def plan(self, clip_id: str) -> dict:
         from . import camera
         with self.lock:
@@ -433,6 +441,7 @@ def serve(root: Path, cfg: DetectConfig, port: int = 8765, open_browser: bool = 
     app = ReviewApp(root, cfg)
     proxy.make_all([(p, proxy.proxy_path(app.cache, clip_id(root, p))) for p in find_clips(root)], jobs)
     httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(app))
+    app.start_warmup()
     url = f"http://127.0.0.1:{port}/"
     print(f"review page: {url}   (Ctrl+C to stop)")
     if open_browser:

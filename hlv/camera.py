@@ -7,7 +7,9 @@ from __future__ import annotations
 
 import hashlib
 import json
+import pickle
 import threading
+import time
 from collections import OrderedDict
 from pathlib import Path
 
@@ -21,7 +23,34 @@ FPS = 30.0
 TRACK_W = 960
 _frames_cache: OrderedDict = OrderedDict()
 _run_cache: dict[str, dict] = {}     # clip id -> tracker runs per click (see track._cached_run)
+RUNS_VERSION = "r1"                  # bump when track._run changes, so saved runs are dropped
+_clip_locks: dict[str, threading.Lock] = {}
 _lock = threading.Lock()
+
+
+def _clip_lock(cid: str) -> threading.Lock:
+    with _lock:
+        return _clip_locks.setdefault(cid, threading.Lock())
+
+
+def _runs_path(cache: Path, cid: str) -> Path:
+    return cache / "track" / f"{cid}-runs-{RUNS_VERSION}.pkl"
+
+
+def _runs(cache: Path, cid: str) -> dict:
+    """Tracker runs for this clip, kept on disk so a new click is quick even after a restart."""
+    with _lock:
+        if cid in _run_cache:
+            return _run_cache[cid]
+    runs = {}
+    f = _runs_path(cache, cid)
+    if f.exists():
+        try:
+            runs = pickle.loads(f.read_bytes())
+        except Exception:  # noqa: BLE001 - a damaged cache just means tracking again
+            runs = {}
+    with _lock:
+        return _run_cache.setdefault(cid, runs)
 
 
 def _proxy_frames(cache: Path, cid: str) -> np.ndarray:
@@ -59,7 +88,9 @@ def anchors_of(clip: dict) -> list[dict]:
     return [a for a in sp if isinstance(a, dict)] if isinstance(sp, list) else []
 
 
-def player_track(cache: Path, clip: dict) -> np.ndarray | None:
+def player_track(cache: Path, clip: dict, need_runs: bool = False) -> np.ndarray | None:
+    """need_runs: track even if the result is cached, when the per-click runs aren't saved
+    yet (so the next click on this clip is quick)."""
     anchors = anchors_of(clip)
     if not anchors:
         return None
@@ -67,18 +98,39 @@ def player_track(cache: Path, clip: dict) -> np.ndarray | None:
     win = segment._window(clip)   # only the footage a render can use is worth tracking
     key = hashlib.sha1(("v13" + json.dumps([anchors, win], sort_keys=True)).encode()).hexdigest()[:12]
     f = cache / "track" / f"{clip['id']}-{key}.npy"
-    if f.exists():
-        res = np.load(f)
-    else:
-        fr = _proxy_frames(cache, clip["id"])
-        t0, t1 = segment.extents(clip, len(fr) / FPS)
-        with _lock:
-            runs = _run_cache.setdefault(clip["id"], {})
-        res = track.track_player(fr, FPS, anchors, run_cache=runs,
-                                 span=(int(t0 * FPS), int(np.ceil(t1 * FPS))))
-        f.parent.mkdir(parents=True, exist_ok=True)
-        np.save(f, res)   # raw track cached; smoothing is cheap and tweakable
+    with _clip_lock(clip["id"]):   # the page and the background warm-up may ask at once
+        if f.exists() and not (need_runs and not _runs_path(cache, clip["id"]).exists()):
+            res = np.load(f)
+        else:
+            fr = _proxy_frames(cache, clip["id"])
+            t0, t1 = segment.extents(clip, len(fr) / FPS)
+            runs = _runs(cache, clip["id"])
+            n_before = len(runs)
+            res = track.track_player(fr, FPS, anchors, run_cache=runs,
+                                     span=(int(t0 * FPS), int(np.ceil(t1 * FPS))))
+            f.parent.mkdir(parents=True, exist_ok=True)
+            np.save(f, res)   # raw track cached; smoothing is cheap and tweakable
+            if len(runs) != n_before:
+                _runs_path(cache, clip["id"]).write_bytes(pickle.dumps(runs))
     return track.smooth_track(res, FPS)
+
+
+def warm(cache: Path, clips: list[dict], busy=lambda: False, log=print) -> None:
+    """Track every clip that has spotlight clicks ahead of time, so opening one is instant.
+    Waits while `busy()` (a reel build is using the CPU and memory)."""
+    for clip in clips:
+        if not anchors_of(clip):
+            continue
+        while busy():
+            time.sleep(5)
+        t = time.time()
+        try:
+            player_track(cache, clip, need_runs=True)
+        except Exception as e:  # noqa: BLE001 - warming is best effort
+            log(f"warm-up: {clip['id']} failed: {e}")
+            continue
+        if time.time() - t > 1:
+            log(f"warm-up: tracked {clip['id']} ({time.time() - t:.0f} s)")
 
 
 def _camera_motion(cache: Path, cid: str, fr: np.ndarray) -> np.ndarray:
