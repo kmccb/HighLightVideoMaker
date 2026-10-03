@@ -72,3 +72,17 @@ def test_migrate_keeps_existing_library_player(home, tmp_path):
     profiles.save(library.home(), [{"id": "caleb", "name": "Caleb (edited)"}])
     library.migrate(_old_project(tmp_path / "Caleb"))
     assert profiles.load(library.home())[0]["name"] == "Caleb (edited)"
+
+
+def test_branding_defaults_save_and_card(home):
+    from hlv import graphics, library
+    b = library.branding()
+    assert b["accent"] == "#ff5a1f" and b["url"] == "https://ScottForge.ai" and library.branding_ready(b)
+    b = library.save_branding({"accent": "orange", "invite": "  DM me  ", "bogus": "x"})
+    assert b["accent"] == "#ff5a1f" and b["invite"] == "DM me" and "bogus" not in b
+    assert library.branding() == b                                  # persisted
+    img = graphics.scottforge_card(library.home(), b)
+    assert img.shape == (graphics.H, graphics.W, 3)
+    assert tuple(img[graphics.H - 5, 10]) == (31, 90, 255)          # accent stripe, BGR
+    empty = library.save_branding({"title": "", "url": "", "invite": ""})
+    assert not library.branding_ready(empty)                        # nothing to show: no card

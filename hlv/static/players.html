@@ -77,6 +77,8 @@ input[type=file] { display: none; }
     </div>
     <div class="list" id="list"></div>
     <button class="btn add" id="add">+ Add player</button>
+    <button class="item" id="brandItem" style="border-top:1px solid var(--line)">
+      <span class="swatch" style="background:#ff5a1f"></span><span>ScottForge card</span><span class="num">brand</span></button>
   </aside>
 
   <main id="main">
@@ -85,6 +87,7 @@ input[type=file] { display: none; }
 </div>
 
 <input type="file" id="logoFile" accept=".png,.jpg,.jpeg,.webp">
+<input type="file" id="brandFile" accept=".png,.jpg,.jpeg,.webp">
 
 <script>
 const $ = id => document.getElementById(id);
@@ -96,7 +99,7 @@ async function load() {
   info = await (await fetch('/api/players')).json();
   players = info.players;
   const i = players.findIndex(p => p.id === info.selected);
-  sel = i >= 0 ? i : 0;
+  sel = location.hash === '#brand' ? -1 : (i >= 0 ? i : 0);
   render();
 }
 
@@ -124,6 +127,8 @@ const fileName = rel => (rel || '').split(/[\\/]/).pop();
 
 function render() {
   renderList();
+  $('brandItem').classList.toggle('active', sel === -1);
+  if (sel === -1) return renderBranding();
   const p = players[sel];
   if (!p) {
     $('main').innerHTML = '<div class="empty">No players yet. Click <b>+ Add player</b>.</div>';
@@ -285,6 +290,62 @@ $('add').onclick = () => {
   document.querySelector('[data-k="name"]').focus();
 };
 document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); saveNow(false); } });
+
+// ---------- ScottForge closing card (your branding, shared by every project) ----------
+let brand = null, brandTimer = null;
+async function renderBranding() {
+  if (!brand) brand = await (await fetch('/api/branding')).json();
+  const b = brand.branding;
+  const bf = (k, label, ph = '') => `<label class="f wide">${label}<input type="text" data-b="${k}" value="${esc(b[k])}" placeholder="${esc(ph)}" autocomplete="off"></label>`;
+  const bc = (k, label) => `<label class="f">${label}<span class="color"><input type="color" data-b="${k}" value="${esc(b[k])}"><input type="text" data-b="${k}" value="${esc(b[k])}" maxlength="7"></span></label>`;
+  $('main').innerHTML = `
+    <div class="cols"><div style="display:grid;gap:14px;align-content:start">
+      <div class="row" style="justify-content:space-between"><h2 style="margin:0">ScottForge closing card</h2><span class="status" id="status"></span></div>
+      <div class="card"><h3>Text</h3><div class="grid2">
+        ${bf('title', 'Title', 'Created by ScottForge')}${bf('url', 'Website', 'https://ScottForge.ai')}${bf('invite', 'Invite line', 'Want a highlight reel like this? Reach out at ScottForge.ai')}
+      </div></div>
+      <div class="card"><h3>Colours</h3><div class="grid2">${bc('bg', 'Background')}${bc('accent', 'Accent (website, stripe)')}</div></div>
+      <div class="card"><h3>Logo</h3><div class="row">
+        <div class="logo-box">${brand.logo ? `<img src="/media/branding/logo?t=${Date.now()}" alt="logo">` : 'no logo'}</div>
+        <div style="display:grid;gap:8px;flex:1;min-width:180px">
+          <button class="btn" id="pickBrand">Choose image…</button>
+          ${b.logo ? '<button class="btn danger" id="noBrand">Remove logo</button>' : ''}
+          <span class="file">PNG with a transparent background looks best</span></div></div></div>
+      <div class="note">Shown for 3.5 s after the player's end card, in every project that has <b>ScottForge card</b> ticked in the Build reel panel. Changing it only re-renders the ending, never the plays.</div>
+    </div>
+    <div class="previews"><h3 style="margin:0 0 4px">Preview</h3><img id="pvBrand" alt="card preview" src="/api/branding/card.png?t=${Date.now()}"></div></div>`;
+  document.querySelectorAll('[data-b]').forEach(el => el.addEventListener('input', () => {
+    const k = el.dataset.b, v = el.value;
+    if ((k === 'bg' || k === 'accent')) {
+      if (!/^#[0-9a-fA-F]{6}$/.test(v)) return;
+      document.querySelectorAll(`[data-b="${k}"]`).forEach(o => { if (o !== el) o.value = v; });
+    }
+    b[k] = v; setStatus('editing…');
+    clearTimeout(brandTimer); brandTimer = setTimeout(() => saveBrand(false), 500);
+  }));
+  $('pickBrand').onclick = () => $('brandFile').click();
+  if ($('noBrand')) $('noBrand').onclick = () => { b.logo = ''; saveBrand(true); };
+}
+async function saveBrand(rerender) {
+  try {
+    const res = await fetch('/api/branding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(brand.branding) });
+    const j = await res.json(); if (!res.ok) throw new Error(j.error || res.status);
+    brand = j;
+    if (rerender) renderBranding(); else { setStatus('saved ✓', 'ok'); $('pvBrand').src = '/api/branding/card.png?t=' + Date.now(); }
+  } catch (e) { setStatus('save failed: ' + e.message, 'err'); }
+}
+$('brandFile').onchange = async e => {
+  const file = e.target.files[0]; e.target.value = '';
+  if (!file) return;
+  setStatus(`uploading ${file.name}…`);
+  try {
+    const res = await fetch('/api/upload/brandlogo', { method: 'POST', headers: { 'X-Filename': encodeURIComponent(file.name) }, body: file });
+    const j = await res.json(); if (!res.ok) throw new Error(j.error || res.status);
+    brand = null; renderBranding();
+  } catch (err) { setStatus('upload failed: ' + err.message, 'err'); }
+};
+$('brandItem').onclick = () => { sel = -1; render(); };
+if (location.hash === '#brand') sel = -1;
 
 load();
 </script>

@@ -190,3 +190,40 @@ def composite(frame: np.ndarray, overlay: tuple[np.ndarray, np.ndarray], alpha: 
         a[:, W - slide_px:] = 0
     a = (a * alpha)[..., None]
     frame[:] = (frame.astype(np.float32) * (1 - a) + bgr * a).astype(np.uint8)
+
+
+def scottforge_card(root: Path, b: dict) -> np.ndarray:
+    """Closing credit: logo, 'Created by ScottForge', the URL in the accent colour, and an
+    invite line. root holds the logo (the app folder)."""
+    bg, accent = _rgb(b.get("bg"), (10, 10, 12)), _rgb(b.get("accent"), (255, 90, 31))
+    base = np.zeros((H, W, 3), np.float32)
+    base[:] = bg
+    yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+    glow = np.clip(1.0 - np.hypot((xx - W / 2) / (W * 0.55), (yy - H * 0.42) / (H * 0.6)), 0, 1) ** 2.2
+    base += glow[..., None] * np.array(accent, np.float32) * 0.22
+    base += np.random.default_rng(0).normal(0, 1.4, (H, W, 1))   # dither: a dark glow bands in 8 bit
+    img = Image.fromarray(np.clip(base, 0, 255).astype(np.uint8))
+    dr = ImageDraw.Draw(img)
+    lg = _logo(root, {"logo": b.get("logo", "")}, 300)
+    title, url, invite = b.get("title", ""), b.get("url", ""), b.get("invite", "")
+    tf, uf, inf = font(84), font(72), font(44, "SemiBold")
+    block = (lg.height + 60 if lg else 0) + (110 if title else 0) + (100 if url else 0) + (80 if invite else 0)
+    y = (H - block) // 2
+
+    def centred(text, f, fill, yy):
+        w = dr.textlength(text, font=f)
+        dr.text(((W - w) / 2, yy), text, font=f, fill=fill)
+
+    if lg:
+        _paste_logo(img, lg, W // 2, y + lg.height // 2)
+        y += lg.height + 60
+    if title:
+        centred(title, tf, (255, 255, 255), y)
+        y += 110
+    if url:
+        centred(url.replace("https://", "").replace("http://", ""), uf, accent, y)
+        y += 100
+    if invite:
+        centred(invite, inf, (200, 196, 190), y)
+    dr.rectangle([0, H - 14, W, H], fill=accent)
+    return _bgr(img)

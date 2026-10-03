@@ -26,6 +26,7 @@ BEAT_NEAR_COST = 1.0
 BEAT_STRETCH_COST = 0.6
 TRANSITIONS = {"crossfade": ("fade", 10 / 30), "dip": ("fadeblack", 18 / 30), "cut": (None, 0.0)}  # whole frames
 TITLE_S, END_S = 4.0, 4.0
+CREDIT_S = 3.5          # ScottForge closing card
 OUT_DIRNAME = "reel"
 
 
@@ -120,6 +121,11 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     seg_dir.mkdir(parents=True)
     title = segment.card(seg_dir / "00_title.mp4", graphics.title_card(lib, pl), TITLE_S, fade_in=True)
     endc = segment.card(seg_dir / f"{len(clips) + 1:02d}_end.mp4", graphics.end_card(lib, pl), END_S, fade_in=False)
+    credit = None
+    brand = library.branding()
+    if settings.get("scottforge_card") and library.branding_ready(brand):
+        credit = segment.card(seg_dir / f"{len(clips) + 2:02d}_scottforge.mp4",
+                              graphics.scottforge_card(lib, brand), CREDIT_S, fade_in=False)
     done += 1
     say("cards", done, total)
     plays = []
@@ -156,6 +162,8 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         pieces.append((p, a + f, tm["post"]))
         items.append(pieces)
     items.append([(endc, 0.0, END_S)])
+    if credit is not None:
+        items.append([(credit, 0.0, CREDIT_S)])     # music keeps playing and fades out over it
 
     # 4) assemble
     out = out_dir / f"{pl['id']}_reel.mp4"

@@ -286,6 +286,8 @@ video { display: block; max-width: 100%; max-height: 58vh; }
           <input type="text" id="rYt" placeholder="or paste a YouTube link" style="flex:1;min-width:160px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px">
           <button class="btn" id="rYtGo">Download</button></div>
         <div id="rSongMsg" class="hint"></div>
+        <label class="row"><span class="lbl">ScottForge card</span><input type="checkbox" id="rCredit">
+          <span class="hint" id="rCreditHint">3.5 s closing card after the end card · <a href="/players#brand" style="color:var(--accent)">edit ▸</a></span></label>
         <div class="hint">Name, number, school, colours and logo: <a href="/players" style="color:var(--accent)">edit player profiles ▸</a><span hidden><code id="rProfile"></code><code id="rAssetsDir"></code></span></div>
       </div>
       <div class="card">
@@ -865,6 +867,8 @@ async function loadReel() {
     `Music: ${a.music ? '<span class="ok">' + esc(a.music.split(/[\\/]/).pop()) + '</span>' : '<span class="bad">' + (a.music_missing ? 'file not found' : 'none yet') + ' (game audio only)</span>'}`;
   document.querySelectorAll('#rTrans button').forEach(b => b.classList.toggle('on', b.dataset.v === s.transition));
   $('rFreeze').checked = !!s.freeze;
+  $('rCredit').checked = !!s.scottforge_card;
+  $('rCredit').disabled = !reelInfo.credit_ready;
   document.querySelectorAll('#rBanner button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.name_banner || 'first')));
   $('rGame').value = Math.round((s.game_audio ?? 0.3) * 100);
   $('rGameV').textContent = $('rGame').value + '% under music';
@@ -998,6 +1002,7 @@ $('openReel').onclick = openReel;
 $('reelClose').onclick = closeReel;
 $('pvClose').onclick = () => { $('pv').hidden = true; $('pvVideo').pause(); };
 $('rPlayer').onchange = e => saveReelSetting({ player: e.target.value });
+$('rCredit').onchange = e => saveReelSetting({ scottforge_card: e.target.checked });
 const postJ = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
   .then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
 $('rSong').onclick = async () => {

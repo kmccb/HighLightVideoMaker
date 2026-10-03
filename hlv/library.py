@@ -15,6 +15,11 @@ from pathlib import Path
 from . import profiles, project
 
 PROJECTS = "projects.json"
+BRANDING = "branding.json"
+BRANDING_DEFAULTS = {
+    "logo": "", "bg": "#0a0a0c", "accent": "#ff5a1f", "title": "Created by ScottForge",
+    "url": "https://ScottForge.ai", "invite": "Want a highlight reel like this? Reach out at ScottForge.ai",
+}
 
 
 def home() -> Path:
@@ -115,3 +120,30 @@ def migrate(root: Path) -> None:
         project.save(root, proj)
     if find(root) is None:
         add_project(root, s.get("player"))
+
+
+def branding() -> dict:
+    """Tom's ScottForge closing card: logo (relative to the app folder), colours, text."""
+    p = home() / BRANDING
+    raw = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+    return {k: str(raw.get(k, v) if raw.get(k) is not None else v) for k, v in BRANDING_DEFAULTS.items()}
+
+
+def save_branding(patch: dict) -> dict:
+    b = branding()
+    for k in BRANDING_DEFAULTS:
+        if k in patch and isinstance(patch[k], str):
+            v = patch[k].strip()
+            if k in ("bg", "accent") and not (len(v) == 7 and v.startswith("#")):
+                continue
+            b[k] = v
+    p = home() / BRANDING
+    tmp = p.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(b, indent=2), encoding="utf-8")
+    tmp.replace(p)
+    return b
+
+
+def branding_ready(b: dict) -> bool:
+    """Worth showing a card: a logo that exists, or some text."""
+    return bool(profiles.asset(home(), b.get("logo", "")) or b.get("title") or b.get("url"))

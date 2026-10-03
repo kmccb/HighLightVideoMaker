@@ -228,6 +228,22 @@ class ReviewApp:
                 "settings": project.settings(proj), "clips": out}
 
     # ---------------- reel ----------------
+    @staticmethod
+    def _credit_on(s: dict) -> bool:
+        return bool(s.get("scottforge_card")) and library.branding_ready(library.branding())
+
+    def branding_info(self) -> dict:
+        b = library.branding()
+        return {"branding": b, "logo": bool(profiles.asset(library.home(), b["logo"])),
+                "images": profiles.asset_files(library.home())["images"]}
+
+    def credit_png(self) -> bytes:
+        import cv2
+        from . import graphics
+        img = graphics.scottforge_card(library.home(), library.branding())
+        img = cv2.resize(img, (img.shape[1] // 2, img.shape[0] // 2), interpolation=cv2.INTER_AREA)
+        return cv2.imencode(".png", img)[1].tobytes()
+
     def reel_info(self) -> dict:
         self._need()
         lib = library.home()
@@ -253,7 +269,9 @@ class ReviewApp:
                        "music_missing": bool(s.get("music")) and project.music_path(self.root, s) is None}
             if pl else None,
             "profile_path": str(profiles.path(lib)), "assets_dir": str(lib / profiles.ASSETS),
-            "transitions": list(reel.TRANSITIONS), "card_s": reel.TITLE_S + reel.END_S,
+            "transitions": list(reel.TRANSITIONS),
+            "card_s": reel.TITLE_S + reel.END_S + (reel.CREDIT_S if self._credit_on(s) else 0),
+            "credit_ready": library.branding_ready(library.branding()),
             "clips": rows, "job": self.job,
         }
 
@@ -390,7 +408,7 @@ class ReviewApp:
                 s["name_banner"] = patch["name_banner"]
             if "slowmo_speed" in patch and float(patch["slowmo_speed"]) in (0.5, 0.4, 0.3):
                 s["slowmo_speed"] = float(patch["slowmo_speed"])
-            for k in ("beat_sync", "hit_fx", "slowmo"):
+            for k in ("beat_sync", "hit_fx", "slowmo", "scottforge_card"):
                 if k in patch:
                     s[k] = bool(patch[k])
             if "music_start" in patch:
@@ -535,10 +553,17 @@ def make_handler(app: ReviewApp):
                 return self._file(STATIC / "players.html", "text/html; charset=utf-8")
             if path == "/api/players":
                 return self._json(app.players_info())
+            if path == "/api/branding":
+                return self._json(app.branding_info())
+            if path == "/media/branding/logo":
+                f = profiles.asset(library.home(), library.branding()["logo"])
+                if f is None:
+                    return self.send_error(HTTPStatus.NOT_FOUND)
+                return self._file(f, {".png": "image/png", ".webp": "image/webp"}.get(f.suffix.lower(), "image/jpeg"))
             m = re.fullmatch(r"/api/players/([a-z0-9-]+)/(title|end|banner)\.png", path)
-            if m:
+            if m or path == "/api/branding/card.png":
                 try:
-                    body = app.card_png(m.group(1), m.group(2))
+                    body = app.credit_png() if not m else app.card_png(m.group(1), m.group(2))
                 except KeyError:
                     return self.send_error(HTTPStatus.NOT_FOUND)
                 self.send_response(HTTPStatus.OK)
@@ -611,6 +636,10 @@ def make_handler(app: ReviewApp):
                     return self._json(app.remove_project(Path(folder)))
                 except ValueError as e:
                     return self._json({"error": str(e)}, HTTPStatus.CONFLICT)
+            if self.path == "/api/branding":
+                body = json.loads(self.rfile.read(n) or b"{}") or {}
+                library.save_branding(body if isinstance(body, dict) else {})
+                return self._json(app.branding_info())
             if self.path == "/api/reel/order":
                 return self._json(app.set_order(json.loads(self.rfile.read(n) or b"{}").get("order", [])))
             if self.path == "/api/reel/build":
@@ -620,7 +649,7 @@ def make_handler(app: ReviewApp):
                     return self._json(app.save_players(json.loads(self.rfile.read(n) or b"{}").get("players")))
                 except (ValueError, TypeError) as e:
                     return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
-            m = re.fullmatch(r"/api/upload/(logo|music)", self.path)
+            m = re.fullmatch(r"/api/upload/(logo|music|brandlogo)", self.path)
             if m:
                 limit = 80 * 1024 * 1024 if m.group(1) == "music" else 15 * 1024 * 1024
                 if n <= 0 or n > limit:
@@ -630,7 +659,7 @@ def make_handler(app: ReviewApp):
                 name = unquote(self.headers.get("X-Filename", "upload"))
                 data = self.rfile.read(n)
                 try:
-                    if m.group(1) == "logo":
+                    if m.group(1) in ("logo", "brandlogo"):
                         from io import BytesIO
                         from PIL import Image
                         try:
@@ -639,6 +668,9 @@ def make_handler(app: ReviewApp):
                             raise ValueError("that file isn't an image I can read - use a PNG, JPG or WEBP")
                     if m.group(1) == "music":
                         rel = app.store_music(name, data)
+                    elif m.group(1) == "brandlogo":
+                        rel = profiles.store_upload(library.home(), name, data, "logo")
+                        library.save_branding({"logo": rel})
                     else:
                         rel = profiles.store_upload(library.home(), name, data, "logo")
                 except NoProject:
