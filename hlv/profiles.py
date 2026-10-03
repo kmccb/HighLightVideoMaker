@@ -22,8 +22,7 @@ TEMPLATE = {
             "school": "",
             "height_weight": "",
             "contact": "",
-            "logo": "assets/logo.png",
-            "music": "assets/music.mp3",
+            "logo": "",
             "color": "#1f4fd1",
             "accent": "#ffd23f",
         }
@@ -36,7 +35,6 @@ TEMPLATE = {
         "height_weight": "optional, e.g. 6'1\" 185",
         "contact": "optional line for the end card: email, phone or Hudl link",
         "logo": "PNG (transparent background looks best), relative to this folder",
-        "music": "MP3/M4A/WAV, relative to this folder",
         "color": "team colour for the title card and name banner",
         "accent": "highlight colour (ring/arrow) and banner accent",
     },
@@ -95,9 +93,7 @@ def status(root: Path, pl: dict) -> dict:
     """What's ready and what's missing, for the review page."""
     return {
         "logo": str(asset(root, pl["logo"]) or ""),
-        "music": str(asset(root, pl["music"]) or ""),
         "logo_missing": bool(pl["logo"]) and asset(root, pl["logo"]) is None,
-        "music_missing": bool(pl["music"]) and asset(root, pl["music"]) is None,
     }
 
 

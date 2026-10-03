@@ -21,7 +21,18 @@ def settings(project: dict) -> dict:
             "freeze": True, "order": [], "player": None, "game_audio": 0.3, "music_volume": 0.9,
             "beat_sync": True, "hit_fx": True, "music_start": 0.0,
             "slowmo": False, "slowmo_speed": 0.4, "name_banner": "first",
+            "music": None, "scottforge_card": True,
             **(project.get("settings") or {})}
+
+
+def music_path(root: Path, settings: dict) -> Path | None:
+    """The project's song (relative to the project folder, or absolute); None if unset/missing."""
+    m = settings.get("music")
+    if not m:
+        return None
+    p = Path(m)
+    p = p if p.is_absolute() else root / p
+    return p if p.is_file() else None
 
 
 def empty_review() -> dict:
