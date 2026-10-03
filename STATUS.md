@@ -9,9 +9,10 @@ Test project folder: `TestClips\Caleb_Footbal\` (23 clips across Scrimmage, Week
 
 ## How to run
 ```
-.venv\Scripts\python -m hlv review "TestClips\Caleb_Footbal"     # main UI: http://127.0.0.1:8765
+.venv\Scripts\python -m hlv review                              # main UI: http://127.0.0.1:8765 (start screen: project list)
+.venv\Scripts\python -m hlv review "TestClips\Caleb_Footbal"     # or straight into one project
 .venv\Scripts\python -m hlv reel   "TestClips\Caleb_Footbal"     # build the reel from the command line (same as the Build button)
-.venv\Scripts\python -m pytest -q tests                          # 24 tests, all passing
+.venv\Scripts\python -m pytest -q tests                          # 35 tests, all passing
 ```
 In the Claude desktop app, `.claude/launch.json` has a `review` preview config (use `preview_start name=review`). **Restart the server after any Python change**; static HTML changes only need a page reload. **Never restart while a reel is building** (check `/api/reel/status`); the build runs inside the server process.
 
@@ -27,6 +28,8 @@ In the Claude desktop app, `.claude/launch.json` has a `review` preview config (
 | 4 Reel builder | Build reel panel: drag order, transitions (crossfade/cut/dip), freeze intro at the snap with spot shadow, name banner (first/every/off), title and end cards, music bed, FCPXML for Resolve | `reel.py segment.py` |
 | 2c Tracking speed + feedback (2026-10-03) | "Tracking your player…" badge on the video, and the stale ring is hidden while re-tracking. Per-click tracker runs are reused, so a new click only tracks between its neighbouring clicks (~1-2 s instead of 6-19 s); runs are saved to `.hlv_cache\track\<id>-runs-r1.pkl`. Tracking is limited to the renderable window (`segment.extents`). On server start a background warm-up tracks every clicked clip (paused while a build runs), so clicked clips open in <0.5 s | `camera.py track.py review_server.py` |
 | 2d Better tracking in crowds (2026-10-03) | Between two clicks, frames where the forward and backward runs meet, and the stretches before/after they meet, are trusted and skip the straight-path check. That check wrongly rejected correct answers during camera pans. Held-out-click benchmark: within 1 player-width 78%→93% (every other click kept), 64%→78% (every 3rd kept). Strip under the timeline goes amber beyond 1.5 s from the outer clicks | `track.py static/review.html` |
+| 5 Projects (2026-10-03) | Start screen lists projects. **+ New project**: pick or quick-add a player → **Browse** for the clips folder (native Windows dialog opened by the server) → music (a file, the player's last song, or a YouTube link downloaded as MP3 with yt-dlp) → in-app setup (proxies + detection) with progress. "◂ Projects" switches project (blocked while building). Players, logos and branding are shared in `C:\Users\tom\HighlightReels\` (`players.json`, `projects.json`, `branding.json`, `assets\`); the song is per project (`settings.music`, files in `<project>\music\`). An old per-folder `players.json` is migrated on open (kept as a backup; segment keys unchanged). iPhone Live Photo movies (same name as a HEIC/JPG) aren't treated as plays | `library.py setup_job.py music.py pickers.py static/start.html` |
+| 5b ScottForge card (2026-10-03) | 3.5 s closing card after the end card: logo, "Created by ScottForge", the URL in the accent colour, and an invite line (defaults #ff5a1f on #0a0a0c). Edited on Player profiles → **ScottForge card**; ticked per project in the Build panel (on for new projects, off for Caleb_Footbal). Also in the FCPXML | `graphics.scottforge_card reel.py` |
 | 4b Beat sync | Beat detection (~5 ms accurate); hit marked with K, auto-suggested, or N for "no hit"; hits land on strong beats (measured 22/22 within 1 frame); hit punch (zoom bump + flash); optional slow-mo ramp into the hit (optical-flow interpolation for 30 fps clips) | `beats.py hits.py slowmo.py` |
 
 ## Current data state (Caleb_Footbal)
@@ -45,12 +48,20 @@ In the Claude desktop app, `.claude/launch.json` has a `review` preview config (
 3. **Detection accuracy.** Snap is good. End-of-play is weak on long plays such as kickoff returns, where spread-out players read as "play over". Cross-validation showed the parameter sweep overfits at about 20 clips, so the defaults are kept honest. Tom reviews every clip anyway.
 4. **Ideas Tom hasn't asked for yet:** syncing the cuts between plays to the beat; a "first N seconds only" spot-shadow mode; a freeze-frame title with the player's photo.
 5. **IMG_0761 is still unticked**, so it's out of the reel. Unclear if intended.
+6. **Not yet tried by Tom:**
+   - the native folder/file pickers
+   - a real YouTube download (only tested with yt-dlp mocked)
+   - a ScottForge logo (none uploaded yet, so the card is text only)
+
+   Brody's folder (`assets\brody`) isn't a project yet. It has 21 plays plus photos, and `ScreenRecording_09-19-2026 08-40-29_1` appears three times (.mov, .mp4, "(1).mp4"), probably duplicates.
+7. **Next job: photos in the reel** (Tom chose "put photos into the reel": Ken Burns slides). Needs its own design. The projects design and plan are in `docs/superpowers/`.
 
 ## Lessons learned / gotchas (please read)
 - **Memory:** the box has 16 GB. Never load whole clips into RAM unnecessarily; `camera.plan` only decodes frames when tracking or zoom needs them, and `frames.read_frames` pre-allocates. Renders run with `-j 3`.
 - **Disk:** C: was down to 1.4 GB during one build (it's at 58 GB now). The reel folder hard-links segments rather than copying them. Old segment versions in `.hlv_cache\segments` can be deleted safely.
 - **Excel locks `ground_truth.csv`.** Saving still works through `highlights.json`, and the page warns about it.
 - **Tracking confidence:** colour similarity was tried and **removed**. On this footage (same team colours, white pants on both teams, sunset light) it hid the ring while tracking was correct. A "stuck on scenery" check was also tried and disabled, because it gave false alarms on blocks during pans. Current loss signals: the tracker fails, a jump bigger than the camera's own pan, an empty-grass box, or clicks disagreeing. Plus the keyframe path between clicks.
+- **App folder:** `library.home()` is `~/HighlightReels`; override it with the env var `HLV_HOME` (the tests do; never point tests at the real one).
 - **Track caches:** the raw track `.npy` key is `"v13"` + anchors + play window (`camera.player_track`). Bump it when the fusion in `track_player` changes. Bump `camera.RUNS_VERSION` when `track._run` changes, so saved runs are dropped. Renders re-key automatically because `segment_key` hashes the plan.
 - **Track coordinates are centres:** `plan.player` rows are `cx, cy, w, h, conf`, not top-left. A debug sheet drawn from the corner looks wrong (this misled one investigation).
 - **Exact timing:** pieces are trimmed by frame/sample number, and xfade offsets sit just under the exact frame time. Rounding to milliseconds previously pushed hits a frame or two off the beat.
