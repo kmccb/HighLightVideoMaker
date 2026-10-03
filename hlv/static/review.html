@@ -281,6 +281,11 @@ video { display: block; max-width: 100%; max-height: 58vh; }
       <div class="card">
         <label class="row"><span class="lbl">Player</span><select id="rPlayer"></select></label>
         <div id="rAssets" class="hint"></div>
+        <div class="row" style="gap:6px;flex-wrap:wrap"><span class="lbl">Song</span>
+          <button class="btn" id="rSong">Choose file…</button>
+          <input type="text" id="rYt" placeholder="or paste a YouTube link" style="flex:1;min-width:160px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px">
+          <button class="btn" id="rYtGo">Download</button></div>
+        <div id="rSongMsg" class="hint"></div>
         <div class="hint">Name, number, school, colours and logo: <a href="/players" style="color:var(--accent)">edit player profiles ▸</a><span hidden><code id="rProfile"></code><code id="rAssetsDir"></code></span></div>
       </div>
       <div class="card">
@@ -857,7 +862,7 @@ async function loadReel() {
   const a = reelInfo.assets;
   $('rAssets').innerHTML = !reelInfo.player ? '<span class="bad">No player profile yet. Add one on the Player profiles page.</span>' :
     `Logo: ${a.logo ? '<span class="ok">found</span>' : '<span class="bad">missing (plain title card)</span>'} · ` +
-    `Music: ${a.music ? '<span class="ok">found</span>' : '<span class="bad">missing (game audio only)</span>'}`;
+    `Music: ${a.music ? '<span class="ok">' + esc(a.music.split(/[\\/]/).pop()) + '</span>' : '<span class="bad">' + (a.music_missing ? 'file not found' : 'none yet') + ' (game audio only)</span>'}`;
   document.querySelectorAll('#rTrans button').forEach(b => b.classList.toggle('on', b.dataset.v === s.transition));
   $('rFreeze').checked = !!s.freeze;
   document.querySelectorAll('#rBanner button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.name_banner || 'first')));
@@ -993,6 +998,34 @@ $('openReel').onclick = openReel;
 $('reelClose').onclick = closeReel;
 $('pvClose').onclick = () => { $('pv').hidden = true; $('pvVideo').pause(); };
 $('rPlayer').onchange = e => saveReelSetting({ player: e.target.value });
+const postJ = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+  .then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
+$('rSong').onclick = async () => {
+  $('rSongMsg').textContent = 'Waiting for the file picker (it may open behind this window)…';
+  try {
+    const r = await postJ('/api/pick/music');
+    $('rSongMsg').textContent = r.cancelled ? '' : 'Song changed. Rebuild the reel to hear it.';
+    if (!r.cancelled) loadReel();
+  } catch (err) { $('rSongMsg').innerHTML = `<span class="bad">${esc(err.message)}</span>`; }
+};
+$('rYtGo').onclick = async () => {
+  const url = $('rYt').value.trim();
+  if (!url) { $('rYt').focus(); return; }
+  $('rYtGo').disabled = true;
+  try {
+    let j = await postJ('/api/music/youtube', { url });
+    while (j.state === 'running') {
+      $('rSongMsg').textContent = `${j.step || 'downloading'}… ${Math.round(100 * (j.frac || 0))}%`;
+      await new Promise(r => setTimeout(r, 700));
+      j = await (await fetch('/api/music/status')).json();
+    }
+    if (j.state === 'error') throw new Error(j.error);
+    $('rYt').value = '';
+    $('rSongMsg').textContent = `Downloaded ${j.name}. Rebuild the reel to hear it.`;
+    loadReel();
+  } catch (err) { $('rSongMsg').innerHTML = `<span class="bad">${esc(err.message)}</span>`; }
+  $('rYtGo').disabled = false;
+};
 $('rFreeze').onchange = e => saveReelSetting({ freeze: e.target.checked });
 $('rSync').onchange = e => saveReelSetting({ beat_sync: e.target.checked });
 $('rFx').onchange = e => saveReelSetting({ hit_fx: e.target.checked });

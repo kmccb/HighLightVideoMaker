@@ -38,6 +38,8 @@ class ReviewApp:
         self.jobs = jobs
         self.job = {"state": "idle"}
         self._gen = 0          # bumps on every project switch; background work for older ones stops
+        self.setup = {"state": "idle"}     # new-project setup job
+        self.music_job = {"state": "idle"}  # YouTube download job
 
     def _need(self) -> None:
         if self.root is None:
@@ -110,6 +112,97 @@ class ReviewApp:
                 "current": self.root is not None and f == self.root,
             })
         return {"current": str(self.root) if self.root else None, "building": self.building(), "projects": out}
+
+    # ---------------- new project ----------------
+    def pick_folder(self) -> dict:
+        from . import pickers, setup_job
+        f = pickers.folder()
+        return {"cancelled": True} if f is None else setup_job.scan(f)
+
+    def _set_music(self, folder: Path, rel: str | None) -> None:
+        """If folder is the open project, make rel its song."""
+        if self.root is not None and Path(folder).resolve() == self.root:
+            with self.lock:
+                proj = project.load(self.root)
+                proj["settings"] = {**project.settings(proj), "music": rel}
+                project.save(self.root, proj)
+
+    def pick_music(self, folder: Path) -> dict:
+        from . import music, pickers
+        f = pickers.music_file()
+        if f is None:
+            return {"cancelled": True}
+        rel = music.import_file(Path(folder), f)
+        self._set_music(folder, rel)
+        return {"music": rel, "name": Path(rel).name}
+
+    def use_music(self, folder: Path, src: Path) -> dict:
+        from . import music
+        rel = music.import_file(Path(folder), Path(src))
+        self._set_music(folder, rel)
+        return {"music": rel, "name": Path(rel).name}
+
+    def music_suggestion(self, player: str) -> dict:
+        """The song from this player's most recent other project, if any."""
+        for x in library.projects():
+            f = Path(x["folder"])
+            if not (f / project.FILENAME).exists():
+                continue
+            s = project.settings(project.load(f))
+            if (s.get("player") or x.get("player")) != player:
+                continue
+            m = project.music_path(f, s)
+            if m:
+                return {"path": str(m), "name": m.name, "from": f.name}
+        return {}
+
+    def start_youtube(self, folder: Path, url: str) -> dict:
+        from . import music
+        if self.music_job.get("state") == "running":
+            return self.music_job
+        if not music.is_youtube(url):
+            raise ValueError("That doesn't look like a YouTube link (youtube.com/watch?v=… or youtu.be/…).")
+        self.music_job = {"state": "running", "frac": 0.0, "step": "starting", "music": None, "error": None}
+        job = self.music_job
+
+        def run():
+            try:
+                rel = music.download_youtube(Path(folder), url,
+                                             progress=lambda f, t: job.update(frac=f, step=t))
+                self._set_music(folder, rel)
+                job.update(state="done", music=rel, name=Path(rel).name)
+            except Exception as e:  # noqa: BLE001
+                job.update(state="error", error=str(e))
+        threading.Thread(target=run, daemon=True).start()
+        return job
+
+    def create_project(self, folder: Path, player: str | None, music_rel: str | None) -> dict:
+        from . import setup_job
+        folder = Path(folder).resolve()
+        if self.setup.get("state") == "running":
+            raise ValueError("a project is already being set up")
+        if self.building():
+            raise ValueError("a reel is building - create the project when it's finished")
+        if not folder.is_dir():
+            raise ValueError(f"folder not found: {folder}")
+        if library.find(folder) or (folder / project.FILENAME).exists():
+            raise ValueError("that folder is already a project")
+        if player and profiles.get(library.home(), player) is None:
+            raise ValueError("pick a player first")
+        self.setup = {"state": "running", "step": "starting", "done": 0, "total": 1, "error": None,
+                      "folder": str(folder)}
+        job = self.setup
+
+        def run():
+            try:
+                res = setup_job.run(folder, player, music_rel, jobs=min(self.jobs, 3),
+                                    progress=lambda st, d, t: job.update(step=st, done=d, total=t))
+                self.open_project(folder)
+                job.update(state="done", result=res)
+            except Exception as e:  # noqa: BLE001 - report to the page
+                job.update(state="error", error=str(e))
+        threading.Thread(target=run, daemon=True).start()
+        return job
 
     def remove_project(self, folder: Path) -> dict:
         if self.root is not None and Path(folder).resolve() == self.root:
@@ -429,6 +522,13 @@ def make_handler(app: ReviewApp):
                 return self._file(STATIC / "review.html", "text/html; charset=utf-8")
             if path == "/api/projects":
                 return self._json(app.projects_info())
+            if path == "/api/projects/setup":
+                return self._json(app.setup)
+            if path == "/api/music/status":
+                return self._json(app.music_job)
+            m = re.fullmatch(r"/api/music/suggest/([a-z0-9-]+)", path)
+            if m:
+                return self._json(app.music_suggestion(m.group(1)))
             if path == "/api/clips":
                 return self._json(app.clips())
             if path in ("/players", "/players.html"):
@@ -482,6 +582,25 @@ def make_handler(app: ReviewApp):
 
         def _post(self):
             n = int(self.headers.get("Content-Length", 0) or 0)
+            if self.path in ("/api/pick/folder", "/api/pick/music", "/api/music/use", "/api/music/youtube",
+                             "/api/projects/create"):
+                body = json.loads(self.rfile.read(n) or b"{}") or {}
+                folder = body.get("folder") or (str(app.root) if app.root else None)
+                try:
+                    if self.path == "/api/pick/folder":
+                        return self._json(app.pick_folder())
+                    if not folder:
+                        return self._json({"error": "choose the clips folder first"}, HTTPStatus.BAD_REQUEST)
+                    if self.path == "/api/pick/music":
+                        return self._json(app.pick_music(Path(folder)))
+                    if self.path == "/api/music/use":
+                        return self._json(app.use_music(Path(folder), Path(str(body.get("path") or ""))))
+                    if self.path == "/api/music/youtube":
+                        return self._json(app.start_youtube(Path(folder), str(body.get("url") or "")))
+                    return self._json(app.create_project(Path(folder), body.get("player") or None,
+                                                         body.get("music") or None))
+                except ValueError as e:
+                    return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
             if self.path in ("/api/projects/open", "/api/projects/remove"):
                 folder = (json.loads(self.rfile.read(n) or b"{}") or {}).get("folder")
                 if not isinstance(folder, str) or not folder:

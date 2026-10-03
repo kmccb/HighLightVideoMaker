@@ -8,6 +8,7 @@ from fractions import Fraction
 from pathlib import Path
 
 VIDEO_EXTS = {".mov", ".mp4", ".m4v", ".mkv", ".avi"}
+LIVE_PHOTO_EXTS = {".heic", ".heif", ".jpg", ".jpeg"}
 
 
 @dataclass
@@ -67,9 +68,15 @@ def probe(path: Path) -> ClipInfo:
     )
 
 
+def is_live_photo(p: Path) -> bool:
+    """The few-second movie of an iPhone Live Photo: same name as a photo next to it."""
+    return any(p.with_suffix(e).exists() or p.with_suffix(e.upper()).exists() for e in LIVE_PHOTO_EXTS)
+
+
 def find_clips(root: Path) -> list[Path]:
     skip = {"normalized", ".hlv_cache", "debug", "previews", "reel", "assets"}
     return sorted(
         p for p in root.rglob("*")
         if p.is_file() and p.suffix.lower() in VIDEO_EXTS and not (skip & set(p.relative_to(root).parts))
+        and not is_live_photo(p)
     )

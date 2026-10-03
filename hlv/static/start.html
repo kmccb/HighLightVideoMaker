@@ -44,6 +44,27 @@ header h1 { margin: 0; font-size: 20px; font-weight: 650; }
 .warn { color: var(--warn); font-size: 13px; }
 .empty { color: var(--dim); padding: 30px 0; }
 .msg { min-height: 20px; margin: 0 0 12px; color: var(--bad); }
+.wiz { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-bottom: 22px; display: grid; gap: 18px; }
+.wiz[hidden] { display: none; }
+.wiz h2 { margin: 0; font-size: 17px; }
+.step { display: grid; gap: 10px; padding-left: 34px; position: relative; }
+.step::before { content: attr(data-n); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 50%;
+  background: var(--panel-2); border: 1px solid var(--line); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
+.step.done::before { content: '✓'; background: #1d3b2a; border-color: #2f6b47; color: var(--ok); }
+.step.locked { opacity: .45; pointer-events: none; }
+.step h3 { margin: 2px 0 0; font-size: 14px; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; }
+.chip.on { border-color: var(--accent); background: #16283a; }
+.chip .sw { width: 10px; height: 10px; border-radius: 50%; }
+.row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+input[type=text] { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; color: var(--text); font: inherit; }
+.quick { display: grid; grid-template-columns: 2fr 70px 1fr 90px 2fr auto; gap: 8px; align-items: center; }
+.quick[hidden] { display: none; }
+.note { color: var(--dim); font-size: 12px; }
+.ok { color: var(--ok); }
+.bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
+.bar > div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
 </style>
 </head>
 <body>
@@ -52,9 +73,44 @@ header h1 { margin: 0; font-size: 20px; font-weight: 650; }
     <h1>Highlight Reels</h1>
     <span class="spacer"></span>
     <a class="btn" href="/players" style="color:var(--text);text-decoration:none">Player profiles</a>
-    <button class="btn primary" id="newProj" disabled title="Coming next: pick a player, a clips folder and music">+ New project</button>
+    <button class="btn primary" id="newProj">+ New project</button>
   </header>
   <div class="msg" id="msg"></div>
+  <section class="wiz" id="wiz" hidden>
+    <div class="row"><h2>New project</h2><span class="spacer"></span><button class="btn" id="wCancel">Cancel</button></div>
+    <div class="step" id="s1" data-n="1">
+      <h3>Who is this reel for?</h3>
+      <div class="chips" id="wPlayers"></div>
+      <div class="quick" id="wQuick" hidden>
+        <input type="text" id="qName" placeholder="Name (e.g. Brody Smith)">
+        <input type="text" id="qNum" placeholder="#">
+        <input type="text" id="qPos" placeholder="Position">
+        <input type="text" id="qYear" placeholder="Class of">
+        <input type="text" id="qSchool" placeholder="School / team">
+        <button class="btn primary" id="qSave">Add player</button>
+      </div>
+      <div class="note">Logo and colours can be set later on the <a href="/players">Player profiles</a> page.</div>
+    </div>
+    <div class="step locked" id="s2" data-n="2">
+      <h3>Which folder has the clips?</h3>
+      <div class="row"><button class="btn" id="wFolder">Browse…</button><span id="wFolderInfo" class="note">Opens the Windows folder picker (it may appear behind this window).</span></div>
+    </div>
+    <div class="step locked" id="s3" data-n="3">
+      <h3>Music</h3>
+      <div class="row" id="wSuggest" hidden></div>
+      <div class="row"><button class="btn" id="wSong">Choose a song file…</button>
+        <span class="note">or</span>
+        <input type="text" id="wYt" placeholder="paste a YouTube link" style="flex:1;min-width:240px">
+        <button class="btn" id="wYtGo">Download</button></div>
+      <div class="bar" id="wYtBar" hidden><div></div></div>
+      <div id="wSongInfo" class="note">Optional: you can add or change the song later in the Build reel panel.</div>
+    </div>
+    <div class="row">
+      <button class="btn primary" id="wCreate" disabled>Create project</button>
+      <span id="wStatus" class="note"></span>
+    </div>
+    <div class="bar" id="wBar" hidden><div></div></div>
+  </section>
   <div class="grid" id="grid"></div>
 </div>
 <script>
@@ -110,6 +166,136 @@ $('grid').addEventListener('click', async e => {
   const res = await fetch('/api/projects/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: p.folder }) });
   if (!res.ok) { o.style.opacity = 1; $('msg').textContent = (await res.json()).error || 'could not open'; return; }
   location = '/review';
+});
+// ---------- new project ----------
+const W = { player: null, folder: null, music: null, players: [] };
+const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })
+  .then(async r => { const j = await r.json(); if (!r.ok) throw new Error(j.error || r.status); return j; });
+
+function wizState() {
+  $('s1').classList.toggle('done', !!W.player);
+  $('s2').classList.toggle('locked', !W.player);
+  $('s2').classList.toggle('done', !!W.folder);
+  $('s3').classList.toggle('locked', !W.folder);
+  $('s3').classList.toggle('done', !!W.music);
+  $('wCreate').disabled = !(W.player && W.folder);
+}
+async function loadPlayers() {
+  W.players = (await (await fetch('/api/players')).json()).players;
+  $('wPlayers').innerHTML = W.players.map(p =>
+    `<button class="chip ${p.id === W.player ? 'on' : ''}" data-p="${esc(p.id)}"><span class="sw" style="background:${esc(p.color)}"></span>${esc(p.name || p.id)}${p.number ? ' #' + esc(p.number) : ''}</button>`).join('')
+    + `<button class="chip" id="wNewPlayer">+ New player</button>`;
+  $('wQuick').hidden = W.players.length > 0;
+}
+$('newProj').onclick = async () => {
+  Object.assign(W, { player: null, folder: null, music: null });
+  $('wFolderInfo').textContent = 'Opens the Windows folder picker (it may appear behind this window).';
+  $('wSongInfo').textContent = 'Optional: you can add or change the song later in the Build reel panel.';
+  $('wSuggest').hidden = true; $('wYt').value = ''; $('wStatus').textContent = ''; $('wBar').hidden = true;
+  $('wiz').hidden = false; $('newProj').disabled = true;
+  await loadPlayers(); wizState();
+};
+$('wCancel').onclick = () => { $('wiz').hidden = true; $('newProj').disabled = false; };
+$('wPlayers').addEventListener('click', async e => {
+  if (e.target.closest('#wNewPlayer')) { $('wQuick').hidden = false; $('qName').focus(); return; }
+  const c = e.target.closest('[data-p]');
+  if (!c) return;
+  W.player = c.dataset.p; await loadPlayers(); wizState(); suggestSong();
+});
+$('qSave').onclick = async () => {
+  const name = $('qName').value.trim();
+  if (!name) { $('qName').focus(); return; }
+  const before = new Set(W.players.map(p => p.id));
+  try {
+    const res = await post('/api/players', { players: [...W.players, { name, number: $('qNum').value.trim(), position: $('qPos').value.trim(),
+      class_year: $('qYear').value.trim(), school: $('qSchool').value.trim(), color: '#1f4fd1', accent: '#ffd23f' }] });
+    const added = res.players.find(p => !before.has(p.id));
+    W.player = added ? added.id : W.player;
+    ['qName', 'qNum', 'qPos', 'qYear', 'qSchool'].forEach(id => $(id).value = '');
+    await loadPlayers(); wizState(); suggestSong();
+  } catch (err) { $('msg').textContent = 'Could not add the player: ' + err.message; }
+};
+$('wFolder').onclick = async () => {
+  $('wFolderInfo').textContent = 'Waiting for the folder picker…';
+  try {
+    const r = await post('/api/pick/folder');
+    if (r.cancelled) { $('wFolderInfo').textContent = W.folder ? W.folder : 'No folder chosen.'; return; }
+    if (r.project) {
+      W.folder = null;
+      $('wFolderInfo').innerHTML = `<span style="color:var(--warn)">${esc(r.name)} is already a project.</span> <button class="btn" id="wOpenExisting">Open that project</button>`;
+      $('wOpenExisting').onclick = async () => { await post('/api/projects/open', { folder: r.folder }); location = '/review'; };
+    } else if (!r.videos) {
+      W.folder = null;
+      $('wFolderInfo').innerHTML = `<span style="color:var(--bad)">No videos in ${esc(r.name)}.</span> Pick the folder that has the .mov/.mp4 clips.`;
+    } else {
+      W.folder = r.folder;
+      $('wFolderInfo').innerHTML = `<b>${esc(r.folder)}</b>: <span class="ok">${r.videos} video${r.videos === 1 ? '' : 's'}</span>` +
+        (r.photos ? ` · ${r.photos} photo${r.photos === 1 ? '' : 's'} (photos aren't used yet)` : '');
+    }
+  } catch (err) { $('wFolderInfo').textContent = 'Folder picker failed: ' + err.message; }
+  wizState();
+};
+async function suggestSong() {
+  $('wSuggest').hidden = true;
+  if (!W.player) return;
+  const s = await (await fetch('/api/music/suggest/' + encodeURIComponent(W.player))).json();
+  if (!s.path) return;
+  $('wSuggest').innerHTML = `<button class="btn" id="wUseLast">Use ${esc(s.name)}</button><span class="note">the song from ${esc(s.from)}</span>`;
+  $('wSuggest').hidden = false;
+  $('wUseLast').onclick = async () => {
+    try { const r = await post('/api/music/use', { folder: W.folder, path: s.path }); songChosen(r); }
+    catch (err) { $('wSongInfo').textContent = err.message; }
+  };
+}
+function songChosen(r) {
+  W.music = r.music;
+  $('wSongInfo').innerHTML = `<span class="ok">♪ ${esc(r.name)}</span> will be the reel's music.`;
+  wizState();
+}
+$('wSong').onclick = async () => {
+  $('wSongInfo').textContent = 'Waiting for the file picker…';
+  try { const r = await post('/api/pick/music', { folder: W.folder }); if (r.cancelled) { $('wSongInfo').textContent = W.music ? '♪ ' + W.music : 'No song chosen.'; return; } songChosen(r); }
+  catch (err) { $('wSongInfo').textContent = err.message; }
+};
+$('wYtGo').onclick = async () => {
+  const url = $('wYt').value.trim();
+  if (!url) { $('wYt').focus(); return; }
+  $('wYtGo').disabled = true; $('wYtBar').hidden = false;
+  try {
+    let j = await post('/api/music/youtube', { folder: W.folder, url });
+    while (j.state === 'running') {
+      $('wYtBar').firstElementChild.style.width = Math.round(100 * (j.frac || 0)) + '%';
+      $('wSongInfo').textContent = (j.step || 'downloading') + '…';
+      await new Promise(r => setTimeout(r, 700));
+      j = await (await fetch('/api/music/status')).json();
+    }
+    if (j.state === 'error') throw new Error(j.error);
+    songChosen(j);
+  } catch (err) { $('wSongInfo').innerHTML = `<span style="color:var(--bad)">${esc(err.message)}</span> You can choose a song file instead.`; }
+  $('wYtGo').disabled = false; $('wYtBar').hidden = true;
+};
+$('wCreate').onclick = async () => {
+  $('wCreate').disabled = true; $('wCancel').disabled = true; $('wBar').hidden = false;
+  try {
+    let j = await post('/api/projects/create', { folder: W.folder, player: W.player, music: W.music });
+    while (j.state === 'running') {
+      $('wBar').firstElementChild.style.width = Math.round(100 * (j.done || 0) / (j.total || 1)) + '%';
+      $('wStatus').textContent = `${j.step}… (${j.done}/${j.total}). This takes a few minutes for a folder of 4K clips.`;
+      await new Promise(r => setTimeout(r, 1000));
+      j = await (await fetch('/api/projects/setup')).json();
+    }
+    if (j.state === 'error') throw new Error(j.error);
+    const sk = j.result && j.result.skipped.length ? ` (${j.result.skipped.length} couldn't be read: ${j.result.skipped.join(', ')})` : '';
+    $('wStatus').innerHTML = `<span class="ok">Ready: ${j.result.clips} clips${esc(sk)}.</span> Opening…`;
+    setTimeout(() => location = '/review', sk ? 3000 : 600);
+  } catch (err) {
+    $('wStatus').innerHTML = `<span style="color:var(--bad)">${esc(err.message)}</span>`;
+    $('wCreate').disabled = false; $('wCancel').disabled = false;
+  }
+};
+// A setup started earlier (page reloaded mid-way): show it.
+fetch('/api/projects/setup').then(r => r.json()).then(j => {
+  if (j.state === 'running') { $('wiz').hidden = false; $('newProj').disabled = true; $('wStatus').textContent = 'Setting up ' + j.folder + '…'; }
 });
 load();
 </script>
