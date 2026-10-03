@@ -119,7 +119,23 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     if seg_dir.exists():
         shutil.rmtree(seg_dir)
     seg_dir.mkdir(parents=True)
-    title = segment.card(seg_dir / "00_title.mp4", graphics.title_card(lib, pl), TITLE_S, fade_in=True)
+    # The song's beats are needed for the intro's slams as well as the play timing.
+    music = project.music_path(root, settings)
+    music_start = float(settings.get("music_start") or 0)
+    grid = None
+    if music and settings.get("beat_sync", True):
+        grid = beatmod.cached(music, root / ".hlv_cache")
+    if settings.get("intro", "animated") == "animated":
+        from . import intro
+        say("animating the intro", done, total)
+        intro_grid = grid or (beatmod.cached(music, root / ".hlv_cache") if music else None)
+        src, title_s = intro.build(root, lib, pl, clips, intro_grid, music_start,
+                                   sfx=bool(settings.get("intro_sfx", True)))
+        title = seg_dir / "00_title.mp4"
+        _link_or_copy(src, title)
+    else:
+        title_s = TITLE_S
+        title = segment.card(seg_dir / "00_title.mp4", graphics.title_card(lib, pl), TITLE_S, fade_in=True)
     endc = segment.card(seg_dir / f"{len(clips) + 1:02d}_end.mp4", graphics.end_card(lib, pl), END_S, fade_in=False)
     credit = None
     brand = library.branding()
@@ -136,12 +152,7 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         plays.append(dst)
 
     # 3) timing: nominal, or fitted so each hit lands on a strong beat
-    music = project.music_path(root, settings)
-    music_start = float(settings.get("music_start") or 0)
     _, d = TRANSITIONS[transition]
-    grid = None
-    if music and settings.get("beat_sync", True):
-        grid = beatmod.cached(music, root / ".hlv_cache")
     metas = []
     for c, p in zip(clips, plays):
         lay = segment.layout(p)
@@ -150,9 +161,9 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         metas.append({"lay": lay, "lead_nom": snap - t_in,
                       "post_nom": lay.get("post_nom", t_out - snap),
                       "hit": _hit_in_play(lay, hits.hit_of(root, c)[0], snap)})
-    timing = plan_timing(metas, grid, music_start, TITLE_S - d, d)
+    timing = plan_timing(metas, grid, music_start, title_s - d, d)
 
-    items = [[(title, 0.0, TITLE_S)]]
+    items = [[(title, 0.0, title_s)]]
     for p, m, tm in zip(plays, metas, timing):
         a = m["lay"]["a_frames"] / segment.FPS
         f = m["lay"]["f_frames"] / segment.FPS
@@ -167,7 +178,9 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
 
     # 4) assemble
     out = out_dir / f"{pl['id']}_reel.mp4"
-    _assemble(items, transition, music, music_start, settings, out)
+    # Intro impact sounds play at full level; game audio sits under the music.
+    gains = [1.0] + [None] * (len(items) - 1)
+    _assemble(items, transition, music, music_start, settings, out, gains)
     done += 1
     say("assembled", done, total)
 
@@ -267,8 +280,9 @@ def plan_timing(metas: list[dict], grid: dict | None, music_start: float, t_firs
 
 
 def _assemble(items: list[list[tuple]], transition: str, music: Path | None, music_start: float,
-              settings: dict, out: Path) -> None:
-    """items: per timeline item, a list of (file, start, duration) pieces played in order."""
+              settings: dict, out: Path, gains: list | None = None) -> None:
+    """items: per timeline item, a list of (file, start, duration) pieces played in order.
+    gains: per-item audio level (None = game-audio level under the music)."""
     kind, d = TRANSITIONS[transition]
     files = []
     for it in items:
@@ -296,7 +310,10 @@ def _assemble(items: list[list[tuple]], transition: str, music: Path | None, mus
                      f"atrim=start_sample={f0 * spf}:end_sample={(f0 + nf) * spf},asetpts=PTS-STARTPTS[i{n_it}a{j}]")
             parts.append(f"[i{n_it}v{j}][i{n_it}a{j}]")
             n_frames += nf
-        f.append("".join(parts) + f"concat=n={len(it)}:v=1:a=1[v{n_it}][a{n_it}]")
+        f.append("".join(parts) + f"concat=n={len(it)}:v=1:a=1[v{n_it}][r{n_it}]")
+        g = (gains[n_it] if gains and gains[n_it] is not None
+             else (float(settings.get("game_audio", 0.3)) if music else 1.0))
+        f.append(f"[r{n_it}]volume={g}[a{n_it}]")
         durs.append(n_frames / segment.FPS)
     n = len(items)
     if kind is None:
@@ -315,9 +332,8 @@ def _assemble(items: list[list[tuple]], transition: str, music: Path | None, mus
         total = t
     f.append(f"[vc]fade=t=out:st={max(0.0, total - 0.8):.3f}:d=0.8[vout]")
     if music:
-        game = float(settings.get("game_audio", 0.3))
         mvol = float(settings.get("music_volume", 0.9))
-        f.append(f"[ac]volume={game}[g]")
+        f.append("[ac]anull[g]")                      # per-item levels already applied
         f.append(f"[{len(files)}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:{total:.3f},"
                  f"afade=t=in:d=0.5,afade=t=out:st={max(0.0, total - 3):.3f}:d=3,volume={mvol}[m]")
         f.append("[g][m]amix=inputs=2:normalize=0:duration=first[aout]")

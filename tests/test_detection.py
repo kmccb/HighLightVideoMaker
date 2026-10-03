@@ -344,3 +344,22 @@ def test_no_hit_play_keeps_natural_timing():
     assert t[0]["beat"] is None and t[0]["lead"] == 1.0
     assert abs(t[0]["fz"] - segment.FREEZE_S) < 1 / 30 and abs(t[0]["post"] - 6.0) < 1 / 30
     assert reel._hit_in_play(lay, None, 2.0) == -1.0
+
+
+def test_intro_slams_land_on_beats_about_a_second_apart():
+    from hlv import intro
+    for bpm in (95, 118.6, 140):
+        period = 60 / bpm
+        grid = {"beats": [0.2 + k * period for k in range(64)], "strength": [1.0 if k % 4 == 0 else 0.5 for k in range(64)]}
+        T, end = intro.beat_times(grid, 0.0)
+        beats = np.array(grid["beats"])
+        assert all(np.abs(beats - t).min() <= 1 / 30 + 1e-6 for t in T)        # on a beat (to the frame)
+        gaps = np.diff(T[:3])
+        assert np.all((gaps > 0.6) & (gaps < 1.4))                              # ~1 s between big slams
+        assert T[0] >= 0.45 and T[3] > T[2] and 3.5 < end <= 7.0
+
+
+def test_intro_without_music_uses_default_timing():
+    from hlv import intro
+    T, end = intro.beat_times(None, 0.0)
+    assert T == sorted(T) and end > T[-1]

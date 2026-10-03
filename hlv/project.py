@@ -21,7 +21,7 @@ def settings(project: dict) -> dict:
             "freeze": True, "order": [], "player": None, "game_audio": 0.3, "music_volume": 0.9,
             "beat_sync": True, "hit_fx": True, "music_start": 0.0,
             "slowmo": False, "slowmo_speed": 0.4, "name_banner": "first",
-            "music": None, "scottforge_card": True,
+            "music": None, "scottforge_card": True, "intro": "animated", "intro_sfx": True,
             **(project.get("settings") or {})}
 
 

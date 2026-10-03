@@ -295,6 +295,13 @@ video { display: block; max-width: 100%; max-height: 58vh; }
           <span class="segctl" id="rTrans">
             <button data-v="crossfade">Crossfade</button><button data-v="cut">Cut</button><button data-v="dip">Dip to black</button>
           </span></label>
+        <label class="row"><span class="lbl">Intro</span>
+          <span class="segctl" id="rIntro">
+            <button data-v="animated" title="number, name and logo slam in on the beat">Animated</button><button data-v="classic" title="the still title card">Classic</button>
+          </span>
+          <button class="btn" id="rIntroPv" style="flex:none;padding:5px 10px">▶ Preview intro</button></label>
+        <label class="row"><span class="lbl">Impact sounds</span><input type="checkbox" id="rIntroSfx">
+          <span class="hint">whoosh + boom on each slam of the animated intro</span></label>
         <label class="row"><span class="lbl">Name banner</span>
           <span class="segctl" id="rBanner">
             <button data-v="first" title="first play that has a spotlight">First play</button><button data-v="every">Every play</button><button data-v="off">Off</button>
@@ -870,6 +877,9 @@ async function loadReel() {
   $('rCredit').checked = !!s.scottforge_card;
   $('rCredit').disabled = !reelInfo.credit_ready;
   document.querySelectorAll('#rBanner button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.name_banner || 'first')));
+  document.querySelectorAll('#rIntro button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.intro || 'animated')));
+  $('rIntroSfx').checked = s.intro_sfx !== false;
+  $('rIntroSfx').disabled = (s.intro || 'animated') !== 'animated';
   $('rGame').value = Math.round((s.game_audio ?? 0.3) * 100);
   $('rGameV').textContent = $('rGame').value + '% under music';
   $('rStyle').textContent = STYLE_NAMES[s.highlight] || s.highlight;
@@ -1041,6 +1051,21 @@ $('rGame').oninput = e => { $('rGameV').textContent = e.target.value + '% under 
 $('rGame').onchange = e => saveReelSetting({ game_audio: e.target.value / 100 });
 document.querySelectorAll('#rTrans button').forEach(b => b.onclick = () => saveReelSetting({ transition: b.dataset.v }));
 document.querySelectorAll('#rBanner button').forEach(b => b.onclick = () => saveReelSetting({ name_banner: b.dataset.v }));
+document.querySelectorAll('#rIntro button').forEach(b => b.onclick = () => saveReelSetting({ intro: b.dataset.v }));
+$('rIntroSfx').onchange = e => saveReelSetting({ intro_sfx: e.target.checked });
+$('rIntroPv').onclick = async e => {
+  e.preventDefault();
+  const btn = $('rIntroPv'), old = btn.textContent;
+  btn.textContent = 'Rendering… (~45 s first time)'; btn.disabled = true;
+  try {
+    const res = await fetch('/api/intro/preview', { method: 'POST' });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || res.status);
+    $('pvTitle').textContent = 'Animated intro'; $('pv').hidden = false;
+    $('pvVideo').src = j.url + '?t=' + Date.now(); $('pvVideo').play();
+  } catch (err) { alert('Intro preview failed: ' + err.message); }
+  btn.textContent = old; btn.disabled = false;
+};
 $('rBuild').onclick = async () => {
   $('rResult').innerHTML = '';
   showJob(await (await fetch('/api/reel/build', { method: 'POST' })).json());

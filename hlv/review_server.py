@@ -374,6 +374,24 @@ class ReviewApp:
         banner = clip_id in reel.banner_ids([c for c in reel.ordered_clips(proj) if reel.included(c)], s)
         return segment.render(self.root, clip, pl, {**s, "_banner": banner}).name
 
+    def intro_preview(self) -> str:
+        """Render (or reuse) the animated intro with the song underneath; returns its file name."""
+        from . import beats as beatmod, intro
+        self._need()
+        with self.lock:
+            proj = project.load(self.root)
+        s = project.settings(proj)
+        lib = library.home()
+        pl = profiles.get(lib, s.get("player"))
+        if pl is None:
+            raise ValueError("add a player on the Player profiles page first")
+        clips = [c for c in reel.ordered_clips(proj) if reel.included(c)]
+        music = project.music_path(self.root, s)
+        ms = float(s.get("music_start") or 0)
+        grid = beatmod.cached(music, self.cache) if music else None
+        mp4, _ = intro.build(self.root, lib, pl, clips, grid, ms, sfx=bool(s.get("intro_sfx", True)))
+        return intro.preview(self.root, mp4, music, ms, s).name
+
     def start_build(self) -> dict:
         self._need()
         if self.job.get("state") == "running":
@@ -404,6 +422,10 @@ class ReviewApp:
                 s["transition"] = patch["transition"]
             if "freeze" in patch:
                 s["freeze"] = bool(patch["freeze"])
+            if patch.get("intro") in ("animated", "classic"):
+                s["intro"] = patch["intro"]
+            if "intro_sfx" in patch:
+                s["intro_sfx"] = bool(patch["intro_sfx"])
             if patch.get("name_banner") in reel.BANNER_MODES:
                 s["name_banner"] = patch["name_banner"]
             if "slowmo_speed" in patch and float(patch["slowmo_speed"]) in (0.5, 0.4, 0.3):
@@ -591,6 +613,10 @@ def make_handler(app: ReviewApp):
                     return self.send_error(HTTPStatus.NOT_FOUND)
             if path == "/api/reel/status":
                 return self._json(app.job)
+            m = re.fullmatch(r"/media/intro/(intro-[a-z0-9-]+\.mp4)", path)
+            if m:
+                app._need()
+                return self._file(app.cache / "intro" / m.group(1), "video/mp4")
             m = re.fullmatch(r"/media/segment/([a-z0-9-]+\.mp4)", path)
             if m:
                 app._need()
@@ -678,6 +704,14 @@ def make_handler(app: ReviewApp):
                 except Exception as e:  # noqa: BLE001 - tell the page what was wrong
                     return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
                 return self._json({"path": rel, "assets": profiles.asset_files(library.home())})
+            if self.path == "/api/intro/preview":
+                if app.building():
+                    return self._json({"error": "a reel is building - preview the intro when it's done"},
+                                      HTTPStatus.CONFLICT)
+                try:
+                    return self._json({"url": "/media/intro/" + app.intro_preview()})
+                except Exception as e:  # noqa: BLE001 - show the reason on the page
+                    return self._json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
             m = re.fullmatch(r"/api/clips/([a-z0-9-]+)/segment", self.path)
             if m:
                 try:
