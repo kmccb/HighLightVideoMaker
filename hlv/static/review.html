@@ -262,7 +262,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
       <div><kbd>Z</kbd> zoom off · 1.25× · 1.5× · 1.8×</div>
       <div><kbd>V</kbd> full frame + camera box ↔ zoomed view</div>
       <div><kbd>H</kbd> highlight style for the whole reel: ring · arrow · spot shadow · off</div>
-      <div>Highlight fades out where tracking is unsure (amber/red strip)</div>
+      <div>Strip under the timeline: green = following him · amber = unsure or far from a click (click him there) · red = lost</div>
       <div><kbd>K</kbd> mark the hit (tackle/catch) here: synced to a beat · <kbd>J</kbd> go to hit · <kbd>Shift</kbd>+<kbd>K</kbd> back to auto · <kbd>N</kbd> or ✕ no hit on this play</div>
     </div>
   </main>
@@ -584,6 +584,7 @@ function setTracking(on) {
 
 const frameAt = (t, arr) => arr ? arr[Math.max(0, Math.min(arr.length - 1, Math.round(t * plan.fps)))] : null;
 
+const CLICK_REACH = 1.5;   // s either side of the outer clicks the strip trusts the tracker alone
 function drawConfStrip() {
   const cv = $('tlConf'), w = cv.clientWidth, h = cv.clientHeight || 4;
   cv.width = w; cv.height = h;
@@ -591,9 +592,14 @@ function drawConfStrip() {
   g.clearRect(0, 0, w, h);
   if (!plan || !plan.player || tracking) return;
   const n = plan.player.length;
+  // Between clicks the ring is held to the path joining them. Before the first and after the
+  // last click it's the tracker on its own, which can drift onto another player while still
+  // "confident" - so past CLICK_REACH from the outer clicks the strip goes amber: click there.
+  const ts = cur.spotlight.map(a => a.t), first = Math.min(...ts), last = Math.max(...ts);
   for (let x = 0; x < w; x++) {
-    const p = plan.player[Math.min(n - 1, Math.floor(x / w * n))];
-    const c = p[0] < 0 ? 0 : p[4];
+    const i = Math.min(n - 1, Math.floor(x / w * n)), p = plan.player[i], t = i / plan.fps;
+    let c = p[0] < 0 ? 0 : p[4];
+    if (t < first - CLICK_REACH || t > last + CLICK_REACH) c = Math.min(c, 0.49);
     g.fillStyle = c >= 0.5 ? '#3ecf6e' : c >= 0.25 ? '#f5b942' : '#ff5c5c';
     g.fillRect(x, 0, 1, h);
   }
