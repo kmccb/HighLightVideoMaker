@@ -8,6 +8,7 @@ A local Python tool that turns a folder of football clips into a finished highli
 Test project folder: `TestClips\Caleb_Footbal\` (23 clips across Scrimmage, Week 1, Week 2 and Week 5).
 
 ## How to run
+**Tom starts it with the desktop shortcut "Highlight Reels"** (→ `Start Highlight Reels.bat`: opens the browser, or starts the app in a minimised window if it isn't running). Don't leave Tom on a server started by Claude's preview pane: the desktop app stops it when the session goes idle or closes, which looks to Tom like a crash (2026-10-04). After a Python change, restart by closing the "Highlight Reels" window (only when `/api/reel/status` isn't running) and run the .bat again, and tell Tom to reload.
 ```
 .venv\Scripts\python -m hlv review                              # main UI: http://127.0.0.1:8765 (start screen: project list)
 .venv\Scripts\python -m hlv review "TestClips\Caleb_Footbal"     # or straight into one project
