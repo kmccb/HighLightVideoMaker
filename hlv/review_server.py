@@ -229,8 +229,11 @@ class ReviewApp:
                 "proxy": f"/proxy/{c['id']}.mp4",
                 "proxy_ready": proxy.proxy_path(self.cache, c["id"]).exists(),
             })
+        pics = [{"id": ph["id"], "source": ph["source"], "group": ph.get("group", ""), "taken": ph.get("taken"),
+                 "keep": ph.get("keep") is not False, "thumb": f"/api/photos/{ph['id']}/thumb"}
+                for ph in proj.get("photos") or []]
         return {"pad_before": self.cfg.pad_before, "pad_after": self.cfg.pad_after,
-                "settings": project.settings(proj), "clips": out}
+                "settings": project.settings(proj), "clips": out, "photos": pics}
 
     # ---------------- reel ----------------
     @staticmethod

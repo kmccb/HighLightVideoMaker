@@ -33,6 +33,7 @@ aside { background: var(--panel); border-right: 1px solid var(--line); display: 
 .item.active { background: var(--panel-2); border-left-color: var(--accent); }
 .item .name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .item.skipped .name { color: var(--skip); text-decoration: line-through; }
+.item img.pthumb { width: 32px; height: 24px; object-fit: cover; border-radius: 3px; flex: none; background: var(--panel-2); }
 .item .inc { margin: 0 0 0 4px; width: 15px; height: 15px; accent-color: var(--snap); cursor: pointer; flex: none; }
 .btn.inreel { border-color: #2f6b47; color: var(--snap); }
 .btn.leftout { border-color: #5a4a22; color: var(--warn); }
@@ -428,9 +429,38 @@ function renderList() {
     box.onchange = () => setKeep(i, box.checked);
     list.appendChild(b);
   });
+  renderPhotoList(list);
   $('prog').style.width = (100 * done / data.clips.length) + '%';
   $('progLabel').textContent = `${done} of ${data.clips.length} confirmed · ${inReel} in reel`;
   list.querySelector('.item.active')?.scrollIntoView({ block: 'nearest' });
+}
+
+// Photos: their own section under the clips. Tick = in the reel; click = preview the slide.
+function renderPhotoList(list) {
+  const pics = data.photos || [];
+  if (!pics.length) return;
+  const g = document.createElement('div');
+  g.className = 'group';
+  g.textContent = `Photos · ${pics.filter(p => p.keep).length} of ${pics.length} in reel`;
+  g.title = 'Shown as slow pan-and-zoom slides. Order and length: Build reel panel';
+  list.appendChild(g);
+  for (const ph of pics) {
+    const b = document.createElement('div');
+    b.setAttribute('role', 'button'); b.tabIndex = -1;
+    b.className = 'item' + (ph.keep ? '' : ' skipped');
+    b.title = 'Click to preview the slide';
+    b.innerHTML = `<img class="pthumb" src="${ph.thumb}" alt="" loading="lazy"><span class="name"></span>` +
+      `<input type="checkbox" class="inc" ${ph.keep ? 'checked' : ''} title="${ph.keep ? 'In the reel: untick to leave it out' : 'Left out of the reel: tick to include'}">`;
+    b.querySelector('.name').textContent = ph.source.split('/').pop();
+    const box = b.querySelector('.inc');
+    box.onclick = e => e.stopPropagation();
+    box.onchange = async () => {
+      await fetch('/api/photos/' + ph.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keep: box.checked }) });
+      ph.keep = box.checked; renderList();
+    };
+    b.onclick = () => { video.pause(); previewSegment(ph.id, ph.source.split('/').pop(), b.querySelector('.name'), true); };
+    list.appendChild(b);
+  }
 }
 
 function select(i) {
@@ -1017,7 +1047,8 @@ $('rList').addEventListener('click', async e => {
     saveOrder();
   } else if (act === 'inc' && reelInfo.clips[i].type === 'photo') {
     await fetch('/api/photos/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keep: b.checked }) });
-    await loadReel();
+    const dp = (data.photos || []).find(p => p.id === id); if (dp) dp.keep = b.checked;
+    await loadReel(); renderList();
   } else if (act === 'inc') {
     await fetch('/api/clips/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keep: b.checked }) });
     const dc = data.clips.find(c => c.id === id); if (dc) dc.review.keep = b.checked;
