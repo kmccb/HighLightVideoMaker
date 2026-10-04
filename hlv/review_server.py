@@ -19,7 +19,7 @@ from .config import DetectConfig
 from .pipeline import CACHE_DIRNAME
 
 STATIC = Path(__file__).parent / "static"
-EDITABLE = {"snap", "end", "labeled", "keep", "notes", "spotlight", "zoom", "hit", "no_hit"}
+EDITABLE = {"snap", "end", "labeled", "keep", "notes", "spotlight", "zoom", "hit", "no_hit", "ring_off"}
 ZOOM_LEVELS = (0, 1.25, 1.5, 1.8)
 
 
@@ -477,6 +477,8 @@ class ReviewApp:
                 raise KeyError(clip_id)
             if "spotlight" in patch:
                 patch["spotlight"] = _clean_anchors(patch["spotlight"])
+            if "ring_off" in patch:
+                patch["ring_off"] = _clean_ring_off(patch["ring_off"], clip["probe"]["duration"])
             if "no_hit" in patch:
                 patch["no_hit"] = bool(patch["no_hit"])
             if "hit" in patch:
@@ -517,6 +519,31 @@ def _clean_anchors(v) -> list[dict]:
         if 0 <= a["x"] <= 1 and 0 <= a["y"] <= 1 and 0 < a["w"] <= 1 and 0 < a["h"] <= 1 and a["t"] >= 0:
             out.append({k: round(val, 4) for k, val in a.items()})
     return sorted(out, key=lambda a: a["t"])
+
+
+def _clean_ring_off(v, duration: float) -> list[list]:
+    """Where the highlight is turned off: [[off, on or None (to the end)], ...], sorted and
+    merged, within the clip."""
+    spans = []
+    for r in v if isinstance(v, list) else []:
+        try:
+            a = max(0.0, round(float(r[0]), 3))
+            b = None if r[1] is None else round(float(r[1]), 3)
+        except (IndexError, KeyError, TypeError, ValueError):
+            continue
+        if b is not None and b >= duration:
+            b = None
+        if a >= duration or (b is not None and b <= a):
+            continue
+        spans.append([a, b])
+    out = []
+    for a, b in sorted(spans, key=lambda r: r[0]):
+        if out and (out[-1][1] is None or a <= out[-1][1]):
+            if out[-1][1] is not None:
+                out[-1][1] = None if b is None else max(out[-1][1], b)
+            continue
+        out.append([a, b])
+    return out
 
 
 def make_handler(app: ReviewApp):

@@ -31,6 +31,19 @@ TAIL_EXTRA = 2.0         # footage kept after the out-point
 PUSH_IN = 1.08           # extra zoom during the freeze (completes in the first second)
 RESUME_FRAMES = 15       # spotlight -> style handover and zoom ease-back after the freeze
 HIT_FRAMES = 9           # zoom bump + flash on the hit
+RING_FADE = 0.25         # highlight fades out before a "ring off" point and back in after "on"
+
+
+def ring_visibility(ring_off: list, t: float) -> float:
+    """How visible the highlight is at time t, given [[off, on or None], ...] ranges where
+    you turned it off (e.g. once he's in a pile). Gone by `off`, back in by `on` + fade."""
+    v = 1.0
+    for a, b in ring_off or []:
+        gone = float(_smoothstep((t - (a - RING_FADE)) / RING_FADE))
+        if b is not None:
+            gone *= 1 - float(_smoothstep((t - b) / RING_FADE))
+        v *= 1 - gone
+    return v
 
 
 def _window(clip: dict) -> tuple[float, float, float]:
@@ -63,6 +76,8 @@ def segment_key(clip: dict, pl: dict | None, settings: dict, plan: dict, src: Pa
                                                if settings.get("_banner", True) else ("accent",))},
         "plan": hashlib.sha1(json.dumps([plan.get("rects"), plan.get("player")]).encode()).hexdigest(),
     }
+    if r.get("ring_off"):                      # only keyed when used, so old renders stay valid
+        payload["ring_off"] = r["ring_off"]
     return hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:12]
 
 
@@ -154,8 +169,10 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
                          interpolation=cv2.INTER_AREA if wi >= OW else cv2.INTER_CUBIC)
         return img, (x, y, w, h)
 
+    ring_off = (clip.get("review") or {}).get("ring_off") or []
+
     def highlight(img, t, rect, style_, alpha_mul=1.0):
-        if player is None:
+        if player is None or alpha_mul <= 0:
             return
         p = lerp_row(player, t)
         if p[0] < 0 or np.isnan(p[0]):
@@ -255,7 +272,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
             img, rect = picture(t)
             if img is None:
                 break
-            highlight(img, t, rect, style)
+            highlight(img, t, rect, style, ring_visibility(ring_off, t))
             enc.stdin.write(img.tobytes())
             written += 1
         for jz in range(nfz):
@@ -278,7 +295,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
                     break
                 highlight(img, t, rect, "shadow", 1 - v)
                 if style != "shadow":
-                    highlight(img, t, rect, style, v)
+                    highlight(img, t, rect, style, v * ring_visibility(ring_off, t))
                 if banner is not None:
                     graphics.composite(img, banner, 1 - v)
             else:
@@ -287,7 +304,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
                 img, rect = picture(t, bump)
                 if img is None:
                     break
-                highlight(img, t, rect, style)
+                highlight(img, t, rect, style, ring_visibility(ring_off, t))
                 if 0 <= hj < 5:
                     a = 0.35 * (1 - hj / 5)                               # white flash
                     img[:] = (img.astype(np.float32) * (1 - a) + 255 * a).astype(np.uint8)

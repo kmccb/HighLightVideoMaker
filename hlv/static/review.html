@@ -81,6 +81,10 @@ video { display: block; max-width: 100%; max-height: 58vh; }
 .btn .x:hover { background: var(--panel); color: var(--end); }
 .tl-anchor { position: absolute; top: 2px; width: 10px; height: 10px; background: var(--spot); transform: translateX(-5px) rotate(45deg);
   cursor: pointer; border: 1px solid #000; }
+.tl-ringoff { position: absolute; top: 18px; height: 36px; background: repeating-linear-gradient(135deg, rgba(255,210,63,.16) 0 6px, transparent 6px 12px);
+  border-left: 2px solid var(--spot); pointer-events: none; }
+.tl-ringoff b { position: absolute; top: -16px; left: 2px; font: 700 10px var(--mono); color: var(--spot); white-space: nowrap; pointer-events: auto; cursor: pointer; }
+.tl-ringoff b:hover { color: var(--end); }
 .tl-conf { position: absolute; left: 0; right: 0; top: 50px; height: 4px; width: 100%; }
 .btn.spot.on { border-color: var(--spot); color: var(--spot); }
 .btn .zl { font: 600 12px var(--mono); color: var(--spot); }
@@ -220,6 +224,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
       <div class="tl-mark" id="mSnap" style="color:var(--snap)"><span></span></div>
       <div class="tl-mark" id="mEnd" style="color:var(--end)"><span></span></div>
       <canvas class="tl-conf" id="tlConf"></canvas>
+      <div id="tlRingOff"></div>
       <div id="tlAnchors"></div>
       <div class="tl-hit" id="mHit"><span>HIT</span></div>
       <div class="tl-head" id="tlHead"></div>
@@ -237,6 +242,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
       <button class="btn" id="bZoom"><kbd>Z</kbd> Zoom <span class="zl" id="zoomLbl">off</span></button>
       <button class="btn" id="bView"><kbd>V</kbd> <span id="viewLbl">Show zoomed</span></button>
       <button class="btn" id="bHl"><kbd>H</kbd> Highlight <span class="zl" id="hlLbl">ring</span></button>
+      <button class="btn" id="bRing" title="Hide the highlight from here (e.g. once he's in a pile); press again where it should come back"><kbd>O</kbd> <span id="ringLbl">Ring off here</span></button>
       <button class="btn hit" id="bHit" title="K marks the hit at the playhead"><kbd>K</kbd> Hit <span class="val" id="vHit">–</span><span class="x" id="bNoHit" title="No hit on this play: no punch, no slow-mo, timing left alone (N)">✕</span></button>
       <span class="spacer"></span>
       <button class="btn primary" id="bOk"><kbd>Enter</kbd> Confirm &amp; next</button>
@@ -267,6 +273,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
       <div><kbd>V</kbd> full frame + camera box ↔ zoomed view</div>
       <div><kbd>H</kbd> highlight style for the whole reel: ring · arrow · spot shadow · off</div>
       <div>Strip under the timeline: green = following him · amber = unsure or far from a click (click him there) · red = lost</div>
+      <div><kbd>O</kbd> highlight off from here (e.g. in a pile) · <kbd>O</kbd> again where it should come back · ✕ on the striped band removes it</div>
       <div><kbd>K</kbd> mark the hit (tackle/catch) here: synced to a beat · <kbd>J</kbd> go to hit · <kbd>Shift</kbd>+<kbd>K</kbd> back to auto · <kbd>N</kbd> or ✕ no hit on this play</div>
     </div>
   </main>
@@ -379,6 +386,7 @@ function stateOf(c) {
     zoom: r.zoom || 0,
     hit: r.hit ?? null,
     no_hit: !!r.no_hit,
+    ring_off: Array.isArray(r.ring_off) ? r.ring_off : [],
     edited: r.snap != null || r.end != null,
   };
 }
@@ -486,6 +494,11 @@ function renderState() {
   renderHit();
   $('tlAnchors').innerHTML = cur.spotlight.map((a, i) =>
     `<div class="tl-anchor" data-i="${i}" style="left:${pct(a.t)}" title="spotlight click @ ${a.t.toFixed(2)}s"></div>`).join('');
+  const dur = data.clips[idx].duration;
+  $('tlRingOff').innerHTML = cur.ring_off.map(([a, b], i) =>
+    `<div class="tl-ringoff" style="left:${pct(a)};width:calc(${pct(b ?? dur)} - ${pct(a)})">` +
+    `<b data-i="${i}" title="highlight hidden ${a.toFixed(2)}s–${b == null ? 'end' : b.toFixed(2) + 's'}: click to remove">ring off ✕</b></div>`).join('');
+  $('ringLbl').textContent = ringOffAt(video.currentTime) >= 0 ? 'Ring back on here' : 'Ring off here';
   drawConfStrip();
 }
 
@@ -499,6 +512,8 @@ function redraw() {
   $('tc').textContent = t.toFixed(2) + ' s';
   $('rate').textContent = video.playbackRate !== 1 ? video.playbackRate + '×' : '';
   if (windowStop != null && t >= windowStop) { video.pause(); windowStop = null; }
+  const rl = ringOffAt(t) >= 0 ? 'Ring back on here' : 'Ring off here';
+  if ($('ringLbl').textContent !== rl) $('ringLbl').textContent = rl;
   drawOverlay(t);
 }
 function tick() {
@@ -519,7 +534,7 @@ function queueSave(patch, now = false) {
   renderState();
   clearTimeout(saveTimer);
   const c = data.clips[idx], body = { snap: cur.snap, end: cur.end, labeled: cur.labeled, keep: cur.keep, notes: cur.notes,
-                                      spotlight: cur.spotlight, zoom: cur.zoom, hit: cur.hit, no_hit: cur.no_hit };
+                                      spotlight: cur.spotlight, zoom: cur.zoom, hit: cur.hit, no_hit: cur.no_hit, ring_off: cur.ring_off };
   const run = async () => {
     saveTimer = null;
     try {
@@ -648,7 +663,7 @@ function drawOverlay(t) {
     octx.strokeRect(rect[0] * vw, rect[1] * vh, rect[2] * vw, rect[3] * vh);
   }
   const p = plan && plan.player ? frameAt(t, plan.player) : null;
-  if (p && p[0] >= 0 && !tracking) drawHighlight(data.settings.highlight, p, vw, vh, k, t);
+  if (p && p[0] >= 0 && !tracking) drawHighlight(data.settings.highlight, p, vw, vh, k, t, ringVisibility(t));
   for (const a of cur ? cur.spotlight : []) {   // the box you clicked, when at that moment
     if (Math.abs(a.t - t) < 0.12) {
       octx.strokeStyle = '#ffd23f'; octx.lineWidth = 2 * k; octx.setLineDash([6 * k, 4 * k]);
@@ -662,8 +677,8 @@ function drawOverlay(t) {
 }
 
 // Player highlight, the same three looks the render draws. Fades with tracking confidence.
-function drawHighlight(style, p, vw, vh, k, t) {
-  const a = Math.max(0, Math.min(1, (p[4] - 0.2) / 0.3));
+function drawHighlight(style, p, vw, vh, k, t, mul = 1) {
+  const a = Math.max(0, Math.min(1, (p[4] - 0.2) / 0.3)) * mul;
   if (style === 'off' || a <= 0) return;
   const col = data.settings.highlight_color || '#ffd23f';
   const cx = p[0] * vw, cy = p[1] * vh, bw = p[2] * vw, bh = p[3] * vh;
@@ -713,6 +728,43 @@ function drawHighlight(style, p, vw, vh, k, t) {
   }
   octx.restore();
 }
+
+// ---------- ring off / back on (same fade as the render: segment.ring_visibility) ----------
+const RING_FADE = 0.25;
+const smooth = x => { x = Math.max(0, Math.min(1, x)); return x * x * (3 - 2 * x); };
+function ringVisibility(t) {
+  let v = 1;
+  for (const [a, b] of cur ? cur.ring_off : []) {
+    let gone = smooth((t - (a - RING_FADE)) / RING_FADE);
+    if (b != null) gone *= 1 - smooth((t - b) / RING_FADE);
+    v *= 1 - gone;
+  }
+  return v;
+}
+function ringOffAt(t) { return cur ? cur.ring_off.findIndex(([a, b]) => t >= a && (b == null || t < b)) : -1; }
+// O: off from the playhead; inside an off stretch, back on from the playhead.
+function toggleRing() {
+  const t = +video.currentTime.toFixed(3);
+  let r = cur.ring_off.map(x => [...x]);
+  const i = ringOffAt(t);
+  if (i >= 0) {
+    if (t - r[i][0] < 0.1) r.splice(i, 1); else r[i][1] = t;
+  } else {
+    const next = r.find(([a]) => a > t);
+    if (next) next[0] = t; else r.push([t, null]);
+  }
+  r.sort((x, y) => x[0] - y[0]);
+  queueSave({ ring_off: r });
+  try { redraw(); } catch (e) { console.error(e); }
+}
+$('bRing').onclick = toggleRing;
+$('tlRingOff').addEventListener('pointerdown', e => {
+  const b = e.target.closest('b[data-i]');
+  if (!b) return;
+  e.stopPropagation();
+  queueSave({ ring_off: cur.ring_off.filter((_, i) => i !== +b.dataset.i) });
+  try { redraw(); } catch (err) { console.error(err); }
+});
 
 // ---------- hit (synced to the beat) ----------
 async function loadHitSuggestion(c) {
@@ -1098,6 +1150,7 @@ document.addEventListener('keydown', e => {
     'h': cycleHighlight, 'H': cycleHighlight,
     'k': setHit, 'K': () => (e.shiftKey ? clearHit() : setHit()), 'j': gotoHit, 'J': gotoHit,
     'n': noHit, 'N': noHit,
+    'o': toggleRing, 'O': toggleRing,
     'Delete': removeNearestAnchor, 'Backspace': removeNearestAnchor,
     'Escape': () => setPicking(false),
   }[k];

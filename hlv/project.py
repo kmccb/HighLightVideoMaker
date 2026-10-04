@@ -39,9 +39,10 @@ def empty_review() -> dict:
     # snap/end/labeled: human-confirmed play times (also exported as ground truth).
     # in/out: final trim window; keep: include in the reel.
     # spotlight: [{t, x, y, w, h}] clicks on your player (normalised); zoom: 0 = off, else level.
+    # ring_off: [[off, on or None]] where the highlight is hidden (e.g. while he's in a pile).
     return {"snap": None, "end": None, "labeled": False, "notes": "",
             "in": None, "out": None, "keep": None, "spotlight": [], "zoom": 0, "players": [],
-            "hit": None, "no_hit": False}
+            "hit": None, "no_hit": False, "ring_off": []}
 
 
 def load(root: Path) -> dict:
