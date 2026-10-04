@@ -12,7 +12,7 @@ Test project folder: `TestClips\Caleb_Footbal\` (23 clips across Scrimmage, Week
 .venv\Scripts\python -m hlv review                              # main UI: http://127.0.0.1:8765 (start screen: project list)
 .venv\Scripts\python -m hlv review "TestClips\Caleb_Footbal"     # or straight into one project
 .venv\Scripts\python -m hlv reel   "TestClips\Caleb_Footbal"     # build the reel from the command line (same as the Build button)
-.venv\Scripts\python -m pytest -q tests                          # 41 tests, all passing
+.venv\Scripts\python -m pytest -q tests                          # 43 tests, all passing
 ```
 In the Claude desktop app, `.claude/launch.json` has a `review` preview config (use `preview_start name=review`). **Restart the server after any Python change**; static HTML changes only need a page reload. **Never restart while a reel is building** (check `/api/reel/status`); the build runs inside the server process.
 
