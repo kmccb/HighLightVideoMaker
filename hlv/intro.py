@@ -31,19 +31,20 @@ from .graphics import _detail_line, _rgb, font
 W, H = graphics.W, graphics.H
 FPS = 30
 SR = 48000
-INTRO_VERSION = 1
+INTRO_VERSION = 2
+HOLD_EXTRA = 1.5        # seconds the finished name card stays up before the flash into the first play
 
 
 # ---------------------------------------------------------------- timing
 def beat_times(grid: dict | None, music_start: float) -> tuple[list[float], float]:
     """Slam times T1..T4 and total length, snapped to the song's beats when available."""
     if not grid or not grid.get("beats"):
-        return [0.5, 1.3, 2.1, 2.6], 4.2
+        return [0.5, 1.3, 2.1, 2.6], 4.2 + HOLD_EXTRA
     b = np.array(grid["beats"]) - music_start
     s = np.array(grid.get("strength") or [1.0] * len(b))
     ok = b >= 0.45
     if not ok.any():
-        return [0.5, 1.3, 2.1, 2.6], 4.2
+        return [0.5, 1.3, 2.1, 2.6], 4.2 + HOLD_EXTRA
     period = float(np.median(np.diff(b))) if len(b) > 1 else 0.5
     i0 = int(np.argmax(ok))
     # first reasonably strong beat within ~1 s, else the first beat
@@ -58,8 +59,8 @@ def beat_times(grid: dict | None, music_start: float) -> tuple[list[float], floa
     for k in range(1, 4):                               # guard short / odd grids
         if ts[k] <= ts[k - 1] + 0.3:
             ts[k] = ts[k - 1] + 0.6
-    end = ts[3] + max(1.3, 2.5 * period)
-    return [round(t * FPS) / FPS for t in ts], round(min(end, 7.0) * FPS) / FPS
+    end = ts[3] + max(1.3, 2.5 * period) + HOLD_EXTRA
+    return [round(t * FPS) / FPS for t in ts], round(min(end, 8.5) * FPS) / FPS
 
 
 # ---------------------------------------------------------------- easing

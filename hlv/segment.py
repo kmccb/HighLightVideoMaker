@@ -21,7 +21,7 @@ from .autozoom import _smoothstep, draw_highlight
 from .pipeline import CACHE_DIRNAME
 from .probe import probe
 
-RENDER_VERSION = 4
+RENDER_VERSION = 5
 FPS = 30
 OW, OH = graphics.W, graphics.H
 FREEZE_S = 1.4           # nominal freeze; beat sync may use FREEZE_MIN..FREEZE_MAX
@@ -60,6 +60,23 @@ def extents(clip: dict, duration: float) -> tuple[float, float]:
     """What we actually render: extra lead and tail so the reel can re-time without re-rendering."""
     t_in, t_out, snap = _window(clip)
     return max(0.0, min(t_in, snap - LEAD_MAX)), min(duration, t_out + TAIL_EXTRA)
+
+
+def freeze_time(player, snap: float, t0: float, t1: float, t_out: float) -> tuple[float | None, bool]:
+    """When to freeze on the player: at the snap if he's found there, else the first moment
+    after it that he is (usually your first click), as long as that's at least a second
+    before the play ends. Returns (time, at_snap)."""
+    if player is None:
+        return None, False
+    ok = lambda g: g < len(player) and player[g][0] >= 0 and player[g][4] >= FREEZE_CONF   # noqa: E731
+    g = int(round(snap * FPS))
+    if t0 <= snap < t1 and ok(g):
+        return g / FPS, True
+    last = int((min(t1, t_out) - 1.0) * FPS)
+    for k in range(max(g, int(np.ceil(t0 * FPS))), last):
+        if ok(k):
+            return k / FPS, False
+    return None, False
 
 
 def segment_key(clip: dict, pl: dict | None, settings: dict, plan: dict, src: Path) -> str:
@@ -124,12 +141,10 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
     style = settings.get("highlight", "ring")
     color = (pl or {}).get("accent") or settings.get("highlight_color", "#ffd23f")
 
-    # Freeze at the snap if we know where the player is then.
+    # Freeze at the snap if we know where the player is then (else as soon after as we do).
     freeze_t = None
-    if settings.get("freeze", True) and player is not None:
-        g = int(round(snap * FPS))
-        if t0 <= snap < t1 and g < len(player) and player[g][0] >= 0 and player[g][4] >= FREEZE_CONF:
-            freeze_t = g / FPS
+    if settings.get("freeze", True):
+        freeze_t, _ = freeze_time(player, snap, t0, t1, _window(clip)[1])
     nfz = int(round(FREEZE_MAX * FPS)) if freeze_t is not None else 0
     split_t = min(max(freeze_t if freeze_t is not None else snap, t0), t1)
     hit_t = settings.get("_hit")
@@ -322,7 +337,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
     t_in, t_out, _ = _window(clip)
     b_frames = max(0, written - len(pre) - nfz)
     out.with_suffix(".json").write_text(json.dumps({
-        "fps": FPS, "t0": t0, "snap": snap, "hit": hit_t,
+        "fps": FPS, "t0": t0, "snap": snap, "split": split_t, "hit": hit_t,
         "a_frames": len(pre),             # output frames before the snap (lead, real time)
         "f_frames": nfz,                  # freeze frames (0 = no freeze)
         "b_frames": b_frames,             # output frames from the snap on (play + tail)

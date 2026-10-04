@@ -1,13 +1,13 @@
 """Animated ScottForge ending, in the look of ScottForge.ai.
 
 Background: the forge clip from the website (glowing bar on the anvil), darkened like the
-site's hero, slowly pushing in, with embers rising. Timeline (5 s):
+site's hero, slowly pushing in, with embers rising. Timeline (7 s):
   0.0-0.6  fade up from black
   0.5      the anvil mark strikes in (scale + flash + sparks), its three sparks pop
   0.9/1.2  "Scott" then the italic ember "Forge" rise into place; "Forge" glows and flickers
            like hot metal, with a spark burst as it lands
   1.9-2.9  "— CREATED BY" label, the website, then the invite line
-  4.3-5.0  fade out with the music
+  6.3-7.0  fade out with the music
 Silent: the song plays on underneath. Cached by everything that changes it.
 """
 from __future__ import annotations
@@ -27,8 +27,8 @@ from .intro import Sparks, _clamp, _glow, _paste, ease_out, ease_out_back, smoot
 
 W, H = graphics.W, graphics.H
 FPS = 30
-OUTRO_S = 5.0
-OUTRO_VERSION = 1
+OUTRO_S = 7.0
+OUTRO_VERSION = 2
 FONT_DIR = Path(__file__).parent / "fonts"
 PAPER = (221, 235, 242)          # BGR of #F2EBDD (site --paper)
 PAPER_DIM = (185, 203, 212)      # #D4CBB9

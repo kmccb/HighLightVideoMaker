@@ -299,7 +299,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
           <button class="btn" id="rYtGo">Download</button></div>
         <div id="rSongMsg" class="hint"></div>
         <label class="row"><span class="lbl">ScottForge card</span><input type="checkbox" id="rCredit">
-          <span class="hint" id="rCreditHint">5 s animated ending after the end card · <a href="/players#brand" style="color:var(--accent)">edit ▸</a></span></label>
+          <span class="hint" id="rCreditHint">7 s animated ending after the end card · <a href="/players#brand" style="color:var(--accent)">edit ▸</a></span></label>
         <div class="hint">Name, number, school, colours and logo: <a href="/players" style="color:var(--accent)">edit player profiles ▸</a><span hidden><code id="rProfile"></code><code id="rAssetsDir"></code></span></div>
       </div>
       <div class="card">
@@ -1006,7 +1006,8 @@ function renderReelList() {
       c.kind === 'pre_edited' ? '<span class="tag warn">TV</span>' : '',
       c.labeled ? '' : '<span class="tag warn" title="snap/end not confirmed: uses the auto trim">unconfirmed</span>',
       c.spotlight ? '<span class="tag" style="color:var(--spot)">★ spotlight</span>' : '<span class="tag" title="no spotlight click: no freeze or highlight">no spotlight</span>',
-      c.freeze_ok === false ? '<span class="tag warn" title="He isn't found at the snap (your first click is after it and tracking back lost him), so this play won't freeze. Edit, press [ to jump to the snap, F and click him.">no freeze: click him at the snap</span>' : '',
+      c.freeze_ok === 'late' ? '<span class="tag warn" title="He isn't found at the snap (your first click is after it and tracking back lost him), so the freeze happens later, where you first clicked him. To freeze at the snap: Edit, press [ to jump to the snap, F and click him.">late freeze: click him at the snap</span>'
+      : c.freeze_ok === 'none' ? '<span class="tag warn" title="He isn't found anywhere he could freeze. Edit, press [ to jump to the snap, F and click him.">no freeze: click him at the snap</span>' : '',
       c.zoom ? `<span class="tag">zoom ${c.zoom}×</span>` : '',
       c.no_hit ? '<span class="tag" title="no hit: no punch/slow-mo, timing left alone">no hit</span>'
         : c.hit_set ? '<span class="tag" style="color:var(--hit)">hit ✓</span>' : '<span class="tag" title="hit not marked: using the suggestion">hit auto</span>',

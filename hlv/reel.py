@@ -202,8 +202,9 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         lay = segment.layout(p)
         t_in, t_out, snap = segment._window(c)
         # The layout knows where the hit and out-point land in output time (slow-mo stretches it).
-        metas.append({"lay": lay, "lead_nom": snap - t_in,
-                      "post_nom": lay.get("post_nom", t_out - snap),
+        # lead-in runs up to the freeze (the snap, or later if he was only found later)
+        metas.append({"lay": lay, "lead_nom": lay.get("split", snap) - t_in,
+                      "post_nom": lay.get("post_nom", t_out - lay.get("split", snap)),
                       "hit": _hit_in_play(lay, hits.hit_of(root, c)[0], snap)})
     timing = plan_timing(metas, grid, music_start, title_s - d, d)
 
@@ -251,7 +252,7 @@ def _hit_in_play(lay: dict, hit: float | None, snap: float) -> float:
     """Seconds from the start of the play part to the hit; -1 = no hit (timing left alone)."""
     if hit is None:
         return -1.0
-    return lay["hit_b"] if lay.get("hit_b") is not None else hit - snap
+    return lay["hit_b"] if lay.get("hit_b") is not None else hit - lay.get("split", snap)
 
 
 def _fr(s: float) -> float:

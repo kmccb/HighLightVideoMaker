@@ -356,7 +356,8 @@ def test_intro_slams_land_on_beats_about_a_second_apart():
         assert all(np.abs(beats - t).min() <= 1 / 30 + 1e-6 for t in T)        # on a beat (to the frame)
         gaps = np.diff(T[:3])
         assert np.all((gaps > 0.6) & (gaps < 1.4))                              # ~1 s between big slams
-        assert T[0] >= 0.45 and T[3] > T[2] and 3.5 < end <= 7.0
+        assert T[0] >= 0.45 and T[3] > T[2] and 3.5 < end <= 8.5
+        assert end - T[3] >= 1.3 + intro.HOLD_EXTRA - 1 / 30                 # name card holds before the flash
 
 
 def test_intro_without_music_uses_default_timing():

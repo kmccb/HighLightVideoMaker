@@ -95,9 +95,9 @@ def _track_file(cache: Path, clip: dict) -> Path:
     return cache / "track" / f"{clip['id']}-{key}.npy"
 
 
-def freeze_found(cache: Path, clip: dict) -> bool | None:
-    """Whether the render will find the player at the snap (so the freeze + spotlight happens),
-    from the saved track only - never tracks. None: no clicks, or not tracked yet."""
+def freeze_found(cache: Path, clip: dict) -> str | None:
+    """Where the render will freeze on the player, from the saved track only (never tracks):
+    "snap", "late" (he's only found after the snap), "none", or None (no clicks / not tracked yet)."""
     if not anchors_of(clip):
         return None
     f = _track_file(cache, clip)
@@ -105,9 +105,10 @@ def freeze_found(cache: Path, clip: dict) -> bool | None:
         return None
     from . import segment
     player = np.nan_to_num(track.smooth_track(np.load(f), FPS), nan=-1)
-    _, _, snap = segment._window(clip)
-    g = int(round(snap * segment.FPS))
-    return bool(g < len(player) and player[g][0] >= 0 and player[g][4] >= segment.FREEZE_CONF)
+    t_in, t_out, snap = segment._window(clip)
+    t0, t1 = segment.extents(clip, clip["probe"]["duration"])
+    t, at_snap = segment.freeze_time(player, snap, t0, t1, t_out)
+    return "none" if t is None else ("snap" if at_snap else "late")
 
 
 def player_track(cache: Path, clip: dict, need_runs: bool = False) -> np.ndarray | None:
