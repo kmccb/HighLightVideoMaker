@@ -13,16 +13,16 @@ from .config import DetectConfig
 from .pipeline import CACHE_DIRNAME, analyze, load_clip
 from .probe import VIDEO_EXTS, find_clips
 from .signals import clip_id
+from . import photos as photo_files
 
-PHOTO_EXTS = {".jpg", ".jpeg", ".png", ".heic", ".heif", ".webp"}
+PHOTO_EXTS = photo_files.PHOTO_EXTS
 
 
 def scan(folder: Path) -> dict:
     """What's in a folder the user picked: video and photo counts, and whether it's a project."""
     folder = Path(folder)
     videos = find_clips(folder)
-    photos = [p for p in folder.rglob("*") if p.is_file() and p.suffix.lower() in PHOTO_EXTS
-              and not ({".hlv_cache", "reel", "music"} & set(p.relative_to(folder).parts))]
+    photos = photo_files.find(folder)
     # (Live Photo movies count with their photo, not as plays: find_clips leaves them out.)
     known = library.find(folder)
     return {"folder": str(folder.resolve()), "name": folder.name, "videos": len(videos), "photos": len(photos),

@@ -5,3 +5,4 @@ matplotlib
 pytest
 pillow
 yt-dlp
+pillow-heif

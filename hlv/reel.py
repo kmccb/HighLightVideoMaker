@@ -18,7 +18,7 @@ from xml.sax.saxutils import escape
 
 import numpy as np
 
-from . import graphics, library, profiles, project, segment
+from . import graphics, library, photos, profiles, project, segment
 
 # Beat choice: per second away from the play's natural timing, and extra per second of
 # stretching. With beats ~0.5 s apart, a beat one step further must be ~0.5 stronger.
@@ -31,6 +31,8 @@ OUT_DIRNAME = "reel"
 
 
 def included(clip: dict) -> bool:
+    if photos.is_photo(clip):
+        return clip.get("keep") is not False
     r = clip.get("review") or {}
     if r.get("keep") is False:
         return False
@@ -38,13 +40,29 @@ def included(clip: dict) -> bool:
     return clip["kind"] != "pre_edited" or bool(r.get("labeled"))
 
 
-def ordered_clips(proj: dict) -> list[dict]:
-    """Your saved order first, then anything new in game/file order."""
-    by_id = {c["id"]: c for c in proj["clips"]}
+def ordered_items(proj: dict) -> list[dict]:
+    """Plays and photos in reel order: your saved order first, then new plays in game/file
+    order. Each new photo goes just after the last item taken on or before it (first if it's
+    older than everything), so photos sit with their game without moving anything you placed."""
+    plays, pics = proj["clips"], proj.get("photos") or []
+    by_id = {c["id"]: c for c in plays + pics}
     order = [i for i in project.settings(proj).get("order", []) if i in by_id]
-    rest = sorted((c for c in proj["clips"] if c["id"] not in order),
-                  key=lambda c: (c.get("group", "").lower(), c["source"].lower()))
-    return [by_id[i] for i in order] + rest
+    placed = set(order)
+    seq = [by_id[i] for i in order] + sorted((c for c in plays if c["id"] not in placed),
+                                             key=lambda c: (c.get("group", "").lower(), c["source"].lower()))
+    for ph in sorted((p for p in pics if p["id"] not in placed), key=lambda p: (p.get("taken") or "", p["source"])):
+        dated = [k for k, it in enumerate(seq) if it.get("taken")]
+        if not dated or not ph.get("taken"):
+            seq.append(ph)
+            continue
+        before = [k for k in dated if seq[k]["taken"] <= ph["taken"]]
+        seq.insert(before[-1] + 1 if before else 0, ph)
+    return seq
+
+
+def ordered_clips(proj: dict) -> list[dict]:
+    """Just the plays, in reel order."""
+    return [c for c in ordered_items(proj) if not photos.is_photo(c)]
 
 
 def _link_or_copy(src: Path, dst: Path) -> None:
