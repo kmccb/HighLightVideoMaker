@@ -18,7 +18,7 @@ from xml.sax.saxutils import escape
 
 import numpy as np
 
-from . import graphics, library, photo_slide, photos, profiles, project, segment
+from . import graphics, library, outro, photo_slide, photos, profiles, project, segment
 
 # Beat choice: per second away from the play's natural timing, and extra per second of
 # stretching. With beats ~0.5 s apart, a beat one step further must be ~0.5 stronger.
@@ -26,7 +26,7 @@ BEAT_NEAR_COST = 1.0
 BEAT_STRETCH_COST = 0.6
 TRANSITIONS = {"crossfade": ("fade", 10 / 30), "dip": ("fadeblack", 18 / 30), "cut": (None, 0.0)}  # whole frames
 TITLE_S, END_S = 4.0, 4.0
-CREDIT_S = 3.5          # ScottForge closing card
+CREDIT_S = outro.OUTRO_S  # animated ScottForge ending
 OUT_DIRNAME = "reel"
 PHOTO_FLEX = (0.75, 1.25)  # beat-fitted photo length, as a fraction of the "Photo length" setting
 
@@ -180,8 +180,8 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     credit = None
     brand = library.branding()
     if settings.get("scottforge_card") and library.branding_ready(brand):
-        credit = segment.card(seg_dir / f"{len(seq) + 2:02d}_scottforge.mp4",
-                              graphics.scottforge_card(lib, brand), CREDIT_S, fade_in=False)
+        credit = seg_dir / f"{len(seq) + 2:02d}_scottforge.mp4"
+        _link_or_copy(outro.build(lib / "cache", lib, brand, CREDIT_S), credit)
     done += 1
     say("cards", done, total)
     linked = []

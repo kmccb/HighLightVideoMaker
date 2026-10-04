@@ -17,8 +17,9 @@ from . import profiles, project
 PROJECTS = "projects.json"
 BRANDING = "branding.json"
 BRANDING_DEFAULTS = {
-    "logo": "", "bg": "#0a0a0c", "accent": "#ff5a1f", "title": "Created by ScottForge",
+    "logo": "", "bg": "#0a0a0c", "accent": "#E85D2F", "title": "Created by ScottForge",
     "url": "https://ScottForge.ai", "invite": "Want a highlight reel like this? Reach out at ScottForge.ai",
+    "video": "assets/scottforge-forge.mp4",     # background of the animated ending (the website's forge clip)
 }
 
 

@@ -247,10 +247,16 @@ class ReviewApp:
 
     def credit_png(self) -> bytes:
         import cv2
-        from . import graphics
-        img = graphics.scottforge_card(library.home(), library.branding())
+        from . import outro
+        img = outro.still(library.home(), library.branding())
         img = cv2.resize(img, (img.shape[1] // 2, img.shape[0] // 2), interpolation=cv2.INTER_AREA)
         return cv2.imencode(".png", img)[1].tobytes()
+
+    def outro_preview(self) -> str:
+        """Render (or reuse) the animated ScottForge ending; returns its file name."""
+        from . import outro
+        lib = library.home()
+        return outro.build(lib / "cache", lib, library.branding()).name
 
     def reel_info(self) -> dict:
         self._need()
@@ -721,6 +727,9 @@ def make_handler(app: ReviewApp):
                     return self.send_error(HTTPStatus.NOT_FOUND)
             if path == "/api/reel/status":
                 return self._json(app.job)
+            m = re.fullmatch(r"/media/outro/(outro-[a-z0-9]+\.mp4)", path)
+            if m:
+                return self._file(library.home() / "cache" / "outro" / m.group(1), "video/mp4")
             m = re.fullmatch(r"/media/intro/(intro-[a-z0-9-]+\.mp4)", path)
             if m:
                 app._need()
@@ -827,6 +836,11 @@ def make_handler(app: ReviewApp):
                 except Exception as e:  # noqa: BLE001 - tell the page what was wrong
                     return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
                 return self._json({"path": rel, "assets": profiles.asset_files(library.home())})
+            if self.path == "/api/branding/preview":
+                try:
+                    return self._json({"url": "/media/outro/" + app.outro_preview()})
+                except Exception as e:  # noqa: BLE001 - show the reason on the page
+                    return self._json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
             if self.path == "/api/intro/preview":
                 if app.building():
                     return self._json({"error": "a reel is building - preview the intro when it's done"},
