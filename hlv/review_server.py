@@ -476,7 +476,8 @@ class ReviewApp:
         music = project.music_path(self.root, s)
         ms = float(s.get("music_start") or 0)
         grid = beatmod.cached(music, self.cache) if music else None
-        mp4, _ = intro.build(self.root, lib, pl, clips, grid, ms, sfx=bool(s.get("intro_sfx", False)))
+        mp4, _ = intro.build(self.root, lib, pl, clips, grid, ms, sfx=bool(s.get("intro_sfx", False)),
+                             style=s.get("intro", "animated") if s.get("intro") != "classic" else "animated")
         return intro.preview(self.root, mp4, music, ms, s).name
 
     def start_build(self) -> dict:
@@ -509,7 +510,7 @@ class ReviewApp:
                 s["transition"] = patch["transition"]
             if "freeze" in patch:
                 s["freeze"] = bool(patch["freeze"])
-            if patch.get("intro") in ("animated", "classic"):
+            if patch.get("intro") in ("animated", "inferno", "storm", "shatter", "stadium", "classic"):
                 s["intro"] = patch["intro"]
             if "intro_sfx" in patch:
                 s["intro_sfx"] = bool(patch["intro_sfx"])

@@ -514,8 +514,12 @@ def render(out: Path, lib_root: Path, pl: dict, grid: dict | None, music_start: 
     return out, n_frames / FPS
 
 
-def cache_key(pl: dict, logo: Path | None, grid: dict | None, music_start: float, bg_id: str, sfx: bool) -> str:
-    payload = {"v": INTRO_VERSION, "pl": {k: pl.get(k) for k in ("name", "number", "position", "class_year",
+STYLES = ("animated", "inferno", "storm", "shatter", "stadium")     # "animated" = Slam (this module)
+
+
+def cache_key(pl: dict, logo: Path | None, grid: dict | None, music_start: float, bg_id: str, sfx: bool,
+              style: str = "animated") -> str:
+    payload = {"v": INTRO_VERSION, **({"style": style} if style != "animated" else {}), "pl": {k: pl.get(k) for k in ("name", "number", "position", "class_year",
                                                                   "height_weight", "school", "color", "accent")},
                "logo": [str(logo), logo.stat().st_mtime] if logo else None,
                "beats": beat_times(grid, music_start), "bg": bg_id, "sfx": sfx}
@@ -546,16 +550,20 @@ def pick_background(root: Path, clips: list[dict]) -> tuple[np.ndarray | None, s
 
 
 def build(root: Path, lib_root: Path, pl: dict, clips: list[dict], grid: dict | None, music_start: float,
-          sfx: bool = True) -> tuple[Path, float]:
-    """Render (or reuse) the animated intro for this project. Returns (mp4, duration)."""
+          sfx: bool = True, style: str = "animated") -> tuple[Path, float]:
+    """Render (or reuse) the animated intro for this project in one of STYLES. Returns (mp4, duration)."""
     from . import profiles
     bg, bg_id = pick_background(root, clips)
     logo = profiles.asset(lib_root, pl.get("logo", ""))
-    key = cache_key(pl, logo, grid, music_start, bg_id, sfx)
+    style = style if style in STYLES else "animated"
+    key = cache_key(pl, logo, grid, music_start, bg_id, sfx, style)
     out = root / ".hlv_cache" / "intro" / f"intro-{key}.mp4"
     _, dur = beat_times(grid, music_start)
     if out.exists():
         return out, round(dur * FPS) / FPS
+    if style != "animated":
+        from . import intro_fx
+        return intro_fx.render(style, out, lib_root, pl, grid, music_start, bg, sfx=sfx)
     return render(out, lib_root, pl, grid, music_start, bg, sfx=sfx)
 
 

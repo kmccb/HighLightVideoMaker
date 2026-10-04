@@ -165,12 +165,12 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     grid = None
     if music and settings.get("beat_sync", True):
         grid = beatmod.cached(music, root / ".hlv_cache")
-    if settings.get("intro", "animated") == "animated":
+    if settings.get("intro", "animated") != "classic":
         from . import intro
         say("animating the intro", done, total)
         intro_grid = grid or (beatmod.cached(music, root / ".hlv_cache") if music else None)
         src, title_s = intro.build(root, lib, pl, clips, intro_grid, music_start,
-                                   sfx=bool(settings.get("intro_sfx", False)))
+                                   sfx=bool(settings.get("intro_sfx", False)), style=settings.get("intro", "animated"))
         title = seg_dir / "00_title.mp4"
         _link_or_copy(src, title)
     else:
