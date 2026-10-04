@@ -21,7 +21,7 @@ from .autozoom import _smoothstep, draw_highlight
 from .pipeline import CACHE_DIRNAME
 from .probe import probe
 
-RENDER_VERSION = 5
+RENDER_VERSION = 6
 FPS = 30
 OW, OH = graphics.W, graphics.H
 FREEZE_S = 1.4           # nominal freeze; beat sync may use FREEZE_MIN..FREEZE_MAX
@@ -31,6 +31,7 @@ TAIL_EXTRA = 2.0         # footage kept after the out-point
 PUSH_IN = 1.08           # extra zoom during the freeze (completes in the first second)
 RESUME_FRAMES = 15       # spotlight -> style handover and zoom ease-back after the freeze
 HIT_FRAMES = 9           # zoom bump + flash on the hit
+FREEZE_REACH = 1.5       # a click must be this close to the snap to freeze there (as the review strip)
 FREEZE_CONF = 0.35       # tracker confidence needed at the snap to freeze on the player
 FREEZE_DIM = 0.78        # how dark the field goes around him during the freeze (0 = not at all)
 RING_FADE = 0.25         # highlight fades out before a "ring off" point and back in after "on"
@@ -64,18 +65,20 @@ def extents(clip: dict, duration: float) -> tuple[float, float]:
 
 def freeze_time(player, snap: float, t0: float, t1: float, t_out: float,
                 clicks: list[float] = ()) -> tuple[float | None, bool]:
-    """When to freeze on the player: at the snap if he's found there; else at your first click
-    after the snap (the one moment we know for sure where he is), as long as that's at least a
-    second before the play ends. Returns (time, at_snap)."""
+    """When to freeze on the player: at the snap if he's found there AND you clicked him within
+    FREEZE_REACH of it (tracking further back than that guesses - it has spotlit the sideline);
+    else at your first click after the snap, the one moment we know for sure where he is, if
+    that's before the play ends. Returns (time, at_snap)."""
     if player is None:
         return None, False
     ok = lambda g: g < len(player) and player[g][0] >= 0 and player[g][4] >= FREEZE_CONF   # noqa: E731
     g = int(round(snap * FPS))
-    if t0 <= snap < t1 and ok(g):
+    near = any(abs(t - snap) <= FREEZE_REACH for t in clicks) if clicks else True
+    if t0 <= snap < t1 and near and ok(g):
         return g / FPS, True
     for t in sorted(clicks):
         k = int(round(t * FPS))
-        if snap < t < min(t1, t_out) - 1.0 and ok(k):
+        if snap < t < min(t1, t_out) - 0.5 and ok(k):
             return k / FPS, False
     return None, False
 
