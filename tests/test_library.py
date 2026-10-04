@@ -75,14 +75,15 @@ def test_migrate_keeps_existing_library_player(home, tmp_path):
 
 
 def test_branding_defaults_save_and_card(home):
-    from hlv import graphics, library
+    from hlv import graphics, library, outro
     b = library.branding()
-    assert b["accent"] == "#ff5a1f" and b["url"] == "https://ScottForge.ai" and library.branding_ready(b)
+    assert b["accent"] == "#E85D2F" and b["url"] == "https://ScottForge.ai" and library.branding_ready(b)
     b = library.save_branding({"accent": "orange", "invite": "  DM me  ", "bogus": "x"})
-    assert b["accent"] == "#ff5a1f" and b["invite"] == "DM me" and "bogus" not in b
+    assert b["accent"] == "#E85D2F" and b["invite"] == "DM me" and "bogus" not in b
     assert library.branding() == b                                  # persisted
-    img = graphics.scottforge_card(library.home(), b)
+    assert outro._texts(b) == ("CREATED BY", "ScottForge.ai", "DM me")
+    img = outro.still(library.home(), b)                            # no forge clip here: plain background
     assert img.shape == (graphics.H, graphics.W, 3)
-    assert tuple(img[graphics.H - 5, 10]) == (31, 90, 255)          # accent stripe, BGR
+    assert img[graphics.H - 6, 10, 2] > 150                         # glowing ember line along the bottom
     empty = library.save_branding({"title": "", "url": "", "invite": ""})
     assert not library.branding_ready(empty)                        # nothing to show: no card
