@@ -18,7 +18,7 @@ from xml.sax.saxutils import escape
 
 import numpy as np
 
-from . import graphics, library, photos, profiles, project, segment
+from . import graphics, library, photo_slide, photos, profiles, project, segment
 
 # Beat choice: per second away from the play's natural timing, and extra per second of
 # stretching. With beats ~0.5 s apart, a beat one step further must be ~0.5 stronger.
@@ -28,6 +28,7 @@ TRANSITIONS = {"crossfade": ("fade", 10 / 30), "dip": ("fadeblack", 18 / 30), "c
 TITLE_S, END_S = 4.0, 4.0
 CREDIT_S = 3.5          # ScottForge closing card
 OUT_DIRNAME = "reel"
+PHOTO_FLEX = (0.75, 1.25)  # beat-fitted photo length, as a fraction of the "Photo length" setting
 
 
 def included(clip: dict) -> bool:
@@ -112,24 +113,45 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     pl = profiles.get(lib, player_id or settings.get("player"))
     if pl is None:
         raise ValueError("no player profile yet - add one on the Player profiles page")
-    clips = [c for c in ordered_clips(proj) if included(c)]
+    if photos.sync(root, proj):             # photos added to / removed from the folder
+        project.save(root, proj)
+    entries = [c for c in ordered_items(proj) if included(c)]
+    clips = [c for c in entries if not photos.is_photo(c)]
+    pics = [c for c in entries if photos.is_photo(c)]
     if not clips:
         raise ValueError("no plays to include (all skipped?)")
+    photo_s = float(settings.get("photo_s", 4))
 
-    # 1) play segments, in parallel (decoding 4K is the slow part). Rendered with extra
-    #    lead/tail and a long freeze; the timing below decides how much of each is used.
-    total = len(clips) + 3
+    # 1) play segments and photo slides, in parallel (decoding 4K is the slow part). Plays are
+    #    rendered with extra lead/tail and a long freeze, photos a bit long; the timing below
+    #    decides how much of each is used.
+    total = len(clips) + len(pics) + 3
     seg_paths: list[Path | None] = [None] * len(clips)
+    pic_paths: list[Path | None] = [None] * len(pics)
+    skipped_photos: list[str] = []
     done = 0
     say("rendering plays", done, total)
     with ProcessPoolExecutor(jobs) as ex:
         with_banner = banner_ids(clips, settings)
-        futs = {ex.submit(_render_one, str(root), c, pl, {**settings, "_banner": c["id"] in with_banner}): i
+        futs = {ex.submit(_render_one, str(root), c, pl, {**settings, "_banner": c["id"] in with_banner}): ("play", i)
                 for i, c in enumerate(clips)}
+        for k, ph in enumerate(pics):         # alternate slides zoom in / out
+            futs[ex.submit(photo_slide.render, root, ph, photo_slide.slide_length(photo_s), k % 2 == 1)] = ("photo", k)
         for f in as_completed(futs):
-            seg_paths[futs[f]] = Path(f.result())
+            kind, i = futs[f]
+            if kind == "play":
+                seg_paths[i] = Path(f.result())
+                name = clips[i]["source"]
+            else:
+                name = pics[i]["source"]
+                try:
+                    pic_paths[i] = Path(f.result())
+                except Exception as e:  # noqa: BLE001 - a bad photo shouldn't stop the reel
+                    skipped_photos.append(f"{name}: {e}")
             done += 1
-            say(f"rendered {clips[futs[f]]['source'].split('/')[-1]}", done, total)
+            say(f"rendered {name.split('/')[-1]}", done, total)
+    rendered = {c["id"]: p for c, p in zip(clips, seg_paths)} | {c["id"]: p for c, p in zip(pics, pic_paths) if p}
+    seq = [(c, rendered[c["id"]]) for c in entries if c["id"] in rendered]
 
     # 2) title + end cards
     out_dir = root / OUT_DIRNAME
@@ -154,25 +176,29 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     else:
         title_s = TITLE_S
         title = segment.card(seg_dir / "00_title.mp4", graphics.title_card(lib, pl), TITLE_S, fade_in=True)
-    endc = segment.card(seg_dir / f"{len(clips) + 1:02d}_end.mp4", graphics.end_card(lib, pl), END_S, fade_in=False)
+    endc = segment.card(seg_dir / f"{len(seq) + 1:02d}_end.mp4", graphics.end_card(lib, pl), END_S, fade_in=False)
     credit = None
     brand = library.branding()
     if settings.get("scottforge_card") and library.branding_ready(brand):
-        credit = segment.card(seg_dir / f"{len(clips) + 2:02d}_scottforge.mp4",
+        credit = segment.card(seg_dir / f"{len(seq) + 2:02d}_scottforge.mp4",
                               graphics.scottforge_card(lib, brand), CREDIT_S, fade_in=False)
     done += 1
     say("cards", done, total)
-    plays = []
-    for i, (c, p) in enumerate(zip(clips, seg_paths), 1):
+    linked = []
+    for i, (c, p) in enumerate(seq, 1):
         dst = seg_dir / f"{i:02d}_{c['id']}.mp4"      # readable names for Resolve
         _link_or_copy(p, dst)
-        _link_or_copy(p.with_suffix(".json"), dst.with_suffix(".json"))
-        plays.append(dst)
+        if not photos.is_photo(c):
+            _link_or_copy(p.with_suffix(".json"), dst.with_suffix(".json"))
+        linked.append(dst)
 
     # 3) timing: nominal, or fitted so each hit lands on a strong beat
     _, d = TRANSITIONS[transition]
     metas = []
-    for c, p in zip(clips, plays):
+    for (c, _), p in zip(seq, linked):
+        if photos.is_photo(c):
+            metas.append({"photo": True, "len": photo_s})
+            continue
         lay = segment.layout(p)
         t_in, t_out, snap = segment._window(c)
         # The layout knows where the hit and out-point land in output time (slow-mo stretches it).
@@ -182,7 +208,10 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     timing = plan_timing(metas, grid, music_start, title_s - d, d)
 
     items = [[(title, 0.0, title_s)]]
-    for p, m, tm in zip(plays, metas, timing):
+    for p, m, tm in zip(linked, metas, timing):
+        if m.get("photo"):
+            items.append([(p, 0.0, tm["post"])])
+            continue
         a = m["lay"]["a_frames"] / segment.FPS
         f = m["lay"]["f_frames"] / segment.FPS
         pieces = [(p, a - tm["lead"], tm["lead"])]
@@ -207,13 +236,15 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     write_fcpxml(fcp, items, music, music_start, f"{pl.get('name') or pl['id']} highlights")
     done += 1
     say("done", done, total)
-    synced = [t for t in timing if t.get("beat") is not None]
+    play_timing = [t for t in timing if not t.get("photo")]
+    synced = [t for t in play_timing if t.get("beat") is not None]
     return {"output": str(out), "fcpxml": str(fcp), "plays": len(clips),
+            "photos": len(seq) - len(clips), "skipped_photos": skipped_photos,
             "duration": round(_duration(out), 1), "seconds": round(time.time() - t_start),
             "beat_sync": None if grid is None else {
                 "bpm": grid["bpm"], "on_beat": sum(1 for t in synced if abs(t["err"]) <= 0.034),
-                "avg_shift": round(float(np.mean([abs(t["shift"]) for t in timing])), 2) if timing else 0.0,
-                "plays": len(timing), "timing": timing}}
+                "avg_shift": round(float(np.mean([abs(t["shift"]) for t in play_timing])), 2) if play_timing else 0.0,
+                "plays": len(play_timing), "timing": timing}}
 
 
 def _hit_in_play(lay: dict, hit: float | None, snap: float) -> float:
@@ -245,6 +276,28 @@ def plan_timing(metas: list[dict], grid: dict | None, music_start: float, t_firs
     out, t = [], t_first
     prev_grow = prev_shrink = 0.0            # how much the previous play's tail can move
     for m in metas:
+        if m.get("photo"):
+            # A photo slide: no hit. Its length (within 0.75-1.25x of nominal) is chosen so the
+            # cut out of it - the middle of the transition - lands on a beat.
+            nom_len = float(m["len"])
+            lo, hi = PHOTO_FLEX[0] * nom_len, PHOTO_FLEX[1] * nom_len
+            length, beat, err = nom_len, None, None
+            if beats_t is not None:
+                ok = (beats_t >= t + lo - d / 2) & (beats_t <= t + hi - d / 2)
+                if ok.any():
+                    cand = np.where(ok)[0]
+                    delta = beats_t[cand] - (t + nom_len - d / 2)
+                    k = cand[int(np.argmax(beats_s[cand] - BEAT_NEAR_COST * np.abs(delta)))]
+                    beat = float(beats_t[k])
+                    length = beat - t + d / 2
+            length = _fr(length)
+            if beat is not None:
+                err = round(t + length - d / 2 - beat, 3)
+            out.append({"photo": True, "lead": 0.0, "fz": 0.0, "post": length, "shift": round(length - nom_len, 3),
+                        "beat": None if beat is None else round(beat + music_start, 3), "err": err})
+            prev_grow, prev_shrink = max(0.0, hi - length), max(0.0, length - lo)
+            t += length - d
+            continue
         lay = m["lay"]
         a_max = lay["a_frames"] / segment.FPS
         has_fz = lay["f_frames"] > 0
