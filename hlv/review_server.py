@@ -6,7 +6,9 @@ Binds to 127.0.0.1 only.
 from __future__ import annotations
 
 import json
+import os
 import re
+import subprocess
 import threading
 import webbrowser
 from datetime import datetime
@@ -280,7 +282,8 @@ class ReviewApp:
             "transitions": list(reel.TRANSITIONS),
             "card_s": reel.TITLE_S + reel.END_S + (reel.CREDIT_S if self._credit_on(s) else 0),
             "credit_ready": library.branding_ready(library.branding()),
-            "clips": rows, "job": self.job,
+            "clips": rows, "job": self.job, "photo_count": sum(1 for r in rows if r.get("type") == "photo"),
+            "last_reel": self._reel_entry(s),
         }
 
     # ---------------- player profiles ----------------
@@ -413,6 +416,39 @@ class ReviewApp:
             ph["keep"] = bool(keep)
             project.save(self.root, proj)
         return ph
+
+    def _last_reel(self, s: dict | None = None) -> Path | None:
+        """The reel this project built most recently (this session's build, else the file on disk)."""
+        self._need()
+        out = (self.job.get("result") or {}).get("output") if self.job.get("state") == "done" else None
+        if out and Path(out).exists():
+            return Path(out)
+        if s is None:
+            with self.lock:
+                s = project.settings(project.load(self.root))
+        pl = s.get("player")
+        f = self.root / reel.OUT_DIRNAME / f"{pl}_reel.mp4" if pl else None
+        return f if f and f.exists() else None
+
+    def _reel_entry(self, s: dict) -> dict | None:
+        f = self._last_reel(s)
+        if f is None:
+            return None
+        return {"path": str(f), "file": f.name,
+                "built": datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="minutes")}
+
+    def reveal_reel(self, action: str) -> dict:
+        """Open the finished reel in Windows' video player, or show it in File Explorer."""
+        f = self._last_reel()
+        if f is None:
+            raise ValueError("no reel built yet")
+        if action == "open":
+            os.startfile(str(f))  # noqa: S606 - the user's own file, default app
+        elif action == "folder":
+            subprocess.Popen(["explorer", "/select,", str(f)])
+        else:
+            raise ValueError("unknown action")
+        return {"ok": True, "path": str(f)}
 
     def intro_preview(self) -> str:
         """Render (or reuse) the animated intro with the song underneath; returns its file name."""
@@ -747,6 +783,11 @@ def make_handler(app: ReviewApp):
                 return self._json(app.branding_info())
             if self.path == "/api/reel/order":
                 return self._json(app.set_order(json.loads(self.rfile.read(n) or b"{}").get("order", [])))
+            if self.path == "/api/reel/reveal":
+                try:
+                    return self._json(app.reveal_reel(str(json.loads(self.rfile.read(n) or b"{}").get("action"))))
+                except ValueError as e:
+                    return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
             if self.path == "/api/reel/build":
                 return self._json(app.start_build())
             if self.path == "/api/players":

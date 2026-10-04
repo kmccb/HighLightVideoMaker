@@ -171,6 +171,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
 #rStep { color: var(--dim); font-size: 12px; min-width: 200px; }
 #rResult { margin-top: 14px; display: grid; gap: 8px; }
 #rResult video { width: 100%; max-height: 60vh; background: #000; border-radius: 6px; }
+#rResult .reel-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.8); display: grid; place-items: center; z-index: 10; }
 .modal[hidden] { display: none; }
 .modal .box { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px; width: min(1100px, 94vw); display: grid; gap: 8px; }
@@ -915,6 +916,7 @@ async function openReel() {
   reelOpen = true; $('reel').hidden = false;
   await loadReel();
   if (reelInfo.job && reelInfo.job.state === 'running') pollBuild();
+  else showLastReel();
 }
 function closeReel() { reelOpen = false; $('reel').hidden = true; $('pv').hidden = true; $('pvVideo').pause(); }
 
@@ -1075,11 +1077,41 @@ function showJob(j) {
     const pics = r.photos ? `, ${r.photos} photo${r.photos > 1 ? 's' : ''}` : '';
     const skipped = (r.skipped_photos || []).length ? ` · <span class="warn">couldn't use: ${esc(r.skipped_photos.join('; '))}</span>` : '';
     $('rStep').innerHTML = `<span class="ok">Done</span>: ${r.plays} plays${pics}${skipped}, ${Math.floor(r.duration / 60)}:${String(Math.round(r.duration % 60)).padStart(2, '0')} long, built in ${r.seconds}s${bs}`;
-    $('rResult').innerHTML = `<video controls src="/media/reel/${encodeURIComponent(file)}?t=${Date.now()}"></video>
+    $('rResult').innerHTML = reelActions('Your reel is ready') + `<video controls src="/media/reel/${encodeURIComponent(file)}?t=${Date.now()}"></video>
       <div class="hint">Saved to <code>${esc(r.output)}</code></div>
       <div class="hint">DaVinci Resolve timeline: <code>${esc(r.fcpxml)}</code>. In Resolve use File → Import → Timeline… and pick it. Plays come in as finished clips with the music underneath. To add transitions there, select the clips and press Ctrl+T.</div>`;
   }
 }
+// Buttons under a finished reel: play it here, open it in Windows' video player, or show it in Explorer.
+function reelActions(label) {
+  return `<div class="reel-actions"><b>${esc(label)}</b>
+    <button class="btn" data-reel="play">▶ Play here</button>
+    <button class="btn" data-reel="open">Open in video player</button>
+    <button class="btn" data-reel="folder">Show in File Explorer</button></div>`;
+}
+function showLastReel() {
+  const r = reelInfo && reelInfo.last_reel;
+  if (!r || $('rResult').innerHTML.trim() || (reelInfo.job && reelInfo.job.state !== 'idle')) return;
+  const when = new Date(r.built).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  $('rResult').innerHTML = reelActions(`Last reel (built ${when})`) + `<div class="hint"><code>${esc(r.path)}</code></div>`;
+  $('rResult').dataset.file = r.file;
+}
+$('rResult').addEventListener('click', async e => {
+  const b = e.target.closest('[data-reel]'); if (!b) return;
+  if (b.dataset.reel === 'play') {
+    let v = $('rResult').querySelector('video');
+    if (!v) {
+      const file = $('rResult').dataset.file || (reelInfo.last_reel && reelInfo.last_reel.file);
+      $('rResult').insertAdjacentHTML('beforeend', `<video controls src="/media/reel/${encodeURIComponent(file)}?t=${Date.now()}"></video>`);
+      v = $('rResult').querySelector('video');
+    }
+    v.scrollIntoView({ block: 'center', behavior: 'smooth' }); v.play();
+    return;
+  }
+  const res = await fetch('/api/reel/reveal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: b.dataset.reel }) });
+  if (!res.ok) alert((await res.json()).error || 'Could not open the reel');
+});
+
 async function pollBuild() {
   clearTimeout(pollTimer);
   const j = await (await fetch('/api/reel/status')).json();
