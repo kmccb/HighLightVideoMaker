@@ -142,15 +142,17 @@ video { display: block; max-width: 100%; max-height: 58vh; }
 .reel header h2 { margin: 0; font-size: 18px; }
 .reel-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); gap: 12px; margin-bottom: 16px; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 12px 14px; display: grid; gap: 10px; }
-.card label.row { display: flex; align-items: center; gap: 10px; }
+.card label.row { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.card label.row > .hint { flex: 1 1 150px; }            /* hints drop under the control rather than spill out */
+.card { min-width: 0; }
 .card .lbl { color: var(--dim); font-size: 12px; min-width: 110px; }
 .card select, .card input[type=range] { flex: 1; }
 .card select { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; }
 .hint { color: var(--dim); font-size: 12px; }
 .hint code { font: 11px var(--mono); color: var(--text); background: var(--panel-2); padding: 1px 4px; border-radius: 3px; word-break: break-all; }
 .ok { color: var(--snap); } .bad { color: var(--warn); }
-.segctl { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; flex: 1; }
-.segctl button { flex: 1; background: var(--panel-2); border: 0; padding: 7px 10px; cursor: pointer; border-right: 1px solid var(--line); }
+.segctl { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; flex: 1 1 auto; min-width: 0; }
+.segctl button { flex: 1; white-space: nowrap; background: var(--panel-2); border: 0; padding: 7px 10px; cursor: pointer; border-right: 1px solid var(--line); }
 .segctl button:last-child { border-right: 0; }
 .segctl button.on { background: #24425f; color: #fff; }
 .order-head { color: var(--dim); font-size: 12px; margin: 4px 0 8px; display: flex; gap: 12px; flex-wrap: wrap; }
@@ -297,7 +299,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
           <button class="btn" id="rYtGo">Download</button></div>
         <div id="rSongMsg" class="hint"></div>
         <label class="row"><span class="lbl">ScottForge card</span><input type="checkbox" id="rCredit">
-          <span class="hint" id="rCreditHint">3.5 s closing card after the end card · <a href="/players#brand" style="color:var(--accent)">edit ▸</a></span></label>
+          <span class="hint" id="rCreditHint">5 s animated ending after the end card · <a href="/players#brand" style="color:var(--accent)">edit ▸</a></span></label>
         <div class="hint">Name, number, school, colours and logo: <a href="/players" style="color:var(--accent)">edit player profiles ▸</a><span hidden><code id="rProfile"></code><code id="rAssetsDir"></code></span></div>
       </div>
       <div class="card">
