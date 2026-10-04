@@ -62,19 +62,20 @@ def extents(clip: dict, duration: float) -> tuple[float, float]:
     return max(0.0, min(t_in, snap - LEAD_MAX)), min(duration, t_out + TAIL_EXTRA)
 
 
-def freeze_time(player, snap: float, t0: float, t1: float, t_out: float) -> tuple[float | None, bool]:
-    """When to freeze on the player: at the snap if he's found there, else the first moment
-    after it that he is (usually your first click), as long as that's at least a second
-    before the play ends. Returns (time, at_snap)."""
+def freeze_time(player, snap: float, t0: float, t1: float, t_out: float,
+                clicks: list[float] = ()) -> tuple[float | None, bool]:
+    """When to freeze on the player: at the snap if he's found there; else at your first click
+    after the snap (the one moment we know for sure where he is), as long as that's at least a
+    second before the play ends. Returns (time, at_snap)."""
     if player is None:
         return None, False
     ok = lambda g: g < len(player) and player[g][0] >= 0 and player[g][4] >= FREEZE_CONF   # noqa: E731
     g = int(round(snap * FPS))
     if t0 <= snap < t1 and ok(g):
         return g / FPS, True
-    last = int((min(t1, t_out) - 1.0) * FPS)
-    for k in range(max(g, int(np.ceil(t0 * FPS))), last):
-        if ok(k):
+    for t in sorted(clicks):
+        k = int(round(t * FPS))
+        if snap < t < min(t1, t_out) - 1.0 and ok(k):
             return k / FPS, False
     return None, False
 
@@ -144,7 +145,8 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
     # Freeze at the snap if we know where the player is then (else as soon after as we do).
     freeze_t = None
     if settings.get("freeze", True):
-        freeze_t, _ = freeze_time(player, snap, t0, t1, _window(clip)[1])
+        freeze_t, _ = freeze_time(player, snap, t0, t1, _window(clip)[1],
+                                  [a["t"] for a in camera.anchors_of(clip)])
     nfz = int(round(FREEZE_MAX * FPS)) if freeze_t is not None else 0
     split_t = min(max(freeze_t if freeze_t is not None else snap, t0), t1)
     hit_t = settings.get("_hit")

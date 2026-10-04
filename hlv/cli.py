@@ -201,6 +201,11 @@ def cmd_review(a) -> None:
 
 
 def main(argv=None) -> None:
+    for stream in (sys.stdout, sys.stderr):    # file names like "10.35.02 AM.png" must not crash a Windows console
+        try:
+            stream.reconfigure(errors="replace")
+        except AttributeError:
+            pass
     ap = argparse.ArgumentParser(prog="hlv", description="Football highlight reel tools")
     sub = ap.add_subparsers(dest="cmd", required=True)
 

@@ -107,7 +107,7 @@ def freeze_found(cache: Path, clip: dict) -> str | None:
     player = np.nan_to_num(track.smooth_track(np.load(f), FPS), nan=-1)
     t_in, t_out, snap = segment._window(clip)
     t0, t1 = segment.extents(clip, clip["probe"]["duration"])
-    t, at_snap = segment.freeze_time(player, snap, t0, t1, t_out)
+    t, at_snap = segment.freeze_time(player, snap, t0, t1, t_out, [a["t"] for a in anchors_of(clip)])
     return "none" if t is None else ("snap" if at_snap else "late")
 
 
