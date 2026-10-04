@@ -170,7 +170,7 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         say("animating the intro", done, total)
         intro_grid = grid or (beatmod.cached(music, root / ".hlv_cache") if music else None)
         src, title_s = intro.build(root, lib, pl, clips, intro_grid, music_start,
-                                   sfx=bool(settings.get("intro_sfx", True)))
+                                   sfx=bool(settings.get("intro_sfx", False)))
         title = seg_dir / "00_title.mp4"
         _link_or_copy(src, title)
     else:

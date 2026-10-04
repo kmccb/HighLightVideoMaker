@@ -474,7 +474,7 @@ class ReviewApp:
         music = project.music_path(self.root, s)
         ms = float(s.get("music_start") or 0)
         grid = beatmod.cached(music, self.cache) if music else None
-        mp4, _ = intro.build(self.root, lib, pl, clips, grid, ms, sfx=bool(s.get("intro_sfx", True)))
+        mp4, _ = intro.build(self.root, lib, pl, clips, grid, ms, sfx=bool(s.get("intro_sfx", False)))
         return intro.preview(self.root, mp4, music, ms, s).name
 
     def start_build(self) -> dict:
