@@ -14,7 +14,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import library, profiles, project, proxy, reel, score, segment
+from . import library, photo_slide, photos, profiles, project, proxy, reel, score, segment
 from .config import DetectConfig
 from .pipeline import CACHE_DIRNAME
 
@@ -61,6 +61,9 @@ class ReviewApp:
         library.migrate(folder)
         cfg = DetectConfig.load(folder / CONFIG_FILENAME)
         with self.lock:
+            proj = project.load(folder)
+            if photos.sync(folder, proj):        # pick up photos added since last time
+                project.save(folder, proj)
             self.root, self.cache, self.cfg = folder, folder / CACHE_DIRNAME, cfg
             self.job = {"state": "idle"}
             self._gen += 1
@@ -253,7 +256,12 @@ class ReviewApp:
         players = profiles.load(lib)
         pl = profiles.get(lib, s.get("player"))
         rows = []
-        for c in reel.ordered_clips(proj):
+        for c in reel.ordered_items(proj):
+            if photos.is_photo(c):
+                rows.append({"id": c["id"], "type": "photo", "source": c["source"], "group": c.get("group", ""),
+                             "taken": c.get("taken"), "included": reel.included(c), "keep": c.get("keep"),
+                             "seconds": float(s.get("photo_s", 4)), "thumb": f"/api/photos/{c['id']}/thumb"})
+                continue
             r = {**project.empty_review(), **(c.get("review") or {})}
             t0, t1 = project.final_window(c)
             spot = bool(r.get("spotlight"))
@@ -355,7 +363,7 @@ class ReviewApp:
         self._need()
         with self.lock:
             proj = project.load(self.root)
-            ids = {c["id"] for c in proj["clips"]}
+            ids = {c["id"] for c in proj["clips"] + (proj.get("photos") or [])}
             s = project.settings(proj)
             s["order"] = [i for i in order if isinstance(i, str) and i in ids]
             proj["settings"] = s
@@ -373,6 +381,38 @@ class ReviewApp:
         pl = profiles.get(library.home(), s.get("player"))
         banner = clip_id in reel.banner_ids([c for c in reel.ordered_clips(proj) if reel.included(c)], s)
         return segment.render(self.root, clip, pl, {**s, "_banner": banner}).name
+
+    def _photo(self, photo_id: str) -> tuple[dict, dict]:
+        self._need()
+        with self.lock:
+            proj = project.load(self.root)
+        ph = next((p for p in proj.get("photos") or [] if p["id"] == photo_id), None)
+        if ph is None:
+            raise KeyError(photo_id)
+        return proj, ph
+
+    def photo_thumb(self, photo_id: str) -> Path:
+        _, ph = self._photo(photo_id)
+        return photo_slide.thumb(self.root, ph)
+
+    def photo_slide(self, photo_id: str) -> str:
+        """Render (or reuse) one slide for Preview, as it will look in the reel."""
+        proj, ph = self._photo(photo_id)
+        s = project.settings(proj)
+        pics = [p for p in reel.ordered_items(proj) if photos.is_photo(p) and reel.included(p)]
+        k = next((i for i, p in enumerate(pics) if p["id"] == photo_id), 0)
+        return photo_slide.render(self.root, ph, photo_slide.slide_length(float(s.get("photo_s", 4))), k % 2 == 1).name
+
+    def set_photo_keep(self, photo_id: str, keep: bool) -> dict:
+        self._need()
+        with self.lock:
+            proj = project.load(self.root)
+            ph = next((p for p in proj.get("photos") or [] if p["id"] == photo_id), None)
+            if ph is None:
+                raise KeyError(photo_id)
+            ph["keep"] = bool(keep)
+            project.save(self.root, proj)
+        return ph
 
     def intro_preview(self) -> str:
         """Render (or reuse) the animated intro with the song underneath; returns its file name."""
@@ -428,6 +468,8 @@ class ReviewApp:
                 s["intro_sfx"] = bool(patch["intro_sfx"])
             if patch.get("name_banner") in reel.BANNER_MODES:
                 s["name_banner"] = patch["name_banner"]
+            if "photo_s" in patch and float(patch["photo_s"]) in (3, 4, 5):
+                s["photo_s"] = int(float(patch["photo_s"]))
             if "slowmo_speed" in patch and float(patch["slowmo_speed"]) in (0.5, 0.4, 0.3):
                 s["slowmo_speed"] = float(patch["slowmo_speed"])
             for k in ("beat_sync", "hit_fx", "slowmo", "scottforge_card"):
@@ -644,6 +686,16 @@ def make_handler(app: ReviewApp):
             if m:
                 app._need()
                 return self._file(app.cache / "intro" / m.group(1), "video/mp4")
+            m = re.fullmatch(r"/api/photos/(photo-[a-z0-9-]+)/thumb", path)
+            if m:
+                try:
+                    return self._file(app.photo_thumb(m.group(1)), "image/jpeg")
+                except Exception:  # noqa: BLE001 - unknown or unreadable photo
+                    return self.send_error(HTTPStatus.NOT_FOUND)
+            m = re.fullmatch(r"/media/photo/(photo-[a-z0-9-]+\.mp4)", path)
+            if m:
+                app._need()
+                return self._file(app.cache / "photos" / m.group(1), "video/mp4")
             m = re.fullmatch(r"/media/segment/([a-z0-9-]+\.mp4)", path)
             if m:
                 app._need()
@@ -739,6 +791,20 @@ def make_handler(app: ReviewApp):
                     return self._json({"url": "/media/intro/" + app.intro_preview()})
                 except Exception as e:  # noqa: BLE001 - show the reason on the page
                     return self._json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            m = re.fullmatch(r"/api/photos/(photo-[a-z0-9-]+)/slide", self.path)
+            if m:
+                try:
+                    return self._json({"url": "/media/photo/" + app.photo_slide(m.group(1))})
+                except KeyError:
+                    return self.send_error(HTTPStatus.NOT_FOUND)
+                except Exception as e:  # noqa: BLE001
+                    return self._json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
+            m = re.fullmatch(r"/api/photos/(photo-[a-z0-9-]+)", self.path)
+            if m:
+                try:
+                    return self._json(app.set_photo_keep(m.group(1), json.loads(self.rfile.read(n) or b"{}").get("keep", True)))
+                except KeyError:
+                    return self.send_error(HTTPStatus.NOT_FOUND)
             m = re.fullmatch(r"/api/clips/([a-z0-9-]+)/segment", self.path)
             if m:
                 try:

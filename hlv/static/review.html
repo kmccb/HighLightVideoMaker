@@ -156,6 +156,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
 #rList { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 4px; }
 #rList li { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
 #rList li.off { opacity: .45; }
+#rList img.thumb { width: 40px; height: 30px; object-fit: cover; border-radius: 3px; background: var(--panel-2); flex: none; }
 #rList li.dragging { opacity: .3; }
 #rList li.over { border-color: var(--accent); }
 #rList .grip { cursor: grab; color: var(--faint); user-select: none; }
@@ -313,6 +314,10 @@ video { display: block; max-width: 100%; max-height: 58vh; }
           <span class="segctl" id="rBanner">
             <button data-v="first" title="first play that has a spotlight">First play</button><button data-v="every">Every play</button><button data-v="off">Off</button>
           </span></label>
+        <label class="row"><span class="lbl">Photo length</span>
+          <span class="segctl" id="rPhotoS">
+            <button data-v="3">3 s</button><button data-v="4">4 s</button><button data-v="5">5 s</button>
+          </span><span class="hint">fitted to the beat</span></label>
         <label class="row"><span class="lbl">Freeze intro</span><input type="checkbox" id="rFreeze">
           <span class="hint">freeze + spotlight + name at the snap (plays with a spotlight click)</span></label>
         <label class="row"><span class="lbl">Game audio</span><input type="range" id="rGame" min="0" max="100" step="5"><span id="rGameV" class="hint"></span></label>
@@ -332,7 +337,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
           <span class="hint">seconds into the song (skip a slow intro)</span></label>
       </div>
     </div>
-    <div class="order-head"><span>Plays in reel order: drag to reorder, untick to leave out</span><span id="rCount"></span><span id="rLen"></span></div>
+    <div class="order-head"><span>Plays and photos in reel order: drag to reorder, untick to leave out</span><span id="rCount"></span><span id="rLen"></span></div>
     <ol id="rList"></ol>
     <div class="build-bar">
       <button class="btn primary" id="rBuild">Build reel</button>
@@ -345,7 +350,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
   <div class="modal" id="pv" hidden><div class="box">
     <div style="display:flex;align-items:center;gap:10px"><b id="pvTitle"></b><span class="spacer"></span><button class="btn" id="pvClose">Close</button></div>
     <video id="pvVideo" controls playsinline></video>
-    <div class="hint">This is the finished render of this play: trim, zoom, highlight and freeze intro.</div>
+    <div class="hint" id="pvHint">This is the finished render of this play: trim, zoom, highlight and freeze intro.</div>
   </div></div>
 </div>
 
@@ -930,6 +935,7 @@ async function loadReel() {
   $('rCredit').disabled = !reelInfo.credit_ready;
   document.querySelectorAll('#rBanner button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.name_banner || 'first')));
   document.querySelectorAll('#rIntro button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.intro || 'animated')));
+  document.querySelectorAll('#rPhotoS button').forEach(b => b.classList.toggle('on', +b.dataset.v === (s.photo_s || 4)));
   $('rIntroSfx').checked = s.intro_sfx !== false;
   $('rIntroSfx').disabled = (s.intro || 'animated') !== 'animated';
   $('rGame').value = Math.round((s.game_audio ?? 0.3) * 100);
@@ -949,6 +955,19 @@ function renderReelList() {
   const rows = reelInfo.clips;
   let n = 0;
   $('rList').innerHTML = rows.map(c => {
+    if (c.type === 'photo') {
+      const num = c.included ? ++n : '–';
+      const when = c.taken ? new Date(c.taken).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : '';
+      return `<li draggable="true" data-id="${c.id}" class="${c.included ? '' : 'off'}">
+      <span class="grip">⋮⋮</span><span class="num">${num}</span>
+      <input type="checkbox" data-act="inc" ${c.included ? 'checked' : ''}>
+      <img class="thumb" src="${c.thumb}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
+      <span class="name">${esc(c.source.split('/').pop())}</span><span class="game">${esc(c.group || when)}</span>
+      <span class="tag" title="photo: slow pan and zoom">📷 photo</span>${c.group && when ? `<span class="tag">${esc(when)}</span>` : ''}
+      <span class="len">${c.seconds.toFixed(1)}s</span>
+      <button class="mini" data-act="up">↑</button><button class="mini" data-act="down">↓</button>
+      <button class="mini" data-act="preview">Preview</button></li>`;
+    }
     const badges = [
       c.kind === 'pre_edited' ? '<span class="tag warn">TV</span>' : '',
       c.labeled ? '' : '<span class="tag warn" title="snap/end not confirmed: uses the auto trim">unconfirmed</span>',
@@ -969,7 +988,8 @@ function renderReelList() {
   const inc = rows.filter(c => c.included);
   const tr = { crossfade: 1 / 3, dip: 0.6, cut: 0 }[reelInfo.settings.transition] || 0;
   const total = inc.reduce((s, c) => s + c.seconds, 0) + reelInfo.card_s - tr * (inc.length + 1);
-  $('rCount').textContent = `${inc.length} plays`;
+  const nPics = inc.filter(c => c.type === 'photo').length;
+  $('rCount').textContent = `${inc.length - nPics} plays` + (nPics ? ` · ${nPics} photo${nPics > 1 ? 's' : ''}` : '');
   $('rLen').textContent = `about ${Math.floor(total / 60)}:${String(Math.round(total % 60)).padStart(2, '0')} long`;
 }
 
@@ -993,6 +1013,9 @@ $('rList').addEventListener('click', async e => {
     if (j < 0 || j >= reelInfo.clips.length) return;
     [reelInfo.clips[i], reelInfo.clips[j]] = [reelInfo.clips[j], reelInfo.clips[i]];
     saveOrder();
+  } else if (act === 'inc' && reelInfo.clips[i].type === 'photo') {
+    await fetch('/api/photos/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keep: b.checked }) });
+    await loadReel();
   } else if (act === 'inc') {
     await fetch('/api/clips/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keep: b.checked }) });
     const dc = data.clips.find(c => c.id === id); if (dc) dc.review.keep = b.checked;
@@ -1000,7 +1023,7 @@ $('rList').addEventListener('click', async e => {
   } else if (act === 'edit') {
     closeReel(); select(data.clips.findIndex(c => c.id === id));
   } else if (act === 'preview') {
-    previewSegment(id, li.querySelector('.name').textContent, b);
+    previewSegment(id, li.querySelector('.name').textContent, b, reelInfo.clips[i].type === 'photo');
   }
 });
 
@@ -1023,13 +1046,15 @@ $('rList').addEventListener('drop', e => {
   dragId = null; saveOrder();
 });
 
-async function previewSegment(id, name, btn) {
+async function previewSegment(id, name, btn, photo = false) {
   const old = btn.textContent; btn.textContent = 'Rendering…'; btn.disabled = true;
   try {
-    const res = await fetch('/api/clips/' + id + '/segment', { method: 'POST' });
+    const res = await fetch(photo ? '/api/photos/' + id + '/slide' : '/api/clips/' + id + '/segment', { method: 'POST' });
     const j = await res.json();
     if (!res.ok) throw new Error(j.error || res.status);
     $('pvTitle').textContent = name; $('pv').hidden = false;
+    $('pvHint').textContent = photo ? 'The photo slide as it will look in the reel (the reel fits its length to the beat).'
+      : 'This is the finished render of this play: trim, zoom, highlight and freeze intro.';
     $('pvVideo').src = j.url; $('pvVideo').play();
   } catch (e) { alert('Preview failed: ' + e.message); }
   btn.textContent = old; btn.disabled = false;
@@ -1047,7 +1072,9 @@ function showJob(j) {
   else if (j.state === 'done' && j.result) {
     const r = j.result, file = r.output.split(/[\\/]/).pop();
     const bs = r.beat_sync ? ` · <b>${r.beat_sync.on_beat} of ${r.beat_sync.plays} hits on the beat</b> (${r.beat_sync.bpm} BPM, plays shifted ${r.beat_sync.avg_shift}s on average)` : '';
-    $('rStep').innerHTML = `<span class="ok">Done</span>: ${r.plays} plays, ${Math.floor(r.duration / 60)}:${String(Math.round(r.duration % 60)).padStart(2, '0')} long, built in ${r.seconds}s${bs}`;
+    const pics = r.photos ? `, ${r.photos} photo${r.photos > 1 ? 's' : ''}` : '';
+    const skipped = (r.skipped_photos || []).length ? ` · <span class="warn">couldn't use: ${esc(r.skipped_photos.join('; '))}</span>` : '';
+    $('rStep').innerHTML = `<span class="ok">Done</span>: ${r.plays} plays${pics}${skipped}, ${Math.floor(r.duration / 60)}:${String(Math.round(r.duration % 60)).padStart(2, '0')} long, built in ${r.seconds}s${bs}`;
     $('rResult').innerHTML = `<video controls src="/media/reel/${encodeURIComponent(file)}?t=${Date.now()}"></video>
       <div class="hint">Saved to <code>${esc(r.output)}</code></div>
       <div class="hint">DaVinci Resolve timeline: <code>${esc(r.fcpxml)}</code>. In Resolve use File → Import → Timeline… and pick it. Plays come in as finished clips with the music underneath. To add transitions there, select the clips and press Ctrl+T.</div>`;
@@ -1104,6 +1131,7 @@ $('rGame').onchange = e => saveReelSetting({ game_audio: e.target.value / 100 })
 document.querySelectorAll('#rTrans button').forEach(b => b.onclick = () => saveReelSetting({ transition: b.dataset.v }));
 document.querySelectorAll('#rBanner button').forEach(b => b.onclick = () => saveReelSetting({ name_banner: b.dataset.v }));
 document.querySelectorAll('#rIntro button').forEach(b => b.onclick = () => saveReelSetting({ intro: b.dataset.v }));
+document.querySelectorAll('#rPhotoS button').forEach(b => b.onclick = () => saveReelSetting({ photo_s: +b.dataset.v }));
 $('rIntroSfx').onchange = e => saveReelSetting({ intro_sfx: e.target.checked });
 $('rIntroPv').onclick = async e => {
   e.preventDefault();
