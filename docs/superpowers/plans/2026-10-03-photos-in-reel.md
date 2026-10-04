@@ -94,10 +94,9 @@ def ordered_items(proj):
 Implementation notes:
 - `fit = min(W / w, H / h)`. Background: cover-scale (`max`), centre crop, `GaussianBlur` (sigma 30), ×0.45.
 - Foreground hi-res: the photo resized by `fit * MAX_ZOOM` (LANCZOS). Its zoom-1 top-left is `off = ((W - w*fit)/2, (H - h*fit)/2)`.
-- Focus `F`: the largest Haar face (`haarcascade_frontalface_default.xml`, on a ≤ 800 px grey copy, `minNeighbors=6`), mapped to frame coords; else the frame centre.
+- Focus `F`: the photo's horizontal centre, 40% down (`FOCUS_Y`). (No face detection: OpenCV 5 has no bundled cascades.)
 - Frame k, `u = k / (n - 1)`, `z = 1 + (MAX_ZOOM - 1) * (1 - u if zoom_out else u)` (steady, linear motion). `M = [[z/MAX_ZOOM, 0, F.x + z*(off.x - F.x)], [0, z/MAX_ZOOM, F.y + z*(off.y - F.y)]]`, `cv2.warpAffine(fg, M, (W, H), dst=bg.copy(), flags=INTER_LINEAR, borderMode=BORDER_TRANSPARENT)`.
 - Pipe raw BGR into ffmpeg with `anullsrc`; write to `<name>.tmp.mp4`, then rename. Cache key: sha1 of (file size, mtime, seconds, W, H, zoom_out, PHOTO_VERSION).
-- With a face, always zoom in (`zoom_out` is ignored).
 
 - [ ] **Step 5: Commit** `Photo slides: blurred fill + Ken Burns, cached`.
 
