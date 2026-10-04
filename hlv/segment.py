@@ -21,7 +21,7 @@ from .autozoom import _smoothstep, draw_highlight
 from .pipeline import CACHE_DIRNAME
 from .probe import probe
 
-RENDER_VERSION = 3
+RENDER_VERSION = 4
 FPS = 30
 OW, OH = graphics.W, graphics.H
 FREEZE_S = 1.4           # nominal freeze; beat sync may use FREEZE_MIN..FREEZE_MAX
@@ -31,6 +31,8 @@ TAIL_EXTRA = 2.0         # footage kept after the out-point
 PUSH_IN = 1.08           # extra zoom during the freeze (completes in the first second)
 RESUME_FRAMES = 15       # spotlight -> style handover and zoom ease-back after the freeze
 HIT_FRAMES = 9           # zoom bump + flash on the hit
+FREEZE_CONF = 0.35       # tracker confidence needed at the snap to freeze on the player
+FREEZE_DIM = 0.78        # how dark the field goes around him during the freeze (0 = not at all)
 RING_FADE = 0.25         # highlight fades out before a "ring off" point and back in after "on"
 
 
@@ -126,7 +128,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
     freeze_t = None
     if settings.get("freeze", True) and player is not None:
         g = int(round(snap * FPS))
-        if t0 <= snap < t1 and g < len(player) and player[g][0] >= 0 and player[g][4] >= 0.35:
+        if t0 <= snap < t1 and g < len(player) and player[g][0] >= 0 and player[g][4] >= FREEZE_CONF:
             freeze_t = g / FPS
     nfz = int(round(FREEZE_MAX * FPS)) if freeze_t is not None else 0
     split_t = min(max(freeze_t if freeze_t is not None else snap, t0), t1)
@@ -171,7 +173,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
 
     ring_off = (clip.get("review") or {}).get("ring_off") or []
 
-    def highlight(img, t, rect, style_, alpha_mul=1.0):
+    def highlight(img, t, rect, style_, alpha_mul=1.0, dim=0.5):
         if player is None or alpha_mul <= 0:
             return
         p = lerp_row(player, t)
@@ -181,7 +183,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
         s = OW / w
         a = float(np.clip((p[4] - 0.2) / 0.3, 0, 1)) * alpha_mul
         draw_highlight(img, style_, (p[0] * info.width - ox - x) * s, (p[1] * info.height - oy - y) * s,
-                       p[2] * info.width * s, p[3] * info.height * s, a, color, t)
+                       p[2] * info.width * s, p[3] * info.height * s, a, color, t, dim=dim)
 
     # ---- audio: lead | silence (freeze) | play, time-stretched through the slow-mo ----
     dur = t1 - t0
@@ -280,7 +282,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
             img, rect = picture(split_t, 1 + (PUSH_IN - 1) * _smoothstep(u))
             if img is None:
                 break
-            highlight(img, split_t, rect, "shadow", _smoothstep(jz / 8))
+            highlight(img, split_t, rect, "shadow", _smoothstep(jz / 8), dim=FREEZE_DIM)
             if banner is not None:
                 ba = _smoothstep((jz - 4) / 10)
                 graphics.composite(img, banner, ba, slide_px=int(60 * (1 - ba)))
@@ -293,7 +295,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
                 img, rect = picture(t, 1 + (PUSH_IN - 1) * (1 - v))
                 if img is None:
                     break
-                highlight(img, t, rect, "shadow", 1 - v)
+                highlight(img, t, rect, "shadow", 1 - v, dim=FREEZE_DIM)
                 if style != "shadow":
                     highlight(img, t, rect, style, v * ring_visibility(ring_off, t))
                 if banner is not None:

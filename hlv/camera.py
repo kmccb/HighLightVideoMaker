@@ -88,6 +88,28 @@ def anchors_of(clip: dict) -> list[dict]:
     return [a for a in sp if isinstance(a, dict)] if isinstance(sp, list) else []
 
 
+def _track_file(cache: Path, clip: dict) -> Path:
+    from . import segment   # (segment imports this module)
+    win = segment._window(clip)   # only the footage a render can use is worth tracking
+    key = hashlib.sha1(("v13" + json.dumps([anchors_of(clip), win], sort_keys=True)).encode()).hexdigest()[:12]
+    return cache / "track" / f"{clip['id']}-{key}.npy"
+
+
+def freeze_found(cache: Path, clip: dict) -> bool | None:
+    """Whether the render will find the player at the snap (so the freeze + spotlight happens),
+    from the saved track only - never tracks. None: no clicks, or not tracked yet."""
+    if not anchors_of(clip):
+        return None
+    f = _track_file(cache, clip)
+    if not f.exists():
+        return None
+    from . import segment
+    player = np.nan_to_num(track.smooth_track(np.load(f), FPS), nan=-1)
+    _, _, snap = segment._window(clip)
+    g = int(round(snap * segment.FPS))
+    return bool(g < len(player) and player[g][0] >= 0 and player[g][4] >= segment.FREEZE_CONF)
+
+
 def player_track(cache: Path, clip: dict, need_runs: bool = False) -> np.ndarray | None:
     """need_runs: track even if the result is cached, when the per-click runs aren't saved
     yet (so the next click on this clip is quick)."""
@@ -95,9 +117,7 @@ def player_track(cache: Path, clip: dict, need_runs: bool = False) -> np.ndarray
     if not anchors:
         return None
     from . import segment   # (segment imports this module)
-    win = segment._window(clip)   # only the footage a render can use is worth tracking
-    key = hashlib.sha1(("v13" + json.dumps([anchors, win], sort_keys=True)).encode()).hexdigest()[:12]
-    f = cache / "track" / f"{clip['id']}-{key}.npy"
+    f = _track_file(cache, clip)
     with _clip_lock(clip["id"]):   # the page and the background warm-up may ask at once
         if f.exists() and not (need_runs and not _runs_path(cache, clip["id"]).exists()):
             res = np.load(f)

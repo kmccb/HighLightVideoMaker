@@ -16,7 +16,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import library, photo_slide, photos, profiles, project, proxy, reel, score, segment
+from . import camera, library, photo_slide, photos, profiles, project, proxy, reel, score, segment
 from .config import DetectConfig
 from .pipeline import CACHE_DIRNAME
 
@@ -280,6 +280,8 @@ class ReviewApp:
                 "id": c["id"], "source": c["source"], "group": c.get("group", ""), "kind": c["kind"],
                 "included": reel.included(c), "keep": r.get("keep"), "labeled": bool(r.get("labeled")),
                 "spotlight": spot, "zoom": r.get("zoom") or 0, "hit_set": r.get("hit") is not None, "no_hit": bool(r.get("no_hit")),
+                # False: he isn't found at the snap, so this play won't freeze (None: unknown / not wanted)
+                "freeze_ok": camera.freeze_found(self.cache, c) if spot and s.get("freeze", True) else None,
                 "seconds": round(max(0.0, t1 - max(0.0, t0)) + (segment.FREEZE_S if spot and s.get("freeze") else 0), 2),
             })
         return {
