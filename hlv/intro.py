@@ -514,7 +514,8 @@ def render(out: Path, lib_root: Path, pl: dict, grid: dict | None, music_start: 
     return out, n_frames / FPS
 
 
-STYLES = ("animated", "inferno", "storm", "shatter", "stadium")     # "animated" = Slam (this module)
+STYLES = ("animated", "inferno", "storm", "shatter", "stadium",
+          "glitch", "smoke", "neon", "warp", "gold")     # "animated" = Slam (this module)
 
 
 def cache_key(pl: dict, logo: Path | None, grid: dict | None, music_start: float, bg_id: str, sfx: bool,

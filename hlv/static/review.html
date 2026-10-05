@@ -156,7 +156,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
 .segctl button:last-child { border-right: 0; }
 .segctl button.on { background: #24425f; color: #fff; }
 #rIntro { flex-wrap: wrap; }
-#rIntro button { flex: 1 0 30%; border-bottom: 1px solid var(--line); }
+#rIntro button { flex: 1 0 24%; border-bottom: 1px solid var(--line); }
 .order-head { color: var(--dim); font-size: 12px; margin: 4px 0 8px; display: flex; gap: 12px; flex-wrap: wrap; }
 #rList { list-style: none; margin: 0 0 16px; padding: 0; display: grid; gap: 4px; }
 #rList li { display: flex; align-items: center; gap: 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 6px 10px; }
@@ -304,6 +304,10 @@ video { display: block; max-width: 100%; max-height: 58vh; }
         <div id="rSongMsg" class="hint"></div>
         <label class="row"><span class="lbl">ScottForge card</span><input type="checkbox" id="rCredit">
           <span class="hint" id="rCreditHint">7 s animated ending after the end card · <a href="/players#brand" style="color:var(--accent)">edit ▸</a></span></label>
+        <label class="row"><span class="lbl">Ending style</span>
+          <span class="segctl" id="rOutro">
+            <button data-v="forge" title="your website's forge clip, embers, the anvil mark strikes in">Forge</button><button data-v="anvil" title="darkness, a hammer strike throws a shower of sparks that reveals the logo">Anvil strike</button><button data-v="molten" title="glowing molten metal pours into the letters">Molten</button><button data-v="minimal" title="clean and quiet: a hairline, the logo fades up, the website types out">Minimal</button>
+          </span></label>
         <div class="hint">Name, number, school, colours and logo: <a href="/players" style="color:var(--accent)">edit player profiles ▸</a><span hidden><code id="rProfile"></code><code id="rAssetsDir"></code></span></div>
       </div>
       <div class="card">
@@ -317,7 +321,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
           </span></label>
         <label class="row"><span class="lbl">Intro</span>
           <span class="segctl" id="rIntro">
-            <button data-v="animated" title="number, name and logo slam in on the beat, sparks and shockwave">Slam</button><button data-v="inferno" title="flames roar up, the number burns in, the name rises out of the fire">Inferno</button><button data-v="storm" title="storm clouds, lightning strikes on the beat, electric number">Thunder</button><button data-v="shatter" title="the number punches through glass, shards fly, the name slams in">Shatter</button><button data-v="stadium" title="stadium lights bang on, light beams, chrome number, broadcast bar">Stadium</button><button data-v="classic" title="the still title card">Classic</button>
+            <button data-v="animated" title="number, name and logo slam in on the beat, sparks and shockwave">Slam</button><button data-v="inferno" title="flames roar up, the number burns in, the name rises out of the fire">Inferno</button><button data-v="storm" title="storm clouds, lightning strikes on the beat, electric number">Thunder</button><button data-v="shatter" title="the number punches through glass, shards fly, the name slams in">Shatter</button><button data-v="stadium" title="stadium lights bang on, light beams, chrome number, broadcast bar">Stadium</button><button data-v="glitch" title="digital corruption, RGB split; the name decodes out of scrambled characters">Glitch</button><button data-v="smoke" title="team-colour smoke bombs; the number punches through the smoke">Smoke</button><button data-v="neon" title="neon tubes buzz and flicker on against a brick wall">Neon</button><button data-v="warp" title="hyperspace streaks; the number blasts out with a shockwave">Warp</button><button data-v="gold" title="gold metal lettering, light sweeps and sparkles, falling gold dust">Gold</button><button data-v="classic" title="the still title card">Classic</button>
           </span>
           <button class="btn" id="rIntroPv" style="flex:none;padding:5px 10px">▶ Preview intro</button></label>
         <label class="row"><span class="lbl">Impact sounds</span><input type="checkbox" id="rIntroSfx">
@@ -977,6 +981,7 @@ async function loadReel() {
   $('rCredit').disabled = !reelInfo.credit_ready;
   document.querySelectorAll('#rBanner button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.name_banner || 'first')));
   document.querySelectorAll('#rIntro button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.intro || 'animated')));
+  fetch('/api/branding').then(r => r.json()).then(br => document.querySelectorAll('#rOutro button').forEach(b => b.classList.toggle('on', b.dataset.v === ((br.branding || {}).style || 'forge')))).catch(() => {});
   document.querySelectorAll('#rFormat button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.format || 'wide')));
   document.querySelectorAll('#rPhotoS button').forEach(b => b.classList.toggle('on', +b.dataset.v === (s.photo_s || 4)));
   $('rIntroSfx').checked = !!s.intro_sfx;
@@ -1226,6 +1231,11 @@ $('rGame').onchange = e => saveReelSetting({ game_audio: e.target.value / 100 })
 document.querySelectorAll('#rTrans button').forEach(b => b.onclick = () => saveReelSetting({ transition: b.dataset.v }));
 document.querySelectorAll('#rBanner button').forEach(b => b.onclick = () => saveReelSetting({ name_banner: b.dataset.v }));
 document.querySelectorAll('#rIntro button').forEach(b => b.onclick = () => saveReelSetting({ intro: b.dataset.v }));
+document.querySelectorAll('#rOutro button').forEach(b => b.onclick = async () => {
+  const cur = await (await fetch('/api/branding')).json();
+  await fetch('/api/branding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...cur.branding, style: b.dataset.v }) });
+  document.querySelectorAll('#rOutro button').forEach(x => x.classList.toggle('on', x === b));
+});
 document.querySelectorAll('#rFormat button').forEach(b => b.onclick = () => saveReelSetting({ format: b.dataset.v }));
 document.querySelectorAll('#rPhotoS button').forEach(b => b.onclick = () => saveReelSetting({ photo_s: +b.dataset.v }));
 $('rIntroSfx').onchange = e => saveReelSetting({ intro_sfx: e.target.checked });

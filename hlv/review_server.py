@@ -526,7 +526,8 @@ class ReviewApp:
                 s["freeze"] = bool(patch["freeze"])
             if patch.get("format") in ("wide", "vertical", "both"):
                 s["format"] = patch["format"]
-            if patch.get("intro") in ("animated", "inferno", "storm", "shatter", "stadium", "classic"):
+            if patch.get("intro") in ("animated", "inferno", "storm", "shatter", "stadium",
+                                      "glitch", "smoke", "neon", "warp", "gold", "classic"):
                 s["intro"] = patch["intro"]
             if "intro_sfx" in patch:
                 s["intro_sfx"] = bool(patch["intro_sfx"])

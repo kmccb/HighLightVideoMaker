@@ -744,3 +744,10 @@ def render(style: str, out: Path, lib_root: Path, pl: dict, grid: dict | None, m
     if enc.returncode != 0:
         raise RuntimeError(f"{style} intro render failed")
     return out, n_frames / FPS
+
+
+# the second set of styles (glitch, smoke, neon, warp, gold) lives in intro_fx2
+from . import intro_fx2 as _fx2  # noqa: E402
+
+_STYLE.update(_fx2.STYLES)
+STYLES = STYLES + tuple(_fx2.STYLES)

@@ -29,6 +29,7 @@ W, H = graphics.W, graphics.H
 FPS = 30
 OUTRO_S = 7.0
 OUTRO_VERSION = 2
+STYLES = ("forge", "anvil", "molten", "minimal")
 FONT_DIR = Path(__file__).parent / "fonts"
 PAPER = (221, 235, 242)          # BGR of #F2EBDD (site --paper)
 PAPER_DIM = (185, 203, 212)      # #D4CBB9
@@ -182,7 +183,11 @@ def render(out: Path, b: dict, video: Path | None, seconds: float = OUTRO_S, see
     forge_c = (x0 + mark_px + gap + L_scott.shape[1] + 8 + L_forge.shape[1] / 2, y_logo + 6)
     y_label, y_url, y_inv = 300, 660, 750
 
-    frames = _forge_frames(video, n) if only_frame is None else _forge_frames(video, int(only_frame * FPS) + 1)
+    style = b.get("style") if b.get("style") in STYLES else "forge"
+    if style != "forge":
+        frames = None                                             # only Forge uses the clip
+    else:
+        frames = _forge_frames(video, n) if only_frame is None else _forge_frames(video, int(only_frame * FPS) + 1)
     grade = _grade()
     embers = Embers(rng)
     T_MARK, T_SCOTT, T_FORGE = 0.5, 0.9, 1.2
@@ -255,6 +260,15 @@ def render(out: Path, b: dict, video: Path | None, seconds: float = OUTRO_S, see
         fade = smooth(t / 0.6) * (1 - smooth((t - (seconds - 0.7)) / 0.7))
         return np.clip(frame * fade, 0, 255).astype(np.uint8)
 
+    if style != "forge":
+        from . import outro2
+        frame_at = outro2.make(style, {  # noqa: F811 - another style's frames
+            "W": W, "H": H, "FPS": FPS, "rng": rng, "ember": ember, "seconds": seconds, "grain": grain,
+            "L_scott": L_scott, "L_forge": L_forge, "L_forge_glow": L_forge_glow, "L_anvil": L_anvil,
+            "L_dots": L_dots, "L_anvil_glow": L_anvil_glow, "L_dots_glow": L_dots_glow, "L_label": L_label,
+            "L_url": L_url, "L_url_glow": L_url_glow, "L_inv": L_inv, "mark_c": mark_c, "scott_c": scott_c,
+            "forge_c": forge_c, "y_label": y_label, "y_url": y_url, "y_inv": y_inv})
+
     if only_frame is not None:
         return frame_at(int(only_frame * FPS))
 
@@ -284,7 +298,7 @@ def video_path(lib_root: Path, b: dict) -> Path | None:
 
 
 def cache_key(b: dict, video: Path | None, seconds: float) -> str:
-    payload = {"v": OUTRO_VERSION, "b": {k: b.get(k) for k in ("title", "url", "invite", "accent")},
+    payload = {"v": OUTRO_VERSION, "b": {k: b.get(k) for k in ("title", "url", "invite", "accent", "style")},
                "video": [str(video), video.stat().st_mtime] if video else None, "s": seconds}
     return hashlib.sha1(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:12]
 
