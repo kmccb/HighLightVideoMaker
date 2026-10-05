@@ -727,6 +727,8 @@ def make_handler(app: ReviewApp):
                 return self._json(app.music_suggestion(m.group(1)))
             if path == "/api/clips":
                 return self._json(app.clips())
+            if path in ("/guide", "/guide.html"):
+                return self._file(STATIC / "guide.html", "text/html; charset=utf-8")
             if path in ("/mark", "/mark.html"):
                 if app.root is None:
                     return self._redirect("/")

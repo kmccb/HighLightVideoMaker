@@ -13,7 +13,7 @@ Test project folder: `TestClips\Caleb_Footbal\` (23 clips across Scrimmage, Week
 .venv\Scripts\python -m hlv review                              # main UI: http://127.0.0.1:8765 (start screen: project list)
 .venv\Scripts\python -m hlv review "TestClips\Caleb_Footbal"     # or straight into one project
 .venv\Scripts\python -m hlv reel   "TestClips\Caleb_Footbal"     # build the reel from the command line (same as the Build button)
-.venv\Scripts\python -m pytest -q tests                          # 61 tests, all passing
+.venv\Scripts\python -m pytest -q tests                          # 64 tests, all passing
 ```
 In the Claude desktop app, `.claude/launch.json` has a `review` preview config (use `preview_start name=review`). **Restart the server after any Python change**; static HTML changes only need a page reload. **Never restart while a reel is building** (check `/api/reel/status`); the build runs inside the server process.
 
@@ -86,5 +86,9 @@ Results (measured on Tom's own clicks/marks, all scripts in the session scratchp
 - **Auto-finding the player: not achievable here.** YOLO11s (person detector, `hlv/models/yolo11s.pt`, git-ignored) boxes the clicked player 90% of the time, but picking him among 40-60 people by appearance (ResNet-18 features / colour, leave-one-clip-out) is right first only 14-40%. Jersey-number reading (PARSeq scene-text model) read the right number on 0-9% of his crops (digits-only decoding was worse). Would need a custom-trained model on hundreds of labelled crops.
 - **Detector-based tracker: worse than the current one** (hidden-click benchmark: within 1 player-width 59% best setting vs 94% for `track.py`). Removed; `track.py` stays.
 - **Hits: improved, shipped.** `hitfx.py` signals (field speed with camera removed, decel/accel, nearest-person proximity and crowding from saved detections, audio onset, position in play) + weights fitted on 23 marked hits (`hits.WEIGHTS`). Leave-one-out: within 0.4 s 48% (old rule ~17%, "middle of play" 22%), median 0.5 s off. Top-3 candidates barely help (52%). The Mark plays Hit tab shows the suggestion dashed with **Use suggestion**. Detections are computed in the background warm-up (`detect.warm`, after tracking; 15-45 s per clip, saved in `.hlv_cache\det\`).
-- Next for hits: refit `hits.WEIGHTS` as Tom marks more hits (more data is the main lever).
+- **Correction (same day):** the 48% was a lucky random search. Stable figure with a small fixed grid (`hitmodel.GRID_KEYS`, 384 weightings): **~39% within 0.4 s** leave-one-out (old rule ~17%, "middle of play" 26%).
+- **Hit model relearns by itself** (`hitmodel.py`): trains on every marked hit in every project, refits ~45 s after hits/sides change and after the warm-up, saves `~\HighlightReels\hit_model.json` with its leave-one-out score (shown at the top of Mark plays → Hit). Plays can be tagged **Offense/Defense** (`review.side`); a side gets its own weights once it has 8 examples. Signals cached per clip in `.hlv_cache\hitfx\`.
+- **End of play: left as is.** Detector within 0.5 s of Tom's 34 confirmed ends 41% (1 s: 53%); a learned version scored worse (24%) and there's no consistent bias to correct. Making fixes fast instead.
+- **Mark plays keyboard flow**: arrows, Enter = set and next, A = accept suggestion, O/D, X, comma/period; focused card outlined.
+- **In-app guide** at `/guide` (`static/guide.html`): linked from the start screen, review sidebar ("? How to use"), Mark plays and Player profiles.
 - Installed in .venv: torch/torchvision (CPU), ultralytics (with `--no-deps`: it wants `opencv-python`, which would clash with `opencv-contrib-python`), timm, pytorch_lightning (PARSeq, now unused). The PC has no CUDA GPU (i7-1165G7).
