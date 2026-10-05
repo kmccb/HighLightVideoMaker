@@ -1,0 +1,278 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>Mark plays</title>
+<style>
+:root {
+  --bg: #0f1113; --panel: #171a1d; --panel-2: #1e2226; --line: #2a2f35;
+  --text: #e6e8ea; --dim: #8b939b; --faint: #5a626a;
+  --snap: #3ecf6e; --spot: #ffd23f; --hit: #ff7a1a; --accent: #4aa3ff; --warn: #f5b942; --bad: #ff5c5c;
+  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font: 14px/1.4 system-ui, "Segoe UI", sans-serif; }
+header { position: sticky; top: 0; z-index: 5; background: var(--bg); border-bottom: 1px solid var(--line);
+  display: flex; align-items: center; gap: 14px; padding: 12px 20px; flex-wrap: wrap; }
+header h1 { margin: 0; font-size: 18px; }
+a.back { color: var(--dim); text-decoration: none; }
+a.back:hover { color: var(--text); }
+.tabs { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.tabs button { background: var(--panel-2); color: var(--text); border: 0; padding: 8px 16px; cursor: pointer; font: inherit; }
+.tabs button.on { background: #24425f; }
+.tabs button + button { border-left: 1px solid var(--line); }
+.count { color: var(--dim); }
+label.flt { color: var(--dim); display: inline-flex; gap: 6px; align-items: center; cursor: pointer; }
+.help { color: var(--dim); font-size: 13px; padding: 10px 20px 0; }
+main { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 560px), 1fr)); gap: 16px; padding: 16px 20px 60px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; display: flex; flex-direction: column; }
+.card.done { border-color: #2f6b47; }
+.head { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.head .name { font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.chip { font-size: 11px; padding: 2px 7px; border-radius: 10px; border: 1px solid var(--line); color: var(--dim); white-space: nowrap; }
+.chip.ok { color: var(--snap); border-color: #2f6b47; }
+.chip.need { color: var(--warn); border-color: #5a4a22; }
+.chip.busy { color: var(--spot); border-color: #6b5a1f; }
+.stage { position: relative; background: #000; cursor: crosshair; aspect-ratio: 16 / 9; }
+.stage img { width: 100%; height: 100%; object-fit: contain; display: block; user-select: none; -webkit-user-drag: none; }
+.stage canvas { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.ctl { display: flex; gap: 6px; align-items: center; padding: 8px 12px; flex-wrap: wrap; }
+.ctl button { background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; cursor: pointer; font: inherit; font-size: 13px; }
+.ctl button:hover { border-color: var(--faint); }
+.ctl .t { font: 13px var(--mono); color: var(--dim); min-width: 120px; text-align: center; }
+.ctl .grow { flex: 1; }
+.strip { position: relative; cursor: pointer; background: #000; }
+.strip img { width: 100%; display: block; user-select: none; -webkit-user-drag: none; }
+.strip .sel { position: absolute; top: 0; bottom: 0; border: 3px solid var(--hit); border-radius: 3px; pointer-events: none; }
+.strip .hov { position: absolute; top: 0; bottom: 0; border: 2px solid rgba(255,255,255,.6); pointer-events: none; }
+.big { position: relative; background: #000; aspect-ratio: 16 / 9; }
+.big img { width: 100%; height: 100%; object-fit: contain; display: block; }
+#loupe { position: fixed; width: 240px; height: 240px; border: 2px solid var(--spot); border-radius: 50%; pointer-events: none;
+  z-index: 20; box-shadow: 0 4px 18px rgba(0,0,0,.6); background: #000; display: none; }
+.empty { color: var(--dim); padding: 40px; grid-column: 1 / -1; text-align: center; }
+</style>
+</head>
+<body>
+<header>
+  <a class="back" href="/review">◂ Review</a>
+  <h1>Mark plays</h1>
+  <span class="tabs"><button data-tab="player">Player</button><button data-tab="hit">Hit</button></span>
+  <label class="flt"><input type="checkbox" id="onlyNeed" checked> only plays that still need it</label>
+  <span class="count" id="count"></span>
+</header>
+<div class="help" id="help"></div>
+<main id="grid"></main>
+<canvas id="loupe" width="240" height="240"></canvas>
+<script>
+const $ = id => document.getElementById(id);
+const REACH = 1.5;                       // a click this close to the snap freezes there (segment.FREEZE_REACH)
+const BOX_W = 0.032, BOX_H = 0.09;       // a plain click = a player-sized box (as on the review page)
+let data = null, tab = 'player';
+try { tab = localStorage.getItem('markTab') || 'player'; } catch (e) {}
+const queue = [];                        // clips waiting to be tracked, one at a time
+let tracking = null;
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const snapOf = c => c.review.snap ?? c.detection.snap;
+const endOf = c => c.review.end ?? c.detection.end;
+const included = c => c.review.keep !== false;
+const playerOk = c => (c.review.spotlight || []).some(a => Math.abs(a.t - snapOf(c)) <= REACH);
+const hitOk = c => c.review.hit != null || c.review.no_hit;
+const state = {};                        // per clip: {t}
+
+async function load() {
+  data = await (await fetch('/api/clips')).json();
+  document.title = 'Mark plays';
+  render();
+}
+
+function render() {
+  document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
+  $('help').textContent = tab === 'player'
+    ? 'Click your player in each frame (drag a box if he looks much bigger or smaller than usual). It opens at the snap; if he is hidden there, step a little with the arrows. Tracking starts on its own.'
+    : 'Click the frame with the hit: contact or tackle on defense, the catch or big move on offense. ± nudges it a tenth of a second. ✕ = this play has no hit.';
+  const clips = data.clips.filter(included);
+  const need = clips.filter(c => tab === 'player' ? !playerOk(c) : !hitOk(c));
+  $('count').textContent = `${need.length} of ${clips.length} plays still need ${tab === 'player' ? 'the player' : 'a hit'}`;
+  const show = $('onlyNeed').checked ? need : clips;
+  const g = $('grid');
+  g.innerHTML = show.length ? '' : `<div class="empty">All done here. ${tab === 'player' ? 'Every play has your player marked near the snap.' : 'Every play has a hit.'}</div>`;
+  for (const c of show) g.appendChild(tab === 'player' ? playerCard(c) : hitCard(c));
+}
+
+function chips(c) {
+  const busy = tracking === c.id || queue.includes(c.id);
+  return (busy ? '<span class="chip busy">tracking…</span>' : '') +
+    (playerOk(c) ? '<span class="chip ok">player ✓</span>' : '<span class="chip need">needs player</span>') +
+    (hitOk(c) ? `<span class="chip ok">${c.review.no_hit ? 'no hit' : 'hit ✓'}</span>` : '<span class="chip need">needs hit</span>');
+}
+
+function refreshCard(c) {
+  const el = document.querySelector(`.card[data-id="${c.id}"] .chips`);
+  if (el) el.innerHTML = chips(c);
+  const card = document.querySelector(`.card[data-id="${c.id}"]`);
+  if (card) card.classList.toggle('done', tab === 'player' ? playerOk(c) : hitOk(c));
+  const clips = data.clips.filter(included);
+  const need = clips.filter(x => tab === 'player' ? !playerOk(x) : !hitOk(x));
+  $('count').textContent = `${need.length} of ${clips.length} plays still need ${tab === 'player' ? 'the player' : 'a hit'}`;
+}
+
+async function save(c, patch) {
+  const res = await fetch('/api/clips/' + c.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(patch) });
+  if (!res.ok) { alert('Could not save: ' + res.status); return; }
+  c.review = (await res.json()).review;
+  refreshCard(c);
+}
+
+// ---------------- Player tab ----------------
+function playerCard(c) {
+  const st = state[c.id] || (state[c.id] = { t: snapOf(c) });
+  const el = document.createElement('div');
+  el.className = 'card' + (playerOk(c) ? ' done' : '');
+  el.dataset.id = c.id;
+  el.innerHTML = `<div class="head"><span class="name">${esc(c.source.split('/').pop())}</span><span class="chips">${chips(c)}</span></div>
+    <div class="stage"><img alt=""><canvas></canvas></div>
+    <div class="ctl"><button data-d="-1">◀◀ 1s</button><button data-d="-0.25">◀ ¼s</button>
+      <span class="t"></span><button data-d="0.25">¼s ▶</button><button data-d="1">1s ▶▶</button>
+      <span class="grow"></span><button data-act="snap">Back to snap</button><button data-act="undo" title="remove your click on this frame">Remove click</button></div>`;
+  const img = el.querySelector('img'), cv = el.querySelector('canvas'), stage = el.querySelector('.stage');
+  const show = () => {
+    img.src = `/api/clips/${c.id}/frame.jpg?t=${st.t.toFixed(3)}`;
+    const d = st.t - snapOf(c);
+    el.querySelector('.t').textContent = `${st.t.toFixed(2)}s · ${Math.abs(d) < 0.01 ? 'snap' : (d > 0 ? '+' : '') + d.toFixed(2) + ' s'}`;
+    draw();
+  };
+  const draw = () => {
+    const r = cv.getBoundingClientRect();
+    cv.width = r.width; cv.height = r.height;
+    const g = cv.getContext('2d');
+    g.clearRect(0, 0, cv.width, cv.height);
+    for (const a of c.review.spotlight || []) {
+      if (Math.abs(a.t - st.t) < 0.13) {
+        g.strokeStyle = '#ffd23f'; g.lineWidth = 2; g.setLineDash([6, 4]);
+        g.strokeRect(a.x * cv.width, a.y * cv.height, a.w * cv.width, a.h * cv.height);
+      }
+    }
+  };
+  img.onload = draw;
+  el.querySelectorAll('[data-d]').forEach(b => b.onclick = () => {
+    st.t = Math.min(Math.max(0, st.t + +b.dataset.d), c.duration - 0.05); show();
+  });
+  el.querySelector('[data-act=snap]').onclick = () => { st.t = snapOf(c); show(); };
+  el.querySelector('[data-act=undo]').onclick = async () => {
+    const sp = (c.review.spotlight || []).filter(a => Math.abs(a.t - st.t) >= 0.13);
+    await save(c, { spotlight: sp }); draw(); enqueue(c);
+  };
+  let down = null;
+  stage.addEventListener('pointerdown', e => { const r = stage.getBoundingClientRect(); down = [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height]; });
+  stage.addEventListener('pointerup', async e => {
+    if (!down) return;
+    const r = stage.getBoundingClientRect();
+    const up = [(e.clientX - r.left) / r.width, (e.clientY - r.top) / r.height];
+    let x0 = Math.min(down[0], up[0]), y0 = Math.min(down[1], up[1]), x1 = Math.max(down[0], up[0]), y1 = Math.max(down[1], up[1]);
+    if (x1 - x0 < 0.008 || y1 - y0 < 0.015) {
+      x0 = down[0] - BOX_W / 2; y0 = down[1] - BOX_H / 2; x1 = down[0] + BOX_W / 2; y1 = down[1] + BOX_H / 2;
+    }
+    down = null;
+    x0 = Math.max(0, x0); y0 = Math.max(0, y0); x1 = Math.min(1, x1); y1 = Math.min(1, y1);
+    const t = +st.t.toFixed(3);
+    const sp = (c.review.spotlight || []).filter(a => Math.abs(a.t - t) > 0.05);
+    sp.push({ t, x: +x0.toFixed(4), y: +y0.toFixed(4), w: +(x1 - x0).toFixed(4), h: +(y1 - y0).toFixed(4) });
+    sp.sort((a, b) => a.t - b.t);
+    await save(c, { spotlight: sp });
+    draw(); enqueue(c);
+  });
+  stage.addEventListener('pointermove', e => loupe(e, img));
+  stage.addEventListener('pointerleave', () => $('loupe').style.display = 'none');
+  new ResizeObserver(draw).observe(stage);
+  show();
+  return el;
+}
+
+// Magnifier: 3x around the cursor, from the full-size frame.
+function loupe(e, img) {
+  const L = $('loupe'), g = L.getContext('2d');
+  if (!img.naturalWidth) return;
+  const r = img.getBoundingClientRect();
+  const sx = img.naturalWidth / r.width, sy = img.naturalHeight / r.height, Z = 3;
+  const span = L.width / Z;
+  g.fillStyle = '#000'; g.fillRect(0, 0, L.width, L.height);
+  g.drawImage(img, (e.clientX - r.left - span / 2) * sx, (e.clientY - r.top - span / 2) * sy, span * sx, span * sy, 0, 0, L.width, L.height);
+  g.strokeStyle = '#ffd23f'; g.lineWidth = 1.5;
+  g.beginPath(); g.moveTo(L.width / 2 - 9, L.height / 2); g.lineTo(L.width / 2 + 9, L.height / 2);
+  g.moveTo(L.width / 2, L.height / 2 - 9); g.lineTo(L.width / 2, L.height / 2 + 9); g.stroke();
+  let lx = e.clientX + 24, ly = e.clientY - L.height - 24;
+  if (lx + L.width > innerWidth) lx = e.clientX - L.width - 24;
+  if (ly < 0) ly = e.clientY + 24;
+  L.style.left = lx + 'px'; L.style.top = ly + 'px'; L.style.display = 'block';
+}
+
+// Track one clip at a time in the background (same request the review page makes).
+function enqueue(c) {
+  if (!queue.includes(c.id) && tracking !== c.id) queue.push(c.id);
+  refreshCard(c);
+  pump();
+}
+async function pump() {
+  if (tracking || !queue.length) return;
+  tracking = queue.shift();
+  const c = data.clips.find(x => x.id === tracking);
+  refreshCard(c);
+  try { await fetch('/api/clips/' + c.id + '/plan', { method: 'POST' }); } catch (e) {}
+  tracking = null;
+  refreshCard(c);
+  pump();
+}
+
+// ---------------- Hit tab ----------------
+const N = 14;
+function hitCard(c) {
+  const t0 = snapOf(c) + 0.2, t1 = Math.min(c.duration, endOf(c) + 0.6), span = t1 - t0;
+  const el = document.createElement('div');
+  el.className = 'card' + (hitOk(c) ? ' done' : '');
+  el.dataset.id = c.id;
+  el.innerHTML = `<div class="head"><span class="name">${esc(c.source.split('/').pop())}</span><span class="chips">${chips(c)}</span></div>
+    <div class="big"><img alt=""></div>
+    <div class="strip"><img alt=""><div class="sel" hidden></div><div class="hov" hidden></div></div>
+    <div class="ctl"><button data-n="-0.1">− 0.1s</button><span class="t"></span><button data-n="0.1">+ 0.1s</button>
+      <span class="grow"></span><button data-act="nohit" title="no hit on this play: no punch, no slow-mo, timing left alone">✕ No hit</button></div>`;
+  const strip = el.querySelector('.strip'), simg = strip.querySelector('img'), sel = strip.querySelector('.sel'), hov = strip.querySelector('.hov');
+  const big = el.querySelector('.big img');
+  simg.src = `/api/clips/${c.id}/strip.jpg?t0=${t0.toFixed(3)}&t1=${t1.toFixed(3)}&n=${N}`;
+  const tAt = i => t0 + i * span / N;
+  const update = () => {
+    const h = c.review.no_hit ? null : c.review.hit;
+    el.querySelector('.t').textContent = c.review.no_hit ? 'no hit' : (h == null ? 'pick the hit ▲' : `hit ${h.toFixed(2)}s (+${(h - snapOf(c)).toFixed(2)} after snap)`);
+    if (h != null && h >= t0 - 0.2 && h <= t1) {
+      const i = Math.max(0, Math.min(N - 1, Math.round((h - t0) / (span / N))));
+      sel.hidden = false; sel.style.left = (100 * i / N) + '%'; sel.style.width = (100 / N) + '%';
+    } else sel.hidden = true;
+    big.src = `/api/clips/${c.id}/frame.jpg?t=${(h ?? snapOf(c) + span / 2).toFixed(3)}`;
+  };
+  strip.addEventListener('pointermove', e => {
+    const r = strip.getBoundingClientRect(), i = Math.floor((e.clientX - r.left) / r.width * N);
+    hov.hidden = false; hov.style.left = (100 * i / N) + '%'; hov.style.width = (100 / N) + '%';
+  });
+  strip.addEventListener('pointerleave', () => hov.hidden = true);
+  strip.addEventListener('click', async e => {
+    const r = strip.getBoundingClientRect(), i = Math.floor((e.clientX - r.left) / r.width * N);
+    await save(c, { hit: +tAt(i).toFixed(3), no_hit: false }); update();
+  });
+  el.querySelectorAll('[data-n]').forEach(b => b.onclick = async () => {
+    const h = c.review.hit ?? tAt(N / 2);
+    await save(c, { hit: +(h + +b.dataset.n).toFixed(3), no_hit: false }); update();
+  });
+  el.querySelector('[data-act=nohit]').onclick = async () => { await save(c, { hit: null, no_hit: !c.review.no_hit }); update(); };
+  update();
+  return el;
+}
+
+document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
+  tab = b.dataset.tab;
+  try { localStorage.setItem('markTab', tab); } catch (e) {}
+  render();
+});
+$('onlyNeed').onchange = render;
+load();
+</script>
+</body>
+</html>

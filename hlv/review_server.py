@@ -547,6 +547,34 @@ class ReviewApp:
             raise KeyError(clip_id)
         return hits.suggest(self.root, clip)
 
+    def frame_jpg(self, clip_id: str, t: float, width: int = 1280) -> bytes:
+        """One frame of a clip's review copy (for the Mark plays page)."""
+        self._need()
+        src = proxy.proxy_path(self.cache, clip_id)
+        if not src.exists():
+            raise KeyError(clip_id)
+        r = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{max(0.0, t):.3f}", "-i", str(src), "-frames:v", "1",
+                            "-vf", f"scale={width}:-2", "-q:v", "3", "-f", "image2pipe", "-vcodec", "mjpeg", "-"],
+                           capture_output=True)
+        if not r.stdout:
+            raise KeyError(clip_id)
+        return r.stdout
+
+    def strip_jpg(self, clip_id: str, t0: float, t1: float, n: int) -> bytes:
+        """n frames evenly from t0 to t1 side by side (the hit picker's filmstrip)."""
+        self._need()
+        src = proxy.proxy_path(self.cache, clip_id)
+        if not src.exists():
+            raise KeyError(clip_id)
+        n = max(2, min(int(n), 30))
+        span = max(0.2, t1 - t0)
+        r = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{max(0.0, t0):.3f}", "-i", str(src), "-t", f"{span:.3f}",
+                            "-vf", f"fps={n / span:.5f},scale=256:-2,tile={n}x1", "-frames:v", "1", "-q:v", "4",
+                            "-f", "image2pipe", "-vcodec", "mjpeg", "-"], capture_output=True)
+        if not r.stdout:
+            raise KeyError(clip_id)
+        return r.stdout
+
     def plan(self, clip_id: str) -> dict:
         from . import camera
         self._need()
@@ -688,6 +716,25 @@ def make_handler(app: ReviewApp):
                 return self._json(app.music_suggestion(m.group(1)))
             if path == "/api/clips":
                 return self._json(app.clips())
+            if path in ("/mark", "/mark.html"):
+                if app.root is None:
+                    return self._redirect("/")
+                return self._file(STATIC / "mark.html", "text/html; charset=utf-8")
+            m = re.fullmatch(r"/api/clips/([a-z0-9-]+)/(frame|strip)\.jpg", path)
+            if m:
+                from urllib.parse import parse_qs
+                q = {k: v[0] for k, v in parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "").items()}
+                try:
+                    body = (app.frame_jpg(m.group(1), float(q.get("t", 0))) if m.group(2) == "frame" else
+                            app.strip_jpg(m.group(1), float(q.get("t0", 0)), float(q.get("t1", 1)), int(q.get("n", 12))))
+                except (KeyError, ValueError):
+                    return self.send_error(HTTPStatus.NOT_FOUND)
+                self.send_response(HTTPStatus.OK)
+                self.send_header("Content-Type", "image/jpeg")
+                self.send_header("Content-Length", str(len(body)))
+                self.send_header("Cache-Control", "max-age=300")
+                self.end_headers()
+                return self.wfile.write(body)
             if path in ("/players", "/players.html"):
                 return self._file(STATIC / "players.html", "text/html; charset=utf-8")
             if path == "/api/players":
