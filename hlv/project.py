@@ -22,7 +22,7 @@ def settings(project: dict) -> dict:
             "beat_sync": True, "hit_fx": True, "music_start": 0.0,
             "slowmo": False, "slowmo_speed": 0.4, "name_banner": "first",
             "music": None, "scottforge_card": True, "intro": "animated", "intro_sfx": False,
-            "photo_s": 4,
+            "photo_s": 4, "format": "wide",
             **(project.get("settings") or {})}
 
 

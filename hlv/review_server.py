@@ -300,7 +300,7 @@ class ReviewApp:
             "card_s": reel.TITLE_S + reel.END_S + (reel.CREDIT_S if self._credit_on(s) else 0),
             "credit_ready": library.branding_ready(library.branding()),
             "clips": rows, "job": self.job, "photo_count": sum(1 for r in rows if r.get("type") == "photo"),
-            "last_reel": self._reel_entry(s),
+            "last_reel": self._reel_entry(s), "last_vertical": self._reel_entry(s, True),
         }
 
     # ---------------- player profiles ----------------
@@ -434,29 +434,31 @@ class ReviewApp:
             project.save(self.root, proj)
         return ph
 
-    def _last_reel(self, s: dict | None = None) -> Path | None:
-        """The reel this project built most recently (this session's build, else the file on disk)."""
+    def _last_reel(self, s: dict | None = None, vertical: bool = False) -> Path | None:
+        """The (wide or vertical) reel this project built most recently: this session's build,
+        else the file on disk."""
         self._need()
-        out = (self.job.get("result") or {}).get("output") if self.job.get("state") == "done" else None
-        if out and Path(out).exists():
-            return Path(out)
+        if not vertical:
+            out = (self.job.get("result") or {}).get("output") if self.job.get("state") == "done" else None
+            if out and Path(out).exists() and not out.endswith("_vertical.mp4"):
+                return Path(out)
         if s is None:
             with self.lock:
                 s = project.settings(project.load(self.root))
         pl = s.get("player")
-        f = self.root / reel.OUT_DIRNAME / f"{pl}_reel.mp4" if pl else None
+        f = self.root / reel.OUT_DIRNAME / f"{pl}_reel{'_vertical' if vertical else ''}.mp4" if pl else None
         return f if f and f.exists() else None
 
-    def _reel_entry(self, s: dict) -> dict | None:
-        f = self._last_reel(s)
+    def _reel_entry(self, s: dict, vertical: bool = False) -> dict | None:
+        f = self._last_reel(s, vertical)
         if f is None:
             return None
         return {"path": str(f), "file": f.name,
                 "built": datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="minutes")}
 
-    def reveal_reel(self, action: str) -> dict:
+    def reveal_reel(self, action: str, vertical: bool = False) -> dict:
         """Open the finished reel in Windows' video player, or show it in File Explorer."""
-        f = self._last_reel()
+        f = self._last_reel(vertical=vertical)
         if f is None:
             raise ValueError("no reel built yet")
         if action == "open":
@@ -500,7 +502,13 @@ class ReviewApp:
             try:
                 with self.lock:
                     s = project.settings(project.load(root))
-                res = reel.build(root, s.get("player"), s.get("transition"), progress=progress)
+                fmt = s.get("format", "wide")
+                res = None
+                if fmt in ("wide", "both"):
+                    res = reel.build(root, s.get("player"), s.get("transition"), progress=progress)
+                if fmt in ("vertical", "both"):
+                    rv = reel.build(root, s.get("player"), s.get("transition"), progress=progress, vertical=True)
+                    res = rv if res is None else {**res, "vertical_output": rv["output"]}
                 self.job.update(state="done", result=res, step="done")
             except Exception as e:  # noqa: BLE001 - report any failure to the page
                 self.job.update(state="error", error=str(e))
@@ -516,6 +524,8 @@ class ReviewApp:
                 s["transition"] = patch["transition"]
             if "freeze" in patch:
                 s["freeze"] = bool(patch["freeze"])
+            if patch.get("format") in ("wide", "vertical", "both"):
+                s["format"] = patch["format"]
             if patch.get("intro") in ("animated", "inferno", "storm", "shatter", "stadium", "classic"):
                 s["intro"] = patch["intro"]
             if "intro_sfx" in patch:
@@ -864,7 +874,8 @@ def make_handler(app: ReviewApp):
                 return self._json(app.set_order(json.loads(self.rfile.read(n) or b"{}").get("order", [])))
             if self.path == "/api/reel/reveal":
                 try:
-                    return self._json(app.reveal_reel(str(json.loads(self.rfile.read(n) or b"{}").get("action"))))
+                    body = json.loads(self.rfile.read(n) or b"{}")
+                    return self._json(app.reveal_reel(str(body.get("action")), bool(body.get("vertical"))))
                 except ValueError as e:
                     return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
             if self.path == "/api/reel/build":

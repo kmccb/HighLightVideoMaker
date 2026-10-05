@@ -98,9 +98,21 @@ def _render_one(root: str, clip: dict, pl: dict, settings: dict) -> str:
     return str(segment.render(Path(root), clip, pl, settings))
 
 
+def _to_vertical(src: Path, dst: Path) -> Path:
+    """A 16:9 card/intro on a 9:16 frame: full width in the middle over a blurred, darkened fill."""
+    W_, H_ = segment.VERTICAL
+    subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-filter_complex",
+                    f"[0:v]split[a][b];[a]scale=-2:{H_},crop={W_}:{H_},boxblur=28:2,eq=brightness=-0.22[bg];"
+                    f"[b]scale={W_}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p[v]",
+                    "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-preset", "fast", "-crf", "17",
+                    "-c:a", "copy", "-movflags", "+faststart", str(dst)], check=True)
+    return dst
+
+
 def build(root: Path, player_id: str | None = None, transition: str | None = None,
-          jobs: int = 3, progress=None) -> dict:
-    """Render every included play and assemble the reel. progress(step, done, total)."""
+          jobs: int = 3, progress=None, vertical: bool = False) -> dict:
+    """Render every included play and assemble the reel. progress(step, done, total).
+    vertical: a 9:16 version (1080x1920) for phones, framed on the player."""
     from . import beats as beatmod, hits
     t_start = time.time()
     say = progress or (lambda step, done, total: print(f"  {step} ({done}/{total})", flush=True))
@@ -133,10 +145,12 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     say("rendering plays", done, total)
     with ProcessPoolExecutor(jobs) as ex:
         with_banner = banner_ids(clips, settings)
-        futs = {ex.submit(_render_one, str(root), c, pl, {**settings, "_banner": c["id"] in with_banner}): ("play", i)
+        aspect = {"_aspect": "9:16"} if vertical else {}
+        futs = {ex.submit(_render_one, str(root), c, pl, {**settings, **aspect, "_banner": c["id"] in with_banner}): ("play", i)
                 for i, c in enumerate(clips)}
         for k, ph in enumerate(pics):         # alternate slides zoom in / out
-            futs[ex.submit(photo_slide.render, root, ph, photo_slide.slide_length(photo_s), k % 2 == 1)] = ("photo", k)
+            futs[ex.submit(photo_slide.render, root, ph, photo_slide.slide_length(photo_s), k % 2 == 1,
+                           segment.VERTICAL if vertical else None)] = ("photo", k)
         for f in as_completed(futs):
             kind, i = futs[f]
             if kind == "play":
@@ -155,7 +169,8 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
 
     # 2) title + end cards
     out_dir = root / OUT_DIRNAME
-    seg_dir = out_dir / f"{pl['id']}_segments"
+    suffix = "_vertical" if vertical else ""
+    seg_dir = out_dir / f"{pl['id']}_segments{suffix}"
     if seg_dir.exists():
         shutil.rmtree(seg_dir)
     seg_dir.mkdir(parents=True)
@@ -182,6 +197,11 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     if settings.get("scottforge_card") and library.branding_ready(brand):
         credit = seg_dir / f"{len(seq) + 2:02d}_scottforge.mp4"
         _link_or_copy(outro.build(lib / "cache", lib, brand, CREDIT_S), credit)
+    if vertical:                                    # cards are designed 16:9: place them on a tall frame
+        title = _to_vertical(title, seg_dir / "00_title_v.mp4")
+        endc = _to_vertical(endc, endc.with_name(endc.stem + "_v.mp4"))
+        if credit is not None:
+            credit = _to_vertical(credit, credit.with_name(credit.stem + "_v.mp4"))
     done += 1
     say("cards", done, total)
     linked = []
@@ -225,7 +245,7 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         items.append([(credit, 0.0, CREDIT_S)])     # music keeps playing and fades out over it
 
     # 4) assemble
-    out = out_dir / f"{pl['id']}_reel.mp4"
+    out = out_dir / f"{pl['id']}_reel{suffix}.mp4"
     # Intro impact sounds play at full level; game audio sits under the music.
     gains = [1.0] + [None] * (len(items) - 1)
     _assemble(items, transition, music, music_start, settings, out, gains)
@@ -233,8 +253,9 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     say("assembled", done, total)
 
     # 5) Resolve timeline
-    fcp = out_dir / f"{pl['id']}_reel.fcpxml"
-    write_fcpxml(fcp, items, music, music_start, f"{pl.get('name') or pl['id']} highlights")
+    fcp = out_dir / f"{pl['id']}_reel{suffix}.fcpxml"
+    write_fcpxml(fcp, items, music, music_start, f"{pl.get('name') or pl['id']} highlights{' (vertical)' if vertical else ''}",
+                 size=segment.VERTICAL if vertical else (1920, 1080))
     done += 1
     say("done", done, total)
     play_timing = [t for t in timing if not t.get("photo")]
@@ -424,7 +445,7 @@ def _assemble(items: list[list[tuple]], transition: str, music: Path | None, mus
 
 
 def write_fcpxml(path: Path, items: list[list[tuple]], music: Path | None, music_start: float,
-                 name: str) -> None:
+                 name: str, size: tuple[int, int] = (1920, 1080)) -> None:
     """FCPXML 1.9 timeline: each play's pieces (lead / freeze / play) as cuts on the spine,
     music on a lane underneath. Add transitions in Resolve: select the clips, Ctrl+T."""
     fps = segment.FPS
@@ -434,8 +455,8 @@ def write_fcpxml(path: Path, items: list[list[tuple]], music: Path | None, music
         for p, _, _ in it:
             if p not in files:
                 files.append(p)
-    res = [f'<format id="r0" name="FFVideoFormat1080p{fps}" frameDuration="100/{fps * 100}s" '
-           f'width="1920" height="1080"/>']
+    fmt = f'name="FFVideoFormat1080p{fps}" ' if size == (1920, 1080) else ""
+    res = [f'<format id="r0" {fmt}frameDuration="100/{fps * 100}s" width="{size[0]}" height="{size[1]}"/>']
     for i, p in enumerate(files, 1):
         res.append(f'<asset id="r{i}" name="{escape(p.stem)}" start="0s" duration="{fr(_duration(p))}" '
                    f'hasVideo="1" hasAudio="1" format="r0" audioSources="1" audioChannels="2" audioRate="48000">'

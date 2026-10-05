@@ -307,6 +307,10 @@ video { display: block; max-width: 100%; max-height: 58vh; }
         <div class="hint">Name, number, school, colours and logo: <a href="/players" style="color:var(--accent)">edit player profiles ▸</a><span hidden><code id="rProfile"></code><code id="rAssetsDir"></code></span></div>
       </div>
       <div class="card">
+        <label class="row"><span class="lbl">Format</span>
+          <span class="segctl" id="rFormat">
+            <button data-v="wide" title="16:9, for TV, YouTube, Hudl">Wide</button><button data-v="vertical" title="9:16 for Instagram, TikTok, Snapchat: framed on the player">Vertical</button><button data-v="both" title="both files (takes about twice as long)">Both</button>
+          </span></label>
         <label class="row"><span class="lbl">Transition</span>
           <span class="segctl" id="rTrans">
             <button data-v="crossfade">Crossfade</button><button data-v="cut">Cut</button><button data-v="dip">Dip to black</button>
@@ -973,6 +977,7 @@ async function loadReel() {
   $('rCredit').disabled = !reelInfo.credit_ready;
   document.querySelectorAll('#rBanner button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.name_banner || 'first')));
   document.querySelectorAll('#rIntro button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.intro || 'animated')));
+  document.querySelectorAll('#rFormat button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.format || 'wide')));
   document.querySelectorAll('#rPhotoS button').forEach(b => b.classList.toggle('on', +b.dataset.v === (s.photo_s || 4)));
   $('rIntroSfx').checked = !!s.intro_sfx;
   $('rIntroSfx').disabled = (s.intro || 'animated') !== 'animated';
@@ -1119,26 +1124,45 @@ function showJob(j) {
     $('rResult').innerHTML = reelActions('Your reel is ready') + `<video controls src="/media/reel/${encodeURIComponent(file)}?t=${Date.now()}"></video>
       <div class="hint">Saved to <code>${esc(r.output)}</code></div>
       <div class="hint">DaVinci Resolve timeline: <code>${esc(r.fcpxml)}</code>. In Resolve use File → Import → Timeline… and pick it. Plays come in as finished clips with the music underneath. To add transitions there, select the clips and press Ctrl+T.</div>`;
+    if (r.vertical_output) $('rResult').insertAdjacentHTML('beforeend', verticalRow(r.vertical_output));
   }
 }
 // Buttons under a finished reel: play it here, open it in Windows' video player, or show it in Explorer.
-function reelActions(label) {
+function reelActions(label, vertical = false) {
+  const v = vertical ? ' data-v="1"' : '';
   return `<div class="reel-actions"><b>${esc(label)}</b>
-    <button class="btn" data-reel="play">▶ Play here</button>
-    <button class="btn" data-reel="open">Open in video player</button>
-    <button class="btn" data-reel="folder">Show in File Explorer</button></div>`;
+    <button class="btn" data-reel="play"${v}>▶ Play here</button>
+    <button class="btn" data-reel="open"${v}>Open in video player</button>
+    <button class="btn" data-reel="folder"${v}>Show in File Explorer</button></div>`;
+}
+function verticalRow(path) {
+  return reelActions('Vertical 9:16', true) + `<div class="hint"><code>${esc(path)}</code></div>`;
 }
 function showLastReel() {
   const r = reelInfo && reelInfo.last_reel;
-  if (!r || $('rResult').innerHTML.trim() || (reelInfo.job && reelInfo.job.state !== 'idle')) return;
+  if ($('rResult').innerHTML.trim() || (reelInfo.job && reelInfo.job.state !== 'idle')) return;
+  if (!r && reelInfo.last_vertical) { $('rResult').innerHTML = verticalRow(reelInfo.last_vertical.path); return; }
+  if (!r) return;
   const when = new Date(r.built).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  $('rResult').innerHTML = reelActions(`Last reel (built ${when})`) + `<div class="hint"><code>${esc(r.path)}</code></div>`;
+  $('rResult').innerHTML = reelActions(`Last reel (built ${when})`) + `<div class="hint"><code>${esc(r.path)}</code></div>` +
+    (reelInfo.last_vertical ? verticalRow(reelInfo.last_vertical.path) : '');
   $('rResult').dataset.file = r.file;
 }
 $('rResult').addEventListener('click', async e => {
   const b = e.target.closest('[data-reel]'); if (!b) return;
+  const vert = !!b.dataset.v;
+  if (b.dataset.reel === 'play' && vert) {
+    let v = $('rResult').querySelector('video.vert');
+    if (!v) {
+      const file = (reelInfo.last_vertical || {}).file || ((reelInfo.job.result || {}).vertical_output || '').split(/[\\/]/).pop();
+      b.closest('.reel-actions').insertAdjacentHTML('afterend', `<video class="vert" controls style="max-height:70vh;width:auto;margin:0 auto" src="/media/reel/${encodeURIComponent(file)}?t=${Date.now()}"></video>`);
+      v = $('rResult').querySelector('video.vert');
+    }
+    v.scrollIntoView({ block: 'center', behavior: 'smooth' }); v.play();
+    return;
+  }
   if (b.dataset.reel === 'play') {
-    let v = $('rResult').querySelector('video');
+    let v = $('rResult').querySelector('video:not(.vert)');
     if (!v) {
       const file = $('rResult').dataset.file || (reelInfo.last_reel && reelInfo.last_reel.file);
       $('rResult').insertAdjacentHTML('beforeend', `<video controls src="/media/reel/${encodeURIComponent(file)}?t=${Date.now()}"></video>`);
@@ -1147,7 +1171,7 @@ $('rResult').addEventListener('click', async e => {
     v.scrollIntoView({ block: 'center', behavior: 'smooth' }); v.play();
     return;
   }
-  const res = await fetch('/api/reel/reveal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: b.dataset.reel }) });
+  const res = await fetch('/api/reel/reveal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: b.dataset.reel, vertical: vert }) });
   if (!res.ok) alert((await res.json()).error || 'Could not open the reel');
 });
 
@@ -1202,6 +1226,7 @@ $('rGame').onchange = e => saveReelSetting({ game_audio: e.target.value / 100 })
 document.querySelectorAll('#rTrans button').forEach(b => b.onclick = () => saveReelSetting({ transition: b.dataset.v }));
 document.querySelectorAll('#rBanner button').forEach(b => b.onclick = () => saveReelSetting({ name_banner: b.dataset.v }));
 document.querySelectorAll('#rIntro button').forEach(b => b.onclick = () => saveReelSetting({ intro: b.dataset.v }));
+document.querySelectorAll('#rFormat button').forEach(b => b.onclick = () => saveReelSetting({ format: b.dataset.v }));
 document.querySelectorAll('#rPhotoS button').forEach(b => b.onclick = () => saveReelSetting({ photo_s: +b.dataset.v }));
 $('rIntroSfx').onchange = e => saveReelSetting({ intro_sfx: e.target.checked });
 $('rIntroPv').onclick = async e => {

@@ -99,6 +99,8 @@ def segment_key(clip: dict, pl: dict | None, settings: dict, plan: dict, src: Pa
                                                if settings.get("_banner", True) else ("accent",))},
         "plan": hashlib.sha1(json.dumps([plan.get("rects"), plan.get("player")]).encode()).hexdigest(),
     }
+    if settings.get("_aspect") == "9:16":
+        payload["aspect"] = "9:16"
     if r.get("ring_off"):                      # only keyed when used, so old renders stay valid
         payload["ring_off"] = r["ring_off"]
     return hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:12]
@@ -124,7 +126,38 @@ def layout(seg: Path) -> dict:
     return json.loads(seg.with_suffix(".json").read_text())
 
 
+VERTICAL = (1080, 1920)
+
+
+def _vertical_rects(rects: np.ndarray, player: np.ndarray | None, W: int, H: int, info) -> np.ndarray:
+    """9:16 windows from the 16:9 camera windows: same height, following the player sideways
+    (smoothed; the window's own centre where he isn't known), kept inside the picture."""
+    from scipy.ndimage import gaussian_filter1d
+    out = rects.copy()
+    h = np.minimum(rects[:, 3], H)
+    w = np.minimum(h * 9 / 16, W)
+    cx = rects[:, 0] + rects[:, 2] / 2
+    if player is not None:
+        n = min(len(player), len(cx))
+        p = player[:n]
+        ok = (p[:, 0] >= 0) & ~np.isnan(p[:, 0]) & (np.nan_to_num(p[:, 4]) >= 0.3)
+        if ok.sum() > 5:
+            idx = np.arange(n)
+            px = np.interp(idx, idx[ok], p[ok, 0] * info.width)
+            # where he's unknown, drift back toward the camera window's centre
+            near = np.interp(idx, idx[ok], idx[ok].astype(float))
+            far = np.clip(np.abs(idx - near) / FPS / 1.0, 0, 1)
+            cx[:n] = px * (1 - far) + cx[:n] * far
+    cx = gaussian_filter1d(cx, 0.35 * FPS, mode="nearest")
+    out[:, 0] = np.clip(cx - w / 2, 0, W - w)
+    out[:, 2] = w
+    out[:, 3] = h
+    return out
+
+
 def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, out: Path) -> None:
+    vertical = settings.get("_aspect") == "9:16"
+    OW, OH = VERTICAL if vertical else (graphics.W, graphics.H)
     info = probe(src)
     crop = clip.get("crop")
     ox, oy = (crop["x"], crop["y"]) if crop else (0, 0)
@@ -142,6 +175,8 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
     rects[:, 2] = np.minimum(rects[:, 2], W)
     rects[:, 3] = np.minimum(rects[:, 3], H)
     player = np.array(plan["player"]) if plan.get("player") else None
+    if vertical:
+        rects = _vertical_rects(rects, player, W, H, info)
     style = settings.get("highlight", "ring")
     color = (pl or {}).get("accent") or settings.get("highlight_color", "#ffd23f")
 
@@ -154,7 +189,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
     split_t = min(max(freeze_t if freeze_t is not None else snap, t0), t1)
     hit_t = settings.get("_hit")
     fx = hit_t is not None and settings.get("hit_fx", True)
-    banner = graphics.name_banner(pl) if (pl and freeze_t is not None and settings.get("_banner", True)) else None
+    banner = graphics.name_banner(pl, (OW, OH)) if (pl and freeze_t is not None and settings.get("_banner", True)) else None
 
     # Slow-mo ramp into the hit (after the freeze), as a variable-speed output timeline.
     sspeed = float(settings.get("slowmo_speed", 0.4))

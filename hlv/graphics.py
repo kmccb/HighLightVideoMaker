@@ -143,13 +143,15 @@ def end_card(root: Path, pl: dict) -> np.ndarray:
     return _bgr(img)
 
 
-def name_banner(pl: dict) -> tuple[np.ndarray, np.ndarray]:
-    """Lower-third banner for the freeze frame. Returns (bgr, alpha 0..1)."""
+def name_banner(pl: dict, size: tuple[int, int] = (W, H)) -> tuple[np.ndarray, np.ndarray]:
+    """Lower-third banner for the freeze frame (any frame size; tall frames get it lower and
+    tighter to the left edge). Returns (bgr, alpha 0..1)."""
+    W, H = size
     team = _rgb(pl.get("color"))
     accent = _rgb(pl.get("accent"), (255, 210, 63))
     img = Image.new("RGBA", (W, H), (0, 0, 0, 0))
     dr = ImageDraw.Draw(img)
-    x0, y0, h = 90, 860, 120
+    x0, y0, h = (90, 860, 120) if W >= H else (40, H - 420, 120)
     name = (pl.get("name") or "").upper()
     det = _detail_line(pl)
     nf, df = font(78), font(36, "SemiBold Condensed")
@@ -187,7 +189,7 @@ def composite(frame: np.ndarray, overlay: tuple[np.ndarray, np.ndarray], alpha: 
     if slide_px:
         bgr = np.roll(bgr, -slide_px, axis=1)
         a = np.roll(a, -slide_px, axis=1)
-        a[:, W - slide_px:] = 0
+        a[:, frame.shape[1] - slide_px:] = 0
     a = (a * alpha)[..., None]
     frame[:] = (frame.astype(np.float32) * (1 - a) + bgr * a).astype(np.uint8)
 

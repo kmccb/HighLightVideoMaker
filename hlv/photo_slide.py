@@ -44,7 +44,7 @@ def _src_key(root: Path, photo: dict, *extra) -> str:
     return hashlib.sha1(json.dumps([st.st_size, st.st_mtime, *extra]).encode()).hexdigest()[:12]
 
 
-def _background(img: np.ndarray) -> np.ndarray:
+def _background(img: np.ndarray, W: int = W, H: int = H) -> np.ndarray:
     h, w = img.shape[:2]
     k = max(W / w, H / h)
     big = cv2.resize(img, (int(np.ceil(w * k)), int(np.ceil(h * k))), interpolation=cv2.INTER_AREA)
@@ -53,9 +53,11 @@ def _background(img: np.ndarray) -> np.ndarray:
     return (bg.astype(np.float32) * 0.45).astype(np.uint8)
 
 
-def render(root: Path, photo: dict, seconds: float, zoom_out: bool = False) -> Path:
-    """Render (or reuse) the slide for this photo."""
+def render(root: Path, photo: dict, seconds: float, zoom_out: bool = False,
+           size: tuple[int, int] | None = None) -> Path:
+    """Render (or reuse) the slide for this photo, at size (default 1920x1080)."""
     root = Path(root)
+    W, H = size or (graphics.W, graphics.H)
     key = _src_key(root, photo, seconds, W, H, zoom_out, PHOTO_VERSION)
     out = _cache(root) / f"{photo['id']}-{key}.mp4"
     if out.exists():
@@ -65,7 +67,7 @@ def render(root: Path, photo: dict, seconds: float, zoom_out: bool = False) -> P
     fit = min(W / w, H / h)
     fg = cv2.resize(img, (max(1, round(w * fit * MAX_ZOOM)), max(1, round(h * fit * MAX_ZOOM))),
                     interpolation=cv2.INTER_AREA if fit * MAX_ZOOM < 1 else cv2.INTER_CUBIC)
-    bg = _background(img)
+    bg = _background(img, W, H)
     off = np.array([(W - w * fit) / 2, (H - h * fit) / 2])
     # Zoom about a point a little above the photo's middle: where faces and numbers
     # usually are in sports photos, so they stay in frame.

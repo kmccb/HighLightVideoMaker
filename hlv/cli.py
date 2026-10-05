@@ -190,7 +190,7 @@ def cmd_reel(a) -> None:
     library.migrate(root)
     if not profiles.load(library.home()):
         sys.exit("Add a player profile first (Player profiles page in the review app).")
-    res = reel.build(root, a.player, a.transition, jobs=a.jobs)
+    res = reel.build(root, a.player, a.transition, jobs=a.jobs, vertical=a.vertical)
     print(f"\nreel: {res['output']}  ({res['plays']} plays, {res['duration']}s, built in {res['seconds']}s)")
     print(f"Resolve timeline: {res['fcpxml']}")
 
@@ -247,6 +247,7 @@ def main(argv=None) -> None:
     b.add_argument("--player", help="player id from players.json (default: the one chosen in the review page)")
     b.add_argument("--transition", choices=["crossfade", "cut", "dip"])
     b.add_argument("-j", "--jobs", type=int, default=3)
+    b.add_argument("--vertical", action="store_true", help="9:16 version for phones, framed on the player")
     b.set_defaults(fn=cmd_reel)
 
     n = sub.add_parser("normalize", help="write CFR H.264 mezzanines to <dir>/normalized")
