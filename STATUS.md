@@ -95,3 +95,8 @@ Results (measured on Tom's own clicks/marks, all scripts in the session scratchp
 - **Mark plays keyboard flow**: arrows, Enter = set and next, A = accept suggestion, O/D, X, comma/period; focused card outlined.
 - **In-app guide** at `/guide` (`static/guide.html`): linked from the start screen, review sidebar ("? How to use"), Mark plays and Player profiles.
 - Installed in .venv: torch/torchvision (CPU), ultralytics (with `--no-deps`: it wants `opencv-python`, which would clash with `opencv-contrib-python`), timm, pytorch_lightning (PARSeq, now unused). The PC has no CUDA GPU (i7-1165G7).
+
+## 2026-10-05 evening
+- Caleb: added `Week 3\IMG_1239.MOV` (Sep 4 TD catch, from Tom's Drive). Claude clicked #12 from 7.4 s (couldn't be sure at the snap), hit 10.9 (catch, Offense), trim 3.5-17.0, placed after Week 2.
+- The name-banner play now holds its freeze longer (`segment.BANNER_FREEZE` 2.3/2.6/3.3 s, used by `plan_timing`) so the banner can be read; only that play re-renders. Tom asked whether the banner is needed at all, since the intro shows the same info (Name banner → Off removes it).
+- ScottForge ending style set to **Anvil strike** (a global branding setting, so it applies to every player). Caleb's ScottForge card was off and is now on. Reel copied to `G:\My Drive\Caleb Scott highlights (Anvil outro).mp4`.

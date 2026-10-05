@@ -360,9 +360,11 @@ def plan_timing(metas: list[dict], grid: dict | None, music_start: float, t_firs
         a_max = lay["a_frames"] / segment.FPS
         has_fz = lay["f_frames"] > 0
         lead_nom = float(np.clip(m["lead_nom"], 0, a_max))
-        fz_nom = segment.FREEZE_S if has_fz else 0.0
+        long_fz = has_fz and lay.get("banner")                 # the name-banner play holds longer
+        fz_nom = (segment.BANNER_FREEZE[1] if long_fz else segment.FREEZE_S) if has_fz else 0.0
         lead_lo, lead_hi = min(0.4, lead_nom), a_max
-        fz_lo, fz_hi = (segment.FREEZE_MIN, segment.FREEZE_MAX) if has_fz else (0.0, 0.0)
+        fz_lo, fz_hi = ((segment.BANNER_FREEZE[0], segment.BANNER_FREEZE[2]) if long_fz else
+                        (segment.FREEZE_MIN, segment.FREEZE_MAX)) if has_fz else (0.0, 0.0)
         h = m["hit"]
         lead, fz, beat, err = lead_nom, fz_nom, None, None
         if beats_t is not None and h > 0:

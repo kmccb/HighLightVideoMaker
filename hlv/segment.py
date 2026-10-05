@@ -26,6 +26,7 @@ FPS = 30
 OW, OH = graphics.W, graphics.H
 FREEZE_S = 1.4           # nominal freeze; beat sync may use FREEZE_MIN..FREEZE_MAX
 FREEZE_MIN, FREEZE_MAX = 1.0, 2.2
+BANNER_FREEZE = (2.3, 2.6, 3.3)  # min / nominal / max hold on the play that shows the name banner (time to read it)
 LEAD_MAX = 2.5           # footage kept before the snap so the reel can start earlier
 TAIL_EXTRA = 2.0         # footage kept after the out-point
 PUSH_IN = 1.08           # extra zoom during the freeze (completes in the first second)
@@ -101,6 +102,8 @@ def segment_key(clip: dict, pl: dict | None, settings: dict, plan: dict, src: Pa
     }
     if settings.get("_aspect") == "9:16":
         payload["aspect"] = "9:16"
+    if settings.get("_banner", True):
+        payload["banner_hold"] = BANNER_FREEZE          # only the banner play re-renders
     if r.get("ring_off"):                      # only keyed when used, so old renders stay valid
         payload["ring_off"] = r["ring_off"]
     return hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:12]
@@ -190,6 +193,8 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
     hit_t = settings.get("_hit")
     fx = hit_t is not None and settings.get("hit_fx", True)
     banner = graphics.name_banner(pl, (OW, OH)) if (pl and freeze_t is not None and settings.get("_banner", True)) else None
+    if banner is not None:
+        nfz = int(round(BANNER_FREEZE[2] * FPS))          # a longer hold, so the banner can be read
 
     # Slow-mo ramp into the hit (after the freeze), as a variable-speed output timeline.
     sspeed = float(settings.get("slowmo_speed", 0.4))
@@ -380,6 +385,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
         "fps": FPS, "t0": t0, "snap": snap, "split": split_t, "hit": hit_t,
         "a_frames": len(pre),             # output frames before the snap (lead, real time)
         "f_frames": nfz,                  # freeze frames (0 = no freeze)
+        "banner": banner is not None,
         "b_frames": b_frames,             # output frames from the snap on (play + tail)
         # where things land inside the play part, in output seconds (slow-mo stretches it)
         "hit_b": None if hit_t is None else sum(1 for t in post if t < hit_t) / FPS,
