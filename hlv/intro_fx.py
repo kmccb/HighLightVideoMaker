@@ -169,6 +169,45 @@ for _i in range(256):
             break
 
 
+class FireSim:
+    """Classic rising-heat fire: each step every cell becomes the average of the cells just
+    below it (so heat climbs and spreads), minus a smooth "cooling map" that scrolls upward
+    with the flames. The cooling map carves the heat into licking tongues that flicker and
+    shed wisps at the top. Hot spots along the base sway slowly, so flames gather into
+    columns. Runs at a third of the frame size; ~8 steps a frame."""
+
+    def __init__(self, rng, w: int = W // 3, h: int = H // 3):
+        self.rng, self.w, self.h = rng, w, h
+        self.heat = np.zeros((h, w), np.float32)
+        self.cool = _noise(rng, h * 4, w, 3)                  # scrolls up one row per step
+        self.sway = _noise(rng, h * 6, w, 9)                   # sideways wiggle field, rising
+        self.mx, self.my = np.meshgrid(np.arange(w, dtype=np.float32), np.arange(h, dtype=np.float32))
+        self.src = _noise(rng, 6, w * 4, 7)[3]               # hot spots along the base
+        self.n = 0
+
+    def step(self, height: float, t: float, n: int) -> np.ndarray:
+        k = 2.2 / max(height * self.h, 4)                       # cooling per row -> flame height
+        sway = int(self.w * 0.6 + 30 * np.sin(t * 0.8) + 14 * np.sin(t * 2.1))
+        rows = np.arange(self.h)
+        for _ in range(n):
+            spots = self.src[sway:sway + self.w]
+            self.heat[-2:] = np.clip(0.6 + 1.4 * (spots - 0.45) + 0.3 * self.rng.random(self.w, dtype=np.float32), 0, 1.3)
+            b1 = np.roll(self.heat, -1, 0)
+            avg = (b1 + np.roll(b1, 1, 1) + np.roll(b1, -1, 1) + np.roll(self.heat, -2, 0)) * 0.25
+            cool = self.cool[(rows + self.n) % self.cool.shape[0]]
+            self.heat[:-2] = np.maximum(avg[:-2] - cool[:-2] * k, 0)
+            self.n += 1
+        return self.heat
+
+    def look(self, t: float) -> np.ndarray:
+        """The heat as it's drawn: each row nudged sideways by a slow rising wave, so the
+        tongues sway and curl instead of standing like columns."""
+        rows = (np.arange(self.h) + int(t * 90)) % len(self.sway)
+        dx = (self.sway[rows] - 0.5) * 70 * (1 - 0.6 * np.arange(self.h)[:, None] / self.h)
+        return cv2.remap(self.heat, self.mx + dx.astype(np.float32), self.my, cv2.INTER_LINEAR,
+                         borderMode=cv2.BORDER_WRAP)
+
+
 def _inferno(k, t, ctx):
     c, T, dur, rng = ctx["card"], ctx["T"], ctx["dur"], ctx["rng"]
     T1, T2, T3, T4 = T
@@ -179,19 +218,29 @@ def _inferno(k, t, ctx):
             h = max(h, 0.42 + (peak - 0.42) * np.exp(-max(0.0, t - t0) / 0.45))
     if t >= T1:
         h = max(h, 0.42)
-    n1, n2 = ctx["n1"], ctx["n2"]
-    r1 = (np.arange(QH) + int(t * 260)) % n1.shape[0]
-    r2 = (np.arange(QH) + int(t * 420)) % n2.shape[0]
-    sway = (np.arange(QW) + int(18 * np.sin(t * 1.7))) % QW
-    n = 0.62 * n1[r1][:, sway] + 0.38 * n2[r2]
-    v = (np.arange(QH, dtype=np.float32) / QH)[:, None]
-    base = (np.clip((v - (1 - h)) / max(h, 0.05), 0, 1) ** 1.15).astype(np.float32)
-    fire = np.clip(n * 1.75 * base - 0.32 * (1 - base) - 0.12, 0, 1)
+    roar = any(-0.08 <= t - t0 <= 0.45 for t0 in (T1, T2))
+    ctx["fire"].step(h, t, 200 if k == 0 else (26 if roar else 8))   # flames shoot up on the beat
+    heat = ctx["fire"].look(t)
+    fire = np.clip(heat, 0, 1) ** 1.25
     fire_rgb = _FIRE_LUT[(fire * 255).astype(np.uint8)]
-    # backdrop: near black with a warm glow rising from the fire
+    big = cv2.resize(fire_rgb, (W, H), interpolation=cv2.INTER_CUBIC)
+    big = cv2.GaussianBlur(big, (0, 0), 0.9)                   # soften the grid, keep the tongues
+    # smoke: the heat field blurred, lifted and darkened, drifting above the flames
+    sm = cv2.GaussianBlur(heat, (0, 0), 9)
+    sm = np.roll(sm, -int(ctx["fire"].h * 0.22), axis=0)
+    sm[-int(ctx["fire"].h * 0.22):] = 0
+    smoke = np.clip(sm * 1.4 - heat * 0.8, 0, 1)
+    smoke = cv2.resize(smoke, (W, H), interpolation=cv2.INTER_LINEAR)[..., None]
+    light = float(np.mean(heat[-int(ctx["fire"].h * 0.4):]))     # how bright the fire is now
+    flick = 0.85 + 0.3 * light + 0.06 * np.sin(t * 23) * light
+    # backdrop: near black, warm firelight from below that flickers with the flames
     frame = ctx["base"].copy()
-    frame += _up(cv2.GaussianBlur(fire_rgb, (0, 0), 14)) * 0.55
-    frame += _up(fire_rgb) * 1.05
+    frame += ctx["warm"] * (0.25 + 0.9 * light) * flick
+    frame = frame * (1 - 0.55 * smoke) + smoke * np.array([24, 26, 30], np.float32) * 0.6
+    frame += cv2.resize(cv2.GaussianBlur(fire_rgb, (0, 0), 10), (W, H)) * 0.6
+    frame += big * 1.1
+    v = (np.arange(QH, dtype=np.float32) / QH)[:, None]
+    base = (np.clip((v - (1 - h)) / max(h, 0.05), 0, 1) ** 1.15).astype(np.float32)   # for the heat haze
     # ---- number burns in (dissolving glowing edge), white-hot then cools to the accent colour
     if c.num is not None and t >= T1 - 0.1:
         r = smooth((t - (T1 - 0.1)) / 0.55) * 1.08
@@ -207,7 +256,7 @@ def _inferno(k, t, ctx):
         lay[:, :, :3] = np.clip(col, 0, 255)
         lay[:, :, 3] = np.clip(show * 255 * (1 - 0.78 * ghost), 0, 255)
         s = 1.0 + 0.35 * ghost
-        _paste(frame, ctx["num_glow"], *c.num_c, s, (0.9 * (1 - cool) + 0.25) * (1 - 0.6 * ghost), add=True)
+        _paste(frame, ctx["num_glow"], *c.num_c, s, (0.9 * (1 - cool) + 0.25) * (1 - 0.6 * ghost) * flick, add=True)
         _paste(frame, lay, *c.num_c, s)
         if r < 1.05:
             e = np.zeros(c.num.shape, np.uint8)
@@ -264,8 +313,9 @@ def _inferno_setup(ctx, rng):
     c = ctx["card"]
     T1, T2 = ctx["T"][0], ctx["T"][1]
     ctx["base"] = background_frame(ctx["bg"], ctx["pl"]) * 0.35
-    ctx["n1"] = _noise(rng, QH * 3, QW, 7)
-    ctx["n2"] = _noise(rng, QH * 3, QW, 2.6)
+    ctx["fire"] = FireSim(rng)
+    yy = np.linspace(0, 1, H, dtype=np.float32)[:, None, None]
+    ctx["warm"] = (np.clip(yy - 0.25, 0, 1) ** 1.6) * np.array([10, 45, 120], np.float32)   # firelight from below
     ctx["haze"] = _noise(rng, QH * 3, QW, 4)
     ctx["orange"] = (30, 120, 255)
     if c.num is not None:
