@@ -178,17 +178,25 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     music = project.music_path(root, settings)
     music_start = float(settings.get("music_start") or 0)
     grid = None
-    if music and settings.get("beat_sync", True):
+    composing = settings.get("music_source") == "compose"
+    if composing:
+        # A soundtrack written for this reel: a steady grid now (hits are timed onto it),
+        # the music itself once the timeline is known.
+        from . import composer
+        grid, music, music_start = composer.grid(settings.get("compose_style", "rock")), None, 0.0
+    elif music and settings.get("beat_sync", True):
         grid = beatmod.cached(music, root / ".hlv_cache")
     if settings.get("intro", "animated") != "classic":
         from . import intro
         say("animating the intro", done, total)
         intro_grid = grid or (beatmod.cached(music, root / ".hlv_cache") if music else None)
+        intro_slams = intro.beat_times(intro_grid, music_start)[0] if intro_grid else []
         src, title_s = intro.build(root, lib, pl, clips, intro_grid, music_start,
                                    sfx=bool(settings.get("intro_sfx", False)), style=settings.get("intro", "animated"))
         title = seg_dir / "00_title.mp4"
         _link_or_copy(src, title)
     else:
+        intro_slams = []
         title_s = TITLE_S
         title = segment.card(seg_dir / "00_title.mp4", graphics.title_card(lib, pl), TITLE_S, fade_in=True)
     endc = segment.card(seg_dir / f"{len(seq) + 1:02d}_end.mp4", graphics.end_card(lib, pl), END_S, fade_in=False)
@@ -244,6 +252,13 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     if credit is not None:
         items.append([(credit, 0.0, CREDIT_S)])     # music keeps playing and fades out over it
 
+    if composing:
+        say("composing the soundtrack", done, total)
+        music = composer.build(root / ".hlv_cache", settings.get("compose_style", "rock"),
+                               _timeline(items, metas, timing, d, intro_slams if settings.get("intro", "animated") != "classic" else [],
+                                         credit is not None),
+                               int(settings.get("compose_seed", 1)))
+
     # 4) assemble
     out = out_dir / f"{pl['id']}_reel{suffix}.mp4"
     # Intro impact sounds play at full level; game audio sits under the music.
@@ -279,6 +294,27 @@ def _hit_in_play(lay: dict, hit: float | None, snap: float) -> float:
 def _fr(s: float) -> float:
     """Snap to whole frames."""
     return round(s * segment.FPS) / segment.FPS
+
+
+def _timeline(items, metas, timing, d, slams, has_credit) -> dict:
+    """Where everything happens in the finished reel (seconds), for the composer."""
+    durs = [sum(du for _, _, du in it) for it in items]
+    starts = [sum(durs[:i]) - i * d for i in range(len(items))]
+    plays, pics = [], []
+    for k, (m, tm) in enumerate(zip(metas, timing), 1):
+        s0, s1 = starts[k], starts[k] + durs[k]
+        if m.get("photo"):
+            pics.append((round(s0, 3), round(s1, 3)))
+            continue
+        fs = s0 + tm["lead"] if tm["fz"] > 0 else None
+        plays.append({"start": round(s0, 3), "end": round(s1, 3),
+                      "fs": None if fs is None else round(fs, 3), "fe": None if fs is None else round(fs + tm["fz"], 3),
+                      "hit": round(tm["hit_reel"], 3) if m["hit"] > 0 else None})
+    n_end = len(metas) + 1
+    total = starts[-1] + durs[-1]
+    return {"intro": {"end": round(durs[0], 3), "slams": [round(t, 3) for t in slams]}, "plays": plays, "photos": pics,
+            "end": (round(starts[n_end], 3), round(starts[n_end] + durs[n_end], 3)),
+            "credit": (round(starts[-1], 3), round(total, 3)) if has_credit else None, "total": round(total, 3)}
 
 
 def plan_timing(metas: list[dict], grid: dict | None, music_start: float, t_first: float,

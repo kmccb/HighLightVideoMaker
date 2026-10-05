@@ -524,6 +524,12 @@ class ReviewApp:
                 s["transition"] = patch["transition"]
             if "freeze" in patch:
                 s["freeze"] = bool(patch["freeze"])
+            if patch.get("music_source") in ("song", "compose"):
+                s["music_source"] = patch["music_source"]
+            if patch.get("compose_style") in ("rock", "trap", "cinematic"):
+                s["compose_style"] = patch["compose_style"]
+            if "compose_seed" in patch:
+                s["compose_seed"] = int(patch["compose_seed"]) % 1000
             if patch.get("format") in ("wide", "vertical", "both"):
                 s["format"] = patch["format"]
             if patch.get("intro") in ("animated", "inferno", "storm", "shatter", "stadium",
@@ -805,6 +811,9 @@ def make_handler(app: ReviewApp):
                 return self._json({k: m.get(k) for k in ("fitted", "n", "tol", "all", "O", "D")})
             if path == "/api/reel/status":
                 return self._json(app.job)
+            m = re.fullmatch(r"/media/compose/(demo-[a-z]+-\d+-v\d+\.wav)", path)
+            if m:
+                return self._file(library.home() / "cache" / "compose" / m.group(1), "audio/wav")
             m = re.fullmatch(r"/media/outro/(outro-[a-z0-9]+\.mp4)", path)
             if m:
                 return self._file(library.home() / "cache" / "outro" / m.group(1), "video/mp4")
@@ -915,6 +924,15 @@ def make_handler(app: ReviewApp):
                 except Exception as e:  # noqa: BLE001 - tell the page what was wrong
                     return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
                 return self._json({"path": rel, "assets": profiles.asset_files(library.home())})
+            if self.path == "/api/compose/demo":
+                from . import composer
+                body = json.loads(self.rfile.read(n) or b"{}")
+                style = body.get("style") if body.get("style") in composer.STYLES else "rock"
+                seed = int(body.get("seed", 1)) % 1000
+                f = library.home() / "cache" / "compose" / f"demo-{style}-{seed}-v{composer.COMPOSER_VERSION}.wav"
+                if not f.exists():
+                    composer.render(f, style, composer.demo_timeline(style), seed)
+                return self._json({"url": "/media/compose/" + f.name})
             if self.path == "/api/branding/preview":
                 try:
                     return self._json({"url": "/media/outro/" + app.outro_preview()})

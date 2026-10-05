@@ -297,7 +297,19 @@ video { display: block; max-width: 100%; max-height: 58vh; }
       <div class="card">
         <label class="row"><span class="lbl">Player</span><select id="rPlayer"></select></label>
         <div id="rAssets" class="hint"></div>
-        <div class="row" style="gap:6px;flex-wrap:wrap"><span class="lbl">Song</span>
+        <label class="row"><span class="lbl">Music</span>
+          <span class="segctl" id="rMusicSrc">
+            <button data-v="song" title="your song (file or YouTube); hits are synced to its beats">My song</button><button data-v="compose" title="a soundtrack written for this reel: every hit lands on a big impact">Made for this reel</button>
+          </span></label>
+        <div class="row" id="rComposeRow" style="gap:6px;flex-wrap:wrap"><span class="lbl">Style</span>
+          <span class="segctl" id="rCompStyle" style="flex:1 1 auto">
+            <button data-v="rock">Rock</button><button data-v="trap">Trap / rap</button><button data-v="cinematic">Cinematic</button>
+          </span>
+          <button class="btn" id="rCompHear" style="flex:none;padding:5px 10px" title="a short demo of this style (made-up plays, same take)">▶ Hear style</button>
+          <button class="btn" id="rCompNew" style="flex:none;padding:5px 10px" title="same style, a different take">New take</button>
+          <audio id="rCompAudio" controls hidden style="width:100%;margin-top:4px"></audio>
+          <span class="hint">The music is written after the plays are timed: a build into each play, a hush during the freeze, a fill and a big impact on every hit.</span></div>
+        <div class="row" id="rSongRow" style="gap:6px;flex-wrap:wrap"><span class="lbl">Song</span>
           <button class="btn" id="rSong">Choose file…</button>
           <input type="text" id="rYt" placeholder="or paste a YouTube link" style="flex:1;min-width:160px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px">
           <button class="btn" id="rYtGo">Download</button></div>
@@ -982,6 +994,11 @@ async function loadReel() {
   document.querySelectorAll('#rBanner button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.name_banner || 'first')));
   document.querySelectorAll('#rIntro button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.intro || 'animated')));
   fetch('/api/branding').then(r => r.json()).then(br => document.querySelectorAll('#rOutro button').forEach(b => b.classList.toggle('on', b.dataset.v === ((br.branding || {}).style || 'forge')))).catch(() => {});
+  const comp = s.music_source === 'compose';
+  document.querySelectorAll('#rMusicSrc button').forEach(b => b.classList.toggle('on', b.dataset.v === (comp ? 'compose' : 'song')));
+  document.querySelectorAll('#rCompStyle button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.compose_style || 'rock')));
+  $('rComposeRow').hidden = !comp; $('rSongRow').hidden = comp;
+  $('rCompNew').textContent = `New take (#${s.compose_seed || 1})`;
   document.querySelectorAll('#rFormat button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.format || 'wide')));
   document.querySelectorAll('#rPhotoS button').forEach(b => b.classList.toggle('on', +b.dataset.v === (s.photo_s || 4)));
   $('rIntroSfx').checked = !!s.intro_sfx;
@@ -1236,6 +1253,19 @@ document.querySelectorAll('#rOutro button').forEach(b => b.onclick = async () =>
   await fetch('/api/branding', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...cur.branding, style: b.dataset.v }) });
   document.querySelectorAll('#rOutro button').forEach(x => x.classList.toggle('on', x === b));
 });
+document.querySelectorAll('#rMusicSrc button').forEach(b => b.onclick = () => saveReelSetting({ music_source: b.dataset.v }));
+document.querySelectorAll('#rCompStyle button').forEach(b => b.onclick = () => saveReelSetting({ compose_style: b.dataset.v }));
+$('rCompNew').onclick = () => saveReelSetting({ compose_seed: (reelInfo.settings.compose_seed || 1) + 1 });
+$('rCompHear').onclick = async () => {
+  const btn = $('rCompHear'), old = btn.textContent; btn.textContent = 'Composing…'; btn.disabled = true;
+  try {
+    const s = reelInfo.settings;
+    const res = await fetch('/api/compose/demo', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ style: s.compose_style || 'rock', seed: s.compose_seed || 1 }) });
+    const j = await res.json();
+    const a = $('rCompAudio'); a.hidden = false; a.src = j.url; a.play();
+  } catch (e) { alert('Could not compose: ' + e.message); }
+  btn.textContent = old; btn.disabled = false;
+};
 document.querySelectorAll('#rFormat button').forEach(b => b.onclick = () => saveReelSetting({ format: b.dataset.v }));
 document.querySelectorAll('#rPhotoS button').forEach(b => b.onclick = () => saveReelSetting({ photo_s: +b.dataset.v }));
 $('rIntroSfx').onchange = e => saveReelSetting({ intro_sfx: e.target.checked });
