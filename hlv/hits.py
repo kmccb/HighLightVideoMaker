@@ -1,9 +1,9 @@
 """The 'hit' moment of a play (tackle, catch, big block): what gets synced to a beat.
 
-You set it with K on the review page (review.hit). Until then we suggest one:
-  - with a spotlight: the moment your player stops hardest (biggest deceleration after
-    he's been moving fast) - that's the collision;
-  - otherwise: the peak of on-field motion during the play.
+You set it with K on the review page or on the Mark plays page (review.hit). Until then we
+suggest one: a mix of signals learned from your marked hits (hitfx: someone right on him,
+a crowd around him, a jump in loudness, mid-play, not while he's still accelerating).
+Fallbacks if that can't run: the moment the player stops hardest, else the motion peak.
 """
 from __future__ import annotations
 
@@ -26,7 +26,45 @@ def _times(clip: dict) -> tuple[float, float]:
     return snap, end
 
 
+# Learned from Tom's 23 marked hits (2026-10-05; leave-one-out: 48% within 0.4 s, median
+# 0.5 s off, vs ~17% for the old "player stops" rule). Signals: see hitfx.
+WEIGHTS = {"accel": -1.0, "near": 0.5, "crowd": 0.5, "onset": 1.0, "u": 2.0, "_u0": 0.55}
+
+
+def learned(root: Path, clip: dict) -> dict | None:
+    """The learned suggestion, from the player track (if clicked), saved person detections
+    (if the warm-up has run) and the audio. None if there's nothing to go on."""
+    from . import detect, hitfx
+    snap, end = _times(clip)
+    cache = root / CACHE_DIRNAME
+    player = None
+    if camera.anchors_of(clip):
+        try:
+            player = camera.player_track(cache, clip)
+        except Exception:  # noqa: BLE001
+            player = None
+    n = int(round(clip["probe"]["duration"] * FPS)) + 1
+    if player is None:
+        player = np.full((n, 5), np.nan, np.float32)
+    camf = cache / "track" / f"{clip['id']}-cam.npy"
+    cam = np.load(camf) if camf.exists() else None
+    dets = detect.cached(cache, clip)
+    f = hitfx.features(root, clip, player, cam, dets, snap, end)
+    lo, hi = int((snap + 0.4) * FPS), min(len(player), int((end + 0.3) * FPS))
+    if hi <= lo + 2:
+        return None
+    s = hitfx.score(f, WEIGHTS, lo, hi)
+    how = "learned" + ("" if dets else " (sound + timing; people not detected yet)")
+    return {"t": round((lo + int(np.argmax(s))) / FPS, 3), "method": how}
+
+
 def suggest(root: Path, clip: dict) -> dict:
+    try:
+        r = learned(root, clip)
+        if r is not None:
+            return r
+    except Exception:  # noqa: BLE001 - fall back to the old rules below
+        pass
     snap, end = _times(clip)
     lo, hi = snap + 0.5, max(snap + 0.6, end)
     cache = root / CACHE_DIRNAME

@@ -44,6 +44,7 @@ main { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 
 .strip { position: relative; cursor: pointer; background: #000; }
 .strip img { width: 100%; display: block; user-select: none; -webkit-user-drag: none; }
 .strip .sel { position: absolute; top: 0; bottom: 0; border: 3px solid var(--hit); border-radius: 3px; pointer-events: none; }
+.strip .sug { position: absolute; top: 0; bottom: 0; border: 2px dashed var(--hit); border-radius: 3px; pointer-events: none; opacity: .85; }
 .strip .hov { position: absolute; top: 0; bottom: 0; border: 2px solid rgba(255,255,255,.6); pointer-events: none; }
 .big { position: relative; background: #000; aspect-ratio: 16 / 9; }
 .big img { width: 100%; height: 100%; object-fit: contain; display: block; }
@@ -89,7 +90,7 @@ function render() {
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   $('help').textContent = tab === 'player'
     ? 'Click your player in each frame (drag a box if he looks much bigger or smaller than usual). It opens at the snap; if he is hidden there, step a little with the arrows. Tracking starts on its own.'
-    : 'Click the frame with the hit: contact or tackle on defense, the catch or big move on offense. ± nudges it a tenth of a second. ✕ = this play has no hit.';
+    : 'Click the frame with the hit: contact or tackle on defense, the catch or big move on offense. The dashed frame is the app’s guess (Use suggestion takes it). ± nudges a tenth of a second. ✕ = this play has no hit.';
   const clips = data.clips.filter(included);
   const need = clips.filter(c => tab === 'player' ? !playerOk(c) : !hitOk(c));
   $('count').textContent = `${need.length} of ${clips.length} plays still need ${tab === 'player' ? 'the player' : 'a hit'}`;
@@ -232,9 +233,9 @@ function hitCard(c) {
   el.dataset.id = c.id;
   el.innerHTML = `<div class="head"><span class="name">${esc(c.source.split('/').pop())}</span><span class="chips">${chips(c)}</span></div>
     <div class="big"><img alt=""></div>
-    <div class="strip"><img alt=""><div class="sel" hidden></div><div class="hov" hidden></div></div>
+    <div class="strip"><img alt=""><div class="sug" hidden></div><div class="sel" hidden></div><div class="hov" hidden></div></div>
     <div class="ctl"><button data-n="-0.1">− 0.1s</button><span class="t"></span><button data-n="0.1">+ 0.1s</button>
-      <span class="grow"></span><button data-act="nohit" title="no hit on this play: no punch, no slow-mo, timing left alone">✕ No hit</button></div>`;
+      <span class="grow"></span><button data-act="sug" hidden title="the app’s guess (dashed outline), learned from the hits you've marked">Use suggestion</button><button data-act="nohit" title="no hit on this play: no punch, no slow-mo, timing left alone">✕ No hit</button></div>`;
   const strip = el.querySelector('.strip'), simg = strip.querySelector('img'), sel = strip.querySelector('.sel'), hov = strip.querySelector('.hov');
   const big = el.querySelector('.big img');
   simg.src = `/api/clips/${c.id}/strip.jpg?t0=${t0.toFixed(3)}&t1=${t1.toFixed(3)}&n=${N}`;
@@ -262,6 +263,17 @@ function hitCard(c) {
     await save(c, { hit: +(h + +b.dataset.n).toFixed(3), no_hit: false }); update();
   });
   el.querySelector('[data-act=nohit]').onclick = async () => { await save(c, { hit: null, no_hit: !c.review.no_hit }); update(); };
+  // the app's suggestion: dashed outline on the strip + a button to take it
+  fetch('/api/clips/' + c.id + '/hit').then(r => r.json()).then(sg => {
+    if (sg == null || sg.t == null) return;
+    const i = Math.max(0, Math.min(N - 1, Math.round((sg.t - t0) / (span / N))));
+    const box = strip.querySelector('.sug');
+    box.hidden = false; box.style.left = (100 * i / N) + '%'; box.style.width = (100 / N) + '%';
+    box.title = `suggested: ${sg.t.toFixed(2)}s (${sg.method})`;
+    const b = el.querySelector('[data-act=sug]');
+    b.hidden = false; b.textContent = `Use suggestion (${(sg.t - snapOf(c)).toFixed(1)}s after snap)`;
+    b.onclick = async () => { await save(c, { hit: +sg.t.toFixed(3), no_hit: false }); update(); };
+  }).catch(() => {});
   update();
   return el;
 }

@@ -11,3 +11,5 @@ previews/
 *.mp4
 *.mov
 *.mp3
+
+hlv/models/

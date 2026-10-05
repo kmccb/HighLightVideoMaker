@@ -90,6 +90,9 @@ class ReviewApp:
                 proxy.make_all(todo, self.jobs)
             if not stop():
                 camera.warm(cache, project.load(root)["clips"], busy, stop=stop)
+            if not stop():
+                from . import detect
+                detect.warm(cache, project.load(root)["clips"], busy, stop=stop)
         threading.Thread(target=run, daemon=True).start()
 
     def projects_info(self) -> dict:
