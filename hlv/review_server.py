@@ -21,7 +21,7 @@ from .config import DetectConfig
 from .pipeline import CACHE_DIRNAME
 
 STATIC = Path(__file__).parent / "static"
-EDITABLE = {"snap", "end", "labeled", "keep", "notes", "spotlight", "zoom", "hit", "no_hit", "ring_off"}
+EDITABLE = {"snap", "end", "labeled", "keep", "notes", "spotlight", "zoom", "hit", "no_hit", "ring_off", "side"}
 ZOOM_LEVELS = (0, 1.25, 1.5, 1.8)
 
 
@@ -93,6 +93,9 @@ class ReviewApp:
             if not stop():
                 from . import detect
                 detect.warm(cache, project.load(root)["clips"], busy, stop=stop)
+            if not stop():
+                from . import hitmodel
+                hitmodel.schedule(5)                      # learn from any hits marked meanwhile
         threading.Thread(target=run, daemon=True).start()
 
     def projects_info(self) -> dict:
@@ -600,6 +603,8 @@ class ReviewApp:
                 patch["spotlight"] = _clean_anchors(patch["spotlight"])
             if "ring_off" in patch:
                 patch["ring_off"] = _clean_ring_off(patch["ring_off"], clip["probe"]["duration"])
+            if "side" in patch and patch["side"] not in ("O", "D", None):
+                patch.pop("side")
             if "no_hit" in patch:
                 patch["no_hit"] = bool(patch["no_hit"])
             if "hit" in patch:
@@ -617,6 +622,9 @@ class ReviewApp:
                 r["out"] = round(min(dur, r["end"] + self.cfg.pad_after), 3)
             clip["review"] = r
             project.save(self.root, proj)
+            if {"hit", "no_hit", "side"} & set(patch):
+                from . import hitmodel
+                hitmodel.schedule()                           # relearn from your marks
             labeled = bool(r["labeled"])
             warning = None
             try:
@@ -778,6 +786,10 @@ def make_handler(app: ReviewApp):
                     return self._json(app.hit_suggestion(m.group(1)))
                 except KeyError:
                     return self.send_error(HTTPStatus.NOT_FOUND)
+            if path == "/api/hitmodel":
+                from . import hitmodel
+                m = hitmodel.load() or {}
+                return self._json({k: m.get(k) for k in ("fitted", "n", "tol", "all", "O", "D")})
             if path == "/api/reel/status":
                 return self._json(app.job)
             m = re.fullmatch(r"/media/outro/(outro-[a-z0-9]+\.mp4)", path)

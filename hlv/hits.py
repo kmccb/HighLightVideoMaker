@@ -26,35 +26,26 @@ def _times(clip: dict) -> tuple[float, float]:
     return snap, end
 
 
-# Learned from Tom's 23 marked hits (2026-10-05; leave-one-out: 48% within 0.4 s, median
-# 0.5 s off, vs ~17% for the old "player stops" rule). Signals: see hitfx.
-WEIGHTS = {"accel": -1.0, "near": 0.5, "crowd": 0.5, "onset": 1.0, "u": 2.0, "_u0": 0.55}
+# Starting weights until hitmodel has fitted on your marks (hit_model.json). Fitted on Tom's
+# first 23 hits (2026-10-05): leave-one-out ~39% within 0.4 s (old "player stops" rule ~17%,
+# "middle of the play" 26%). The O/D tag lets offense and defense learn separately.
+WEIGHTS = {"accel": -1.0, "near": 1.0, "crowd": 1.0, "onset": 1.0, "u": 1.0, "_u0": 0.35}
 
 
 def learned(root: Path, clip: dict) -> dict | None:
     """The learned suggestion, from the player track (if clicked), saved person detections
-    (if the warm-up has run) and the audio. None if there's nothing to go on."""
-    from . import detect, hitfx
+    (if the warm-up has run) and the audio, with the weights learned from your marked hits
+    (per side, Offense/Defense, once there are enough). None if there's nothing to go on."""
+    from . import detect, hitfx, hitmodel
     snap, end = _times(clip)
-    cache = root / CACHE_DIRNAME
-    player = None
-    if camera.anchors_of(clip):
-        try:
-            player = camera.player_track(cache, clip)
-        except Exception:  # noqa: BLE001
-            player = None
-    n = int(round(clip["probe"]["duration"] * FPS)) + 1
-    if player is None:
-        player = np.full((n, 5), np.nan, np.float32)
-    camf = cache / "track" / f"{clip['id']}-cam.npy"
-    cam = np.load(camf) if camf.exists() else None
-    dets = detect.cached(cache, clip)
-    f = hitfx.features(root, clip, player, cam, dets, snap, end)
-    lo, hi = int((snap + 0.4) * FPS), min(len(player), int((end + 0.3) * FPS))
+    f = hitmodel.clip_features(root, clip)
+    lo, hi = int((snap + 0.4) * FPS), min(len(f["u"]), int((end + 0.3) * FPS))
     if hi <= lo + 2:
         return None
-    s = hitfx.score(f, WEIGHTS, lo, hi)
-    how = "learned" + ("" if dets else " (sound + timing; people not detected yet)")
+    side = (clip.get("review") or {}).get("side")
+    s = hitfx.score(f, hitmodel.weights_for(side, WEIGHTS), lo, hi)
+    dets = detect.cached(root / CACHE_DIRNAME, clip) is not None
+    how = "learned" + (f" ({'offense' if side == 'O' else 'defense'})" if side in ("O", "D") else "") +         ("" if dets else " - sound + timing; people not detected yet")
     return {"t": round((lo + int(np.argmax(s))) / FPS, 3), "method": how}
 
 

@@ -43,7 +43,7 @@ def empty_review() -> dict:
     # ring_off: [[off, on or None]] where the highlight is hidden (e.g. while he's in a pile).
     return {"snap": None, "end": None, "labeled": False, "notes": "",
             "in": None, "out": None, "keep": None, "spotlight": [], "zoom": 0, "players": [],
-            "hit": None, "no_hit": False, "ring_off": []}
+            "hit": None, "no_hit": False, "ring_off": [], "side": None}
 
 
 def load(root: Path) -> dict:

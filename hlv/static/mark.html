@@ -44,6 +44,10 @@ main { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 
 .strip { position: relative; cursor: pointer; background: #000; }
 .strip img { width: 100%; display: block; user-select: none; -webkit-user-drag: none; }
 .strip .sel { position: absolute; top: 0; bottom: 0; border: 3px solid var(--hit); border-radius: 3px; pointer-events: none; }
+.side { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.side button { border: 0 !important; border-radius: 0 !important; }
+.side button.on { background: #24425f !important; color: #fff; }
+.model { color: var(--dim); font-size: 12px; }
 .strip .sug { position: absolute; top: 0; bottom: 0; border: 2px dashed var(--hit); border-radius: 3px; pointer-events: none; opacity: .85; }
 .strip .hov { position: absolute; top: 0; bottom: 0; border: 2px solid rgba(255,255,255,.6); pointer-events: none; }
 .big { position: relative; background: #000; aspect-ratio: 16 / 9; }
@@ -60,6 +64,7 @@ main { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 
   <span class="tabs"><button data-tab="player">Player</button><button data-tab="hit">Hit</button></span>
   <label class="flt"><input type="checkbox" id="onlyNeed" checked> only plays that still need it</label>
   <span class="count" id="count"></span>
+  <span class="model" id="model"></span>
 </header>
 <div class="help" id="help"></div>
 <main id="grid"></main>
@@ -86,7 +91,17 @@ async function load() {
   render();
 }
 
+async function showModel() {
+  try {
+    const m = await (await fetch('/api/hitmodel')).json();
+    const a = m && m.all;
+    const side = s => m[s] ? ` · ${s === 'O' ? 'offense' : 'defense'} ${Math.round(100 * m[s].loo_within)}% (${m[s].n})` : '';
+    $('model').textContent = a ? `Hit suggestions: learned from ${m.n} marked hits, right (±${m.tol}s) about ${Math.round(100 * a.loo_within)}% of the time${side('O')}${side('D')}` : '';
+  } catch (e) {}
+}
+
 function render() {
+  if (tab === 'hit') showModel(); else $('model').textContent = '';
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   $('help').textContent = tab === 'player'
     ? 'Click your player in each frame (drag a box if he looks much bigger or smaller than usual). It opens at the snap; if he is hidden there, step a little with the arrows. Tracking starts on its own.'
@@ -235,6 +250,7 @@ function hitCard(c) {
     <div class="big"><img alt=""></div>
     <div class="strip"><img alt=""><div class="sug" hidden></div><div class="sel" hidden></div><div class="hov" hidden></div></div>
     <div class="ctl"><button data-n="-0.1">− 0.1s</button><span class="t"></span><button data-n="0.1">+ 0.1s</button>
+      <span class="side" title="Which side of the ball he is on in this play: the hit means contact/tackle on defense, the catch or big move on offense. Suggestions learn each side separately."><button data-side="O">Offense</button><button data-side="D">Defense</button></span>
       <span class="grow"></span><button data-act="sug" hidden title="the app’s guess (dashed outline), learned from the hits you've marked">Use suggestion</button><button data-act="nohit" title="no hit on this play: no punch, no slow-mo, timing left alone">✕ No hit</button></div>`;
   const strip = el.querySelector('.strip'), simg = strip.querySelector('img'), sel = strip.querySelector('.sel'), hov = strip.querySelector('.hov');
   const big = el.querySelector('.big img');
@@ -263,6 +279,11 @@ function hitCard(c) {
     await save(c, { hit: +(h + +b.dataset.n).toFixed(3), no_hit: false }); update();
   });
   el.querySelector('[data-act=nohit]').onclick = async () => { await save(c, { hit: null, no_hit: !c.review.no_hit }); update(); };
+  const sides = () => el.querySelectorAll('[data-side]').forEach(b => b.classList.toggle('on', c.review.side === b.dataset.side));
+  el.querySelectorAll('[data-side]').forEach(b => b.onclick = async () => {
+    await save(c, { side: c.review.side === b.dataset.side ? null : b.dataset.side }); sides();
+  });
+  sides();
   // the app's suggestion: dashed outline on the strip + a button to take it
   fetch('/api/clips/' + c.id + '/hit').then(r => r.json()).then(sg => {
     if (sg == null || sg.t == null) return;
