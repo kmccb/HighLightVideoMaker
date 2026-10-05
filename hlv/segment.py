@@ -55,13 +55,18 @@ def _window(clip: dict) -> tuple[float, float, float]:
     r, d = clip.get("review") or {}, clip["detection"]
     snap = r.get("snap") if r.get("snap") is not None else d["snap"]
     t0, t1 = project.final_window(clip)
+    limit = r.get("limit")                       # never show past this (e.g. a screen recording's controls)
+    if limit is not None:
+        t1 = min(t1, float(limit))
     return max(0.0, t0), t1, snap
 
 
 def extents(clip: dict, duration: float) -> tuple[float, float]:
     """What we actually render: extra lead and tail so the reel can re-time without re-rendering."""
     t_in, t_out, snap = _window(clip)
-    return max(0.0, min(t_in, snap - LEAD_MAX)), min(duration, t_out + TAIL_EXTRA)
+    limit = (clip.get("review") or {}).get("limit")
+    end = min(duration, t_out + TAIL_EXTRA, float(limit) if limit is not None else duration)
+    return max(0.0, min(t_in, snap - LEAD_MAX)), end
 
 
 def freeze_time(player, snap: float, t0: float, t1: float, t_out: float,

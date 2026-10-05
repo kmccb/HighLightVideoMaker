@@ -21,7 +21,7 @@ from .config import DetectConfig
 from .pipeline import CACHE_DIRNAME
 
 STATIC = Path(__file__).parent / "static"
-EDITABLE = {"snap", "end", "labeled", "keep", "notes", "spotlight", "zoom", "hit", "no_hit", "ring_off", "side"}
+EDITABLE = {"snap", "end", "labeled", "keep", "notes", "spotlight", "zoom", "hit", "no_hit", "ring_off", "side", "limit"}
 ZOOM_LEVELS = (0, 1.25, 1.5, 1.8)
 
 
