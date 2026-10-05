@@ -34,7 +34,7 @@ PROGRESSIONS = {"rock": [[0, 8, 10, 7], [0, 10, 8, 10], [0, 5, 8, 7]],
                 "cinematic": [[0, 8, 3, 10], [0, 5, 8, 7], [0, 8, 10, 5]]}
 KEYS = (0, 2, -2, 3, 5)                       # E, F#, D, G, A (minor) - chosen per take
 MINOR = {0, 5, 7}                            # chords on these degrees are minor, others major
-COMPOSER_VERSION = 1
+COMPOSER_VERSION = 2
 
 
 def grid(style: str, seconds: float = 900.0) -> dict:
@@ -475,7 +475,15 @@ def render(out: Path, style: str, tl: dict, seed: int = 1) -> Path:
     wet = fftconvolve(verb + music * 0.25 + fxb * 0.15, ir)[:n].astype(np.float32) * 0.35
     lowb = _filt(low, "lowpass", 220 if style == "trap" else 400)
     # sidechain: the low end ducks under each kick a little
-    mix = drums * 1.0 + music * 1.0 + lowb * 1.0 + fxb * 0.9 + wet
+    # the stop before each hit: everything but the riser drops away (pads and echoes too)
+    duck = np.ones(n, np.float32)
+    ramp = int(0.03 * SR)
+    for a_, b_ in stops:
+        i0, i1 = int(a_ * SR), int(b_ * SR)
+        if 0 <= i0 < i1 <= n:
+            duck[i0:i1] = 0.08
+            duck[i0:i0 + ramp] = np.linspace(1, 0.08, min(ramp, i1 - i0))
+    mix = (drums + music + lowb + wet) * duck + fxb * 0.9
     mix = _filt(mix, "highpass", 28)
     rms = np.sqrt(np.mean(mix ** 2) + 1e-12)
     mix = np.tanh(mix / rms * 0.16 * 1.4) / np.tanh(1.4) * 0.9                    # glue + loudness
