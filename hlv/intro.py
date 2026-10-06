@@ -18,7 +18,10 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import sys
+import threading
 import wave
+from contextlib import contextmanager
 from pathlib import Path
 
 import cv2
@@ -28,11 +31,80 @@ from PIL import Image, ImageDraw, ImageFilter
 from . import graphics
 from .graphics import _detail_line, _rgb, font
 
-W, H = graphics.W, graphics.H
+W, H = graphics.W, graphics.H     # frame size; frame_size() switches it (portrait intros)
 FPS = 30
 SR = 48000
 INTRO_VERSION = 2
 HOLD_EXTRA = 1.5        # seconds the finished name card stays up before the flash into the first play
+_size_lock = threading.Lock()
+
+
+@contextmanager
+def frame_size(w: int, h: int):
+    """Render the intros at w x h (e.g. 1080x1920 for the vertical reel). The styles read the
+    module-level W/H (and the quarter-size QW/QH), so set them in every intro module for the
+    duration, one render at a time."""
+    from . import intro_fx, intro_fx2
+    mods = [sys.modules[__name__], intro_fx, intro_fx2]
+    new = {"W": w, "H": h, "QW": w // 4, "QH": h // 4}
+    with _size_lock:
+        old = [(m, {k: getattr(m, k) for k in new if hasattr(m, k)}) for m in mods]
+        for m, keys in old:
+            for k in keys:
+                setattr(m, k, new[k])
+        try:
+            yield
+        finally:
+            for m, keys in old:
+                for k, v in keys.items():
+                    setattr(m, k, v)
+
+
+def portrait() -> bool:
+    return H > W
+
+
+def layout(has_logo: bool, last_size: int) -> dict:
+    """Where the logo, number and name block go. Wide: logo left, name block right (centred
+    when there's no logo). Portrait: logo on top, number and name block stacked under it."""
+    if portrait():
+        tx = W // 2
+        logo_c = (W // 2, int(H * 0.22))
+        y_first = int(H * 0.46) - (0 if has_logo else int(H * 0.08))
+        num_y = y_first + 120
+    else:
+        tx = 1180 if has_logo else W // 2
+        logo_c = (470, 520)
+        y_first = 300
+        num_y = 500
+    y_last = y_first + 75 + last_size // 2 + 5
+    y_bar = y_last + last_size // 2 + 30
+    return {"tx": tx, "logo_c": logo_c, "y_first": y_first, "y_last": y_last, "y_bar": y_bar,
+            "y_det": y_bar + 70, "y_school": y_bar + 140, "num_c": (tx, num_y)}
+
+
+def fit(layer: np.ndarray | None, max_w: float | None = None) -> np.ndarray | None:
+    """Shrink a text layer that's wider than the frame allows (long names in portrait)."""
+    if layer is None:
+        return None
+    max_w = max_w or W - 90
+    w = layer.shape[1]
+    if w <= max_w:
+        return layer
+    k = max_w / w
+    return cv2.resize(layer, (int(max_w), max(1, int(layer.shape[0] * k))), interpolation=cv2.INTER_AREA)
+
+
+def _cover(img: np.ndarray) -> np.ndarray:
+    """Crop the middle of an image to the frame's shape, then scale to the frame (no squashing)."""
+    h, w = img.shape[:2]
+    if w / h > W / H:
+        cw = int(round(h * W / H))
+        img = img[:, (w - cw) // 2:(w - cw) // 2 + cw]
+    else:
+        ch = int(round(w * H / W))
+        img = img[(h - ch) // 2:(h - ch) // 2 + ch]
+    return cv2.resize(img, (W, H), interpolation=cv2.INTER_AREA)
 
 
 # ---------------------------------------------------------------- timing
@@ -235,9 +307,9 @@ def background_frame(src_bgr: np.ndarray | None, pl: dict) -> np.ndarray:
     """Dark, blurred, team-tinted base (float32 BGR, a bit larger than the frame for push-in)."""
     team = np.array(_rgb(pl.get("color"))[::-1], np.float32)
     if src_bgr is None:
-        base = np.array(graphics._background(pl).convert("RGB"))[:, :, ::-1].astype(np.float32)
+        base = _cover(np.array(graphics._background(pl).convert("RGB"))[:, :, ::-1]).astype(np.float32)
     else:
-        f = cv2.resize(src_bgr, (W, H), interpolation=cv2.INTER_AREA).astype(np.float32)
+        f = _cover(src_bgr).astype(np.float32)
         f = cv2.GaussianBlur(f, (0, 0), 7)
         gray = f.mean(axis=2, keepdims=True)
         f = 0.55 * f + 0.45 * gray                     # desaturate
@@ -301,31 +373,28 @@ def render(out: Path, lib_root: Path, pl: dict, grid: dict | None, music_start: 
     num_txt = f"#{pl['number']}" if pl.get("number") else ""
     parts = (pl.get("name") or "").upper().split()
     first, last = (" ".join(parts[:-1]), parts[-1]) if len(parts) > 1 else ("", parts[0] if parts else "")
-    L_num = _text_layer(num_txt, 600, accent[::-1] + (255,), stroke=16, stroke_fill=team[::-1]) if num_txt else None
+    L_num = fit(_text_layer(num_txt, 600, accent[::-1] + (255,), stroke=16, stroke_fill=team[::-1]), W - 60) if num_txt else None
     L_num_sh = _shadow(L_num, 12) if L_num is not None else None
     L_num_ghost = _outline(L_num, fxc, 5) if L_num is not None else None
     L_num_glow = _glow(L_num, fxc, 30) if L_num is not None else None
     last_size = 300 if len(last) <= 8 else 230
-    L_first = _text_layer(first, 130, white + (255,), spacing=16) if first else None
-    L_last = _text_layer(last, last_size, white + (255,), stroke=4, stroke_fill=team[::-1]) if last else None
+    L_first = fit(_text_layer(first, 130, white + (255,), spacing=16)) if first else None
+    L_last = fit(_text_layer(last, last_size, white + (255,), stroke=4, stroke_fill=team[::-1])) if last else None
     L_first_sh = _shadow(L_first, 7) if L_first is not None else None
     L_last_sh = _shadow(L_last, 10) if L_last is not None else None
     L_last_glow = _glow(L_last, fxc, 22) if L_last is not None else None
     det = _detail_line(pl)
-    L_det = _text_layer(det, 54, (225, 230, 238, 255), style="SemiBold Condensed", spacing=2) if det else None
-    L_school = _text_layer((pl.get("school") or "").upper(), 54, accent[::-1] + (255,),
-                           style="SemiBold Condensed", spacing=3) if pl.get("school") else None
+    L_det = fit(_text_layer(det, 54, (225, 230, 238, 255), style="SemiBold Condensed", spacing=2)) if det else None
+    L_school = fit(_text_layer((pl.get("school") or "").upper(), 54, accent[::-1] + (255,),
+                               style="SemiBold Condensed", spacing=3)) if pl.get("school") else None
     lg = graphics._logo(lib_root, pl, 380)
     L_logo = np.array(lg)[:, :, [2, 1, 0, 3]].copy() if lg is not None else None
     L_logo_glow = _glow(L_logo, fxc, 26) if L_logo is not None else None
 
-    # ---- layout: logo left, text block right (centred when there's no logo)
-    tx = 1180 if L_logo is not None else W // 2
-    logo_c = (470, 520)
-    y_first, y_last = 300, 300 + 75 + last_size // 2 + 5
-    y_bar = y_last + last_size // 2 + 30
-    y_det, y_school = y_bar + 70, y_bar + 140
-    num_c = (tx, 500)
+    # ---- layout: logo left, text block right (centred when there's no logo); stacked in portrait
+    lay = layout(L_logo is not None, last_size)
+    tx, logo_c, num_c = lay["tx"], lay["logo_c"], lay["num_c"]
+    y_first, y_last, y_bar, y_det, y_school = (lay[k] for k in ("y_first", "y_last", "y_bar", "y_det", "y_school"))
 
     base = background_frame(bg_src, pl)
     vig = _vignette()
@@ -519,8 +588,9 @@ STYLES = ("animated", "inferno", "storm", "shatter", "stadium",
 
 
 def cache_key(pl: dict, logo: Path | None, grid: dict | None, music_start: float, bg_id: str, sfx: bool,
-              style: str = "animated") -> str:
-    payload = {"v": INTRO_VERSION, **({"style": style} if style != "animated" else {}), "pl": {k: pl.get(k) for k in ("name", "number", "position", "class_year",
+              style: str = "animated", size: tuple[int, int] | None = None) -> str:
+    payload = {"v": INTRO_VERSION, **({"style": style} if style != "animated" else {}),
+               **({"size": list(size)} if size and tuple(size) != (graphics.W, graphics.H) else {}), "pl": {k: pl.get(k) for k in ("name", "number", "position", "class_year",
                                                                   "height_weight", "school", "color", "accent")},
                "logo": [str(logo), logo.stat().st_mtime] if logo else None,
                "beats": beat_times(grid, music_start), "bg": bg_id, "sfx": sfx}
@@ -551,21 +621,24 @@ def pick_background(root: Path, clips: list[dict]) -> tuple[np.ndarray | None, s
 
 
 def build(root: Path, lib_root: Path, pl: dict, clips: list[dict], grid: dict | None, music_start: float,
-          sfx: bool = True, style: str = "animated") -> tuple[Path, float]:
-    """Render (or reuse) the animated intro for this project in one of STYLES. Returns (mp4, duration)."""
+          sfx: bool = True, style: str = "animated", size: tuple[int, int] | None = None) -> tuple[Path, float]:
+    """Render (or reuse) the animated intro for this project in one of STYLES. Returns (mp4, duration).
+    size: (w, h) to render at, e.g. (1080, 1920) for the vertical reel; default 1920x1080."""
     from . import profiles
     bg, bg_id = pick_background(root, clips)
     logo = profiles.asset(lib_root, pl.get("logo", ""))
     style = style if style in STYLES else "animated"
-    key = cache_key(pl, logo, grid, music_start, bg_id, sfx, style)
+    size = tuple(size) if size else (graphics.W, graphics.H)
+    key = cache_key(pl, logo, grid, music_start, bg_id, sfx, style, size)
     out = root / ".hlv_cache" / "intro" / f"intro-{key}.mp4"
     _, dur = beat_times(grid, music_start)
     if out.exists():
         return out, round(dur * FPS) / FPS
-    if style != "animated":
-        from . import intro_fx
-        return intro_fx.render(style, out, lib_root, pl, grid, music_start, bg, sfx=sfx)
-    return render(out, lib_root, pl, grid, music_start, bg, sfx=sfx)
+    with frame_size(*size):
+        if style != "animated":
+            from . import intro_fx
+            return intro_fx.render(style, out, lib_root, pl, grid, music_start, bg, sfx=sfx)
+        return render(out, lib_root, pl, grid, music_start, bg, sfx=sfx)
 
 
 def preview(root: Path, intro_mp4: Path, music: Path | None, music_start: float, settings: dict) -> Path:

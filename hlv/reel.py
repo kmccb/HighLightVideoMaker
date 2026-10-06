@@ -29,6 +29,8 @@ TITLE_S, END_S = 4.0, 4.0
 CREDIT_S = outro.OUTRO_S  # animated ScottForge ending
 OUT_DIRNAME = "reel"
 PHOTO_FLEX = (0.75, 1.25)  # beat-fitted photo length, as a fraction of the "Photo length" setting
+RECRUIT_MAX_S = 180.0      # recruiting cut: plays stop being added at about 3 minutes
+CUTS = ("reel", "recruit", "both")
 
 
 def included(clip: dict) -> bool:
@@ -64,6 +66,36 @@ def ordered_items(proj: dict) -> list[dict]:
 def ordered_clips(proj: dict) -> list[dict]:
     """Just the plays, in reel order."""
     return [c for c in ordered_items(proj) if not photos.is_photo(c)]
+
+
+def starred(clip: dict) -> bool:
+    return bool((clip.get("review") or {}).get("star"))
+
+
+def play_seconds(clip: dict, settings: dict) -> float:
+    """Roughly how long a play runs in the reel (its trim plus the freeze)."""
+    from . import camera
+    t0, t1 = project.final_window(clip)
+    spot = bool(camera.anchors_of(clip))
+    return max(0.0, t1 - max(0.0, t0)) + (segment.FREEZE_S if spot and settings.get("freeze", True) else 0.0)
+
+
+def recruit_plays(proj: dict) -> list[dict]:
+    """The recruiting cut: your starred plays first (in reel order), then the reel's other plays,
+    until it's about RECRUIT_MAX_S long. Starred plays always go in; no photos."""
+    s = project.settings(proj)
+    plays = [c for c in ordered_clips(proj) if included(c)]
+    out = [c for c in plays if starred(c)]
+    total = sum(play_seconds(c, s) for c in out)
+    for c in plays:
+        if starred(c):
+            continue
+        n = play_seconds(c, s)
+        if total + n > RECRUIT_MAX_S:
+            break
+        out.append(c)
+        total += n
+    return out
 
 
 def _link_or_copy(src: Path, dst: Path) -> None:
@@ -110,9 +142,11 @@ def _to_vertical(src: Path, dst: Path) -> Path:
 
 
 def build(root: Path, player_id: str | None = None, transition: str | None = None,
-          jobs: int = 3, progress=None, vertical: bool = False) -> dict:
+          jobs: int = 3, progress=None, vertical: bool = False, recruiting: bool = False) -> dict:
     """Render every included play and assemble the reel. progress(step, done, total).
-    vertical: a 9:16 version (1080x1920) for phones, framed on the player."""
+    vertical: a 9:16 version (1080x1920) for phones, framed on the player.
+    recruiting: the recruiting cut instead (recruit_plays, info card at both ends, no photos,
+    no name banner)."""
     from . import beats as beatmod, hits
     t_start = time.time()
     say = progress or (lambda step, done, total: print(f"  {step} ({done}/{total})", flush=True))
@@ -127,7 +161,9 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         raise ValueError("no player profile yet - add one on the Player profiles page")
     if photos.sync(root, proj):             # photos added to / removed from the folder
         project.save(root, proj)
-    entries = [c for c in ordered_items(proj) if included(c)]
+    entries = recruit_plays(proj) if recruiting else [c for c in ordered_items(proj) if included(c)]
+    if recruiting:
+        settings = {**settings, "name_banner": "off"}   # the info card says who he is
     clips = [c for c in entries if not photos.is_photo(c)]
     pics = [c for c in entries if photos.is_photo(c)]
     if not clips:
@@ -169,8 +205,9 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
 
     # 2) title + end cards
     out_dir = root / OUT_DIRNAME
-    suffix = "_vertical" if vertical else ""
+    suffix = ("_recruiting" if recruiting else "") + ("_vertical" if vertical else "")
     seg_dir = out_dir / f"{pl['id']}_segments{suffix}"
+    size = segment.VERTICAL if vertical else (graphics.W, graphics.H)
     if seg_dir.exists():
         shutil.rmtree(seg_dir)
     seg_dir.mkdir(parents=True)
@@ -186,28 +223,37 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         grid, music, music_start = composer.grid(settings.get("compose_style", "rock")), None, 0.0
     elif music and settings.get("beat_sync", True):
         grid = beatmod.cached(music, root / ".hlv_cache")
-    if settings.get("intro", "animated") != "classic":
+    animated = settings.get("intro", "animated") != "classic" and not recruiting
+    if animated:
         from . import intro
         say("animating the intro", done, total)
         intro_grid = grid or (beatmod.cached(music, root / ".hlv_cache") if music else None)
         intro_slams = intro.beat_times(intro_grid, music_start)[0] if intro_grid else []
         src, title_s = intro.build(root, lib, pl, clips, intro_grid, music_start,
-                                   sfx=bool(settings.get("intro_sfx", False)), style=settings.get("intro", "animated"))
+                                   sfx=bool(settings.get("intro_sfx", False)), style=settings.get("intro", "animated"),
+                                   size=size)                       # rendered natively for the vertical reel
         title = seg_dir / "00_title.mp4"
         _link_or_copy(src, title)
+    elif recruiting:
+        intro_slams = []
+        title_s = TITLE_S
+        title = segment.card(seg_dir / "00_title.mp4", graphics.recruit_card(lib, pl, size), TITLE_S, fade_in=True)
     else:
         intro_slams = []
         title_s = TITLE_S
         title = segment.card(seg_dir / "00_title.mp4", graphics.title_card(lib, pl), TITLE_S, fade_in=True)
-    endc = segment.card(seg_dir / f"{len(seq) + 1:02d}_end.mp4", graphics.end_card(lib, pl), END_S, fade_in=False)
+    endc = segment.card(seg_dir / f"{len(seq) + 1:02d}_end.mp4",
+                        graphics.recruit_card(lib, pl, size) if recruiting else graphics.end_card(lib, pl), END_S, fade_in=False)
     credit = None
     brand = library.branding()
     if settings.get("scottforge_card") and library.branding_ready(brand):
         credit = seg_dir / f"{len(seq) + 2:02d}_scottforge.mp4"
         _link_or_copy(outro.build(lib / "cache", lib, brand, CREDIT_S), credit)
-    if vertical:                                    # cards are designed 16:9: place them on a tall frame
-        title = _to_vertical(title, seg_dir / "00_title_v.mp4")
-        endc = _to_vertical(endc, endc.with_name(endc.stem + "_v.mp4"))
+    if vertical:                                    # 16:9 cards: place them on a tall frame
+        if not animated and not recruiting:
+            title = _to_vertical(title, seg_dir / "00_title_v.mp4")
+        if not recruiting:
+            endc = _to_vertical(endc, endc.with_name(endc.stem + "_v.mp4"))
         if credit is not None:
             credit = _to_vertical(credit, credit.with_name(credit.stem + "_v.mp4"))
     done += 1
@@ -255,12 +301,12 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     if composing:
         say("composing the soundtrack", done, total)
         music = composer.build(root / ".hlv_cache", settings.get("compose_style", "rock"),
-                               _timeline(items, metas, timing, d, intro_slams if settings.get("intro", "animated") != "classic" else [],
+                               _timeline(items, metas, timing, d, intro_slams if animated else [],
                                          credit is not None),
                                int(settings.get("compose_seed", 1)))
 
     # 4) assemble
-    out = out_dir / f"{pl['id']}_reel{suffix}.mp4"
+    out = out_dir / output_name(pl["id"], vertical, recruiting)
     # Intro impact sounds play at full level; game audio sits under the music.
     gains = [1.0] + [None] * (len(items) - 1)
     _assemble(items, transition, music, music_start, settings, out, gains)
@@ -268,20 +314,25 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     say("assembled", done, total)
 
     # 5) Resolve timeline
-    fcp = out_dir / f"{pl['id']}_reel{suffix}.fcpxml"
-    write_fcpxml(fcp, items, music, music_start, f"{pl.get('name') or pl['id']} highlights{' (vertical)' if vertical else ''}",
+    fcp = out.with_suffix(".fcpxml")
+    write_fcpxml(fcp, items, music, music_start, f"{pl.get('name') or pl['id']} {'recruiting' if recruiting else 'highlights'}"
+                 f"{' (vertical)' if vertical else ''}",
                  size=segment.VERTICAL if vertical else (1920, 1080))
     done += 1
     say("done", done, total)
     play_timing = [t for t in timing if not t.get("photo")]
     synced = [t for t in play_timing if t.get("beat") is not None]
-    return {"output": str(out), "fcpxml": str(fcp), "plays": len(clips),
+    return {"output": str(out), "fcpxml": str(fcp), "plays": len(clips), "vertical": vertical, "recruiting": recruiting,
             "photos": len(seq) - len(clips), "skipped_photos": skipped_photos,
             "duration": round(_duration(out), 1), "seconds": round(time.time() - t_start),
             "beat_sync": None if grid is None else {
                 "bpm": grid["bpm"], "on_beat": sum(1 for t in synced if abs(t["err"]) <= 0.034),
                 "avg_shift": round(float(np.mean([abs(t["shift"]) for t in play_timing])), 2) if play_timing else 0.0,
                 "plays": len(play_timing), "timing": timing}}
+
+
+def output_name(player_id: str, vertical: bool = False, recruiting: bool = False) -> str:
+    return f"{player_id}_{'recruiting' if recruiting else 'reel'}{'_vertical' if vertical else ''}.mp4"
 
 
 def _hit_in_play(lay: dict, hit: float | None, snap: float) -> float:

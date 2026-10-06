@@ -224,6 +224,9 @@ main { padding: 20px 24px 28px; gap: 14px; }
 .overlay { left: 14px; top: 12px; font: 600 14px var(--mono); background: rgba(6,8,10,.72); padding: 5px 10px; border-radius: 6px; }
 .overlay .rate { color: var(--hit); }
 .trackbadge { font-family: var(--sans); color: var(--spot); border-color: var(--spot); }
+#rList .mini.star { font-size: 15px; line-height: 1; padding: 2px 6px; color: var(--muted, #8a8f98); }
+#rList .mini.star.on { color: #ffcc33; border-color: #ffcc33; }
+#rList .tag.rec { color: #ffcc33; border-color: rgba(255, 204, 51, .5); }
 /* Ring already showing, rest of the play still tracking: a small chip, not a wait sign. */
 .trackbadge.quiet { left: auto; right: 10px; bottom: 10px; transform: none; font-size: 11px; padding: 3px 9px;
   opacity: .8; border-color: rgba(255,255,255,.25); color: rgba(255,255,255,.85); }
@@ -444,6 +447,11 @@ main { padding: 20px 24px 28px; gap: 14px; }
         <div class="hint">Name, number, school, colours and logo: <a href="/players" style="color:var(--accent)">edit player profiles ▸</a><span hidden><code id="rProfile"></code><code id="rAssetsDir"></code></span></div>
       </div>
       <div class="card">
+        <label class="row"><span class="lbl">Make</span>
+          <span class="segctl" id="rCut">
+            <button data-v="reel" title="the full highlight reel: intro, every ticked play and photo">Highlight reel</button><button data-v="recruit" title="for college coaches: info card, your starred plays first, then the rest up to about 3 minutes; no photos">Recruiting cut</button><button data-v="both" title="both videos (takes longer)">Both</button>
+          </span></label>
+        <div class="hint" id="rCutHint" hidden></div>
         <label class="row"><span class="lbl">Format</span>
           <span class="segctl" id="rFormat">
             <button data-v="wide" title="16:9, for TV, YouTube, Hudl">Wide</button><button data-v="vertical" title="9:16 for Instagram, TikTok, Snapchat: framed on the player">Vertical</button><button data-v="both" title="both files (takes about twice as long)">Both</button>
@@ -1136,6 +1144,7 @@ async function loadReel() {
   $('rComposeRow').hidden = !comp; $('rSongRow').hidden = comp;
   $('rCompNew').textContent = `New take (#${s.compose_seed || 1})`;
   document.querySelectorAll('#rFormat button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.format || 'wide')));
+  document.querySelectorAll('#rCut button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.cut || 'reel')));
   document.querySelectorAll('#rPhotoS button').forEach(b => b.classList.toggle('on', +b.dataset.v === (s.photo_s || 4)));
   $('rIntroSfx').checked = !!s.intro_sfx;
   $('rIntroSfx').disabled = (s.intro || 'animated') !== 'animated';
@@ -1180,10 +1189,12 @@ function renderReelList() {
         : c.hit_set ? '<span class="tag" style="color:var(--hit)">hit ✓</span>' : '<span class="tag" title="hit not marked: using the suggestion">hit auto</span>',
     ].join('');
     const num = c.included ? ++n : '–';
+    const rec = (reelInfo.settings.cut || 'reel') !== 'reel' && c.recruit ? '<span class="tag rec" title="in the recruiting cut">recruiting</span>' : '';
     return `<li draggable="true" data-id="${c.id}" class="${c.included ? '' : 'off'}">
       <span class="grip">⋮⋮</span><span class="num">${num}</span>
       <input type="checkbox" data-act="inc" ${c.included ? 'checked' : ''} ${c.kind === 'pre_edited' && !c.labeled ? 'disabled title="trim it in review first"' : ''}>
-      <span class="name">${esc(c.source.split('/').pop())}</span><span class="game">${esc(c.group)}</span>${badges}
+      <button class="mini star${c.star ? ' on' : ''}" data-act="star" title="${c.star ? 'Top play: opens the recruiting cut. Click to unstar' : 'Star a top play: starred plays open the recruiting cut'}">${c.star ? '★' : '☆'}</button>
+      <span class="name">${esc(c.source.split('/').pop())}</span><span class="game">${esc(c.group)}</span>${rec}${badges}
       <span class="len">${c.seconds.toFixed(1)}s</span>
       <button class="mini" data-act="up">↑</button><button class="mini" data-act="down">↓</button>
       <button class="mini" data-act="preview">Preview</button><button class="mini" data-act="edit">Edit</button></li>`;
@@ -1194,6 +1205,19 @@ function renderReelList() {
   const nPics = inc.filter(c => c.type === 'photo').length;
   $('rCount').textContent = `${inc.length - nPics} plays` + (nPics ? ` · ${nPics} photo${nPics > 1 ? 's' : ''}` : '');
   $('rLen').textContent = `about ${Math.floor(total / 60)}:${String(Math.round(total % 60)).padStart(2, '0')} long`;
+  // The recruiting cut: starred plays first, then the rest until ~3 min.
+  const cut = reelInfo.settings.cut || 'reel', recs = rows.filter(c => c.recruit);
+  $('rCutHint').hidden = cut === 'reel';
+  if (cut !== 'reel') {
+    const rs = recs.reduce((s, c) => s + c.seconds, 0) + 8 - tr * (recs.length + 1);
+    const nStar = recs.filter(c => c.star).length, pl = reelInfo.player || {};
+    const missing = ['gpa', 'hudl'].filter(k => !pl[k]).map(k => ({ gpa: 'GPA', hudl: 'Hudl link' })[k]);
+    $('rCutHint').innerHTML = `Recruiting cut: <b>${recs.length} plays</b>, about ${Math.floor(rs / 60)}:${String(Math.round(rs % 60)).padStart(2, '0')}. ` +
+      (nStar ? `Your ${nStar} starred play${nStar > 1 ? 's' : ''} open it, then the rest of the reel's plays up to about 3 minutes.`
+             : 'Star ☆ his best plays in the list below: they open the cut, then the rest of the plays fill it to about 3 minutes.') +
+      ' Info card with his details at the start and end; no photos.' +
+      (missing.length ? ` <span class="warn">No ${missing.join(' or ')} yet: <a href="/players" style="color:var(--accent)">add on Player profiles ▸</a></span>` : '');
+  }
 }
 
 async function saveOrder() {
@@ -1224,6 +1248,10 @@ $('rList').addEventListener('click', async e => {
     await fetch('/api/clips/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keep: b.checked }) });
     const dc = data.clips.find(c => c.id === id); if (dc) dc.review.keep = b.checked;
     await loadReel(); renderList();
+  } else if (act === 'star') {
+    const c = reelInfo.clips[i];
+    await fetch('/api/clips/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ star: !c.star }) });
+    await loadReel();
   } else if (act === 'edit') {
     closeReel(); select(data.clips.findIndex(c => c.id === id));
   } else if (act === 'preview') {
@@ -1279,58 +1307,43 @@ function showJob(j) {
     const pics = r.photos ? `, ${r.photos} photo${r.photos > 1 ? 's' : ''}` : '';
     const skipped = (r.skipped_photos || []).length ? ` · <span class="warn">couldn't use: ${esc(r.skipped_photos.join('; '))}</span>` : '';
     $('rStep').innerHTML = `<span class="ok">Done</span>: ${r.plays} plays${pics}${skipped}, ${Math.floor(r.duration / 60)}:${String(Math.round(r.duration % 60)).padStart(2, '0')} long, built in ${r.seconds}s${bs}`;
-    $('rResult').innerHTML = reelActions('Your reel is ready') + `<video controls src="/media/reel/${encodeURIComponent(file)}?t=${Date.now()}"></video>
-      <div class="hint">Saved to <code>${esc(r.output)}</code></div>
-      <div class="hint">DaVinci Resolve timeline: <code>${esc(r.fcpxml)}</code>. In Resolve use File → Import → Timeline… and pick it. Plays come in as finished clips with the music underneath. To add transitions there, select the clips and press Ctrl+T.</div>`;
-    if (r.vertical_output) $('rResult').insertAdjacentHTML('beforeend', verticalRow(r.vertical_output));
+    const outs = r.outputs || [{ file, path: r.output, vertical: false, label: 'Your reel' }];
+    $('rResult').innerHTML = outs.map((o, k) => outputRow(o, k === 0 ? `${o.label} is ready` : o.label)).join('') +
+      `<div class="hint">DaVinci Resolve timeline: <code>${esc(r.fcpxml)}</code> (each video has its own .fcpxml next to it). In Resolve use File → Import → Timeline… and pick it. Plays come in as finished clips with the music underneath. To add transitions there, select the clips and press Ctrl+T.</div>`;
+    playOutput(outs[0], false);
   }
 }
-// Buttons under a finished reel: play it here, open it in Windows' video player, or show it in Explorer.
-function reelActions(label, vertical = false) {
-  const v = vertical ? ' data-v="1"' : '';
-  return `<div class="reel-actions"><b>${esc(label)}</b>
-    <button class="btn" data-reel="play"${v}>▶ Play here</button>
-    <button class="btn" data-reel="open"${v}>Open in video player</button>
-    <button class="btn" data-reel="folder"${v}>Show in File Explorer</button></div>`;
+// Buttons under each finished video: play it here, open it in Windows' video player, or show it in Explorer.
+function outputRow(o, label) {
+  const f = ` data-file="${esc(o.file)}"${o.vertical ? ' data-v="1"' : ''}`;
+  return `<div class="reel-actions"${f}><b>${esc(label)}</b>
+    <button class="btn" data-reel="play"${f}>▶ Play here</button>
+    <button class="btn" data-reel="open"${f}>Open in video player</button>
+    <button class="btn" data-reel="folder"${f}>Show in File Explorer</button></div>
+    <div class="hint"><code>${esc(o.path)}</code></div>`;
 }
-function verticalRow(path) {
-  return reelActions('Vertical 9:16', true) + `<div class="hint"><code>${esc(path)}</code></div>`;
+function playOutput(o, start = true) {
+  const row = $('rResult').querySelector(`.reel-actions[data-file="${CSS.escape(o.file)}"]`);
+  if (!row) return;
+  let v = $('rResult').querySelector(`video[data-file="${CSS.escape(o.file)}"]`);
+  if (!v) {
+    row.nextElementSibling.insertAdjacentHTML('afterend', `<video controls data-file="${esc(o.file)}"${o.vertical ? ' class="vert" style="max-height:70vh;width:auto;margin:0 auto"' : ''} src="/media/reel/${encodeURIComponent(o.file)}?t=${Date.now()}"></video>`);
+    v = $('rResult').querySelector(`video[data-file="${CSS.escape(o.file)}"]`);
+  }
+  if (start) { v.scrollIntoView({ block: 'center', behavior: 'smooth' }); v.play(); }
 }
 function showLastReel() {
-  const r = reelInfo && reelInfo.last_reel;
-  if ($('rResult').innerHTML.trim() || (reelInfo.job && reelInfo.job.state !== 'idle')) return;
-  if (!r && reelInfo.last_vertical) { $('rResult').innerHTML = verticalRow(reelInfo.last_vertical.path); return; }
-  if (!r) return;
-  const when = new Date(r.built).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
-  $('rResult').innerHTML = reelActions(`Last reel (built ${when})`) + `<div class="hint"><code>${esc(r.path)}</code></div>` +
-    (reelInfo.last_vertical ? verticalRow(reelInfo.last_vertical.path) : '');
-  $('rResult').dataset.file = r.file;
+  const outs = (reelInfo && reelInfo.outputs) || [];
+  if ($('rResult').innerHTML.trim() || (reelInfo.job && reelInfo.job.state !== 'idle') || !outs.length) return;
+  const when = o => new Date(o.built).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  $('rResult').innerHTML = outs.map(o => outputRow(o, `${o.label} (built ${when(o)})`)).join('');
 }
 $('rResult').addEventListener('click', async e => {
   const b = e.target.closest('[data-reel]'); if (!b) return;
-  const vert = !!b.dataset.v;
-  if (b.dataset.reel === 'play' && vert) {
-    let v = $('rResult').querySelector('video.vert');
-    if (!v) {
-      const file = (reelInfo.last_vertical || {}).file || ((reelInfo.job.result || {}).vertical_output || '').split(/[\\/]/).pop();
-      b.closest('.reel-actions').insertAdjacentHTML('afterend', `<video class="vert" controls style="max-height:70vh;width:auto;margin:0 auto" src="/media/reel/${encodeURIComponent(file)}?t=${Date.now()}"></video>`);
-      v = $('rResult').querySelector('video.vert');
-    }
-    v.scrollIntoView({ block: 'center', behavior: 'smooth' }); v.play();
-    return;
-  }
-  if (b.dataset.reel === 'play') {
-    let v = $('rResult').querySelector('video:not(.vert)');
-    if (!v) {
-      const file = $('rResult').dataset.file || (reelInfo.last_reel && reelInfo.last_reel.file);
-      $('rResult').insertAdjacentHTML('beforeend', `<video controls src="/media/reel/${encodeURIComponent(file)}?t=${Date.now()}"></video>`);
-      v = $('rResult').querySelector('video');
-    }
-    v.scrollIntoView({ block: 'center', behavior: 'smooth' }); v.play();
-    return;
-  }
-  const res = await fetch('/api/reel/reveal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: b.dataset.reel, vertical: vert }) });
-  if (!res.ok) alert((await res.json()).error || 'Could not open the reel');
+  const o = { file: b.dataset.file, vertical: !!b.dataset.v };
+  if (b.dataset.reel === 'play') { playOutput(o); return; }
+  const res = await fetch('/api/reel/reveal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: b.dataset.reel, file: o.file }) });
+  if (!res.ok) alert((await res.json()).error || 'Could not open the video');
 });
 
 async function pollBuild() {
@@ -1403,6 +1416,7 @@ $('rCompHear').onclick = async () => {
   btn.textContent = old; btn.disabled = false;
 };
 document.querySelectorAll('#rFormat button').forEach(b => b.onclick = () => saveReelSetting({ format: b.dataset.v }));
+document.querySelectorAll('#rCut button').forEach(b => b.onclick = () => saveReelSetting({ cut: b.dataset.v }));
 document.querySelectorAll('#rPhotoS button').forEach(b => b.onclick = () => saveReelSetting({ photo_s: +b.dataset.v }));
 $('rIntroSfx').onchange = e => saveReelSetting({ intro_sfx: e.target.checked });
 $('rIntroPv').onclick = async e => {

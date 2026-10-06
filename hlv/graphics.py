@@ -45,8 +45,9 @@ def _bgr(img: Image.Image) -> np.ndarray:
     return np.array(img.convert("RGB"))[:, :, ::-1].copy()
 
 
-def _background(pl: dict) -> Image.Image:
+def _background(pl: dict, size: tuple[int, int] = (W, H)) -> Image.Image:
     """Dark field with a team-colour sweep and an accent stripe."""
+    W, H = size
     team = _rgb(pl.get("color"))
     accent = _rgb(pl.get("accent"), (255, 210, 63))
     base = np.zeros((H, W, 3), np.float32)
@@ -111,6 +112,56 @@ def title_card(root: Path, pl: dict) -> np.ndarray:
         y += 70
     if pl.get("school"):
         dr.text((left, y), pl["school"].upper(), font=font(52, "SemiBold Condensed"), fill=accent)
+    return _bgr(img)
+
+
+def recruit_card(root: Path, pl: dict, size: tuple[int, int] = (W, H)) -> np.ndarray:
+    """The recruiting cut's opening and closing card: everything a coach needs at a glance,
+    centred in one column (so it works wide and vertical): logo, #, name, position / class /
+    size, school, GPA, Hudl link."""
+    W, H = size
+    img = _background(pl, size)
+    dr = ImageDraw.Draw(img)
+    accent = _rgb(pl.get("accent"), (255, 210, 63))
+    tall = H > W
+    k = W / 1080 if tall else H / 1080          # text scale
+    lg = _logo(root, pl, int((420 if tall else 250) * (W / 1080 if tall else 1)))
+    name = (pl.get("name") or "").upper()
+    spec = []                                   # (text, size, style, fill, gap after)
+    if pl.get("number"):
+        spec.append((f"#{pl['number']}", 120, "Bold Condensed", accent, 10))
+    spec.append((name, 150 if len(name) <= 14 else 115, "Bold Condensed", (255, 255, 255), 40))
+    det = _detail_line(pl)
+    if det:
+        spec.append((det, 54, "SemiBold Condensed", (225, 230, 238), 18))
+    if pl.get("school"):
+        spec.append((pl["school"].upper(), 54, "SemiBold Condensed", accent, 46))
+    if pl.get("gpa"):
+        g = pl["gpa"].strip()
+        spec.append((g if "gpa" in g.lower() else f"{g} GPA", 50, "SemiBold", (235, 238, 245), 16))
+    if pl.get("hudl"):
+        link = pl["hudl"].strip()
+        for pre in ("https://", "http://", "www."):
+            link = link[len(pre):] if link.lower().startswith(pre) else link
+        spec.append((link, 50, "SemiBold", (235, 238, 245), 16))
+    max_w = W * (0.88 if tall else 0.8)
+    rows = []
+    for t, size_, style, c, g in spec:
+        f = font(int(size_ * k), style)
+        while dr.textlength(t, font=f) > max_w and f.size > 20:     # long names / links shrink to fit
+            f = font(int(f.size * 0.92), style)
+        rows.append((t, f, c, int(g * k)))
+    heights = [f.getbbox(t)[3] for t, f, _, _ in rows]
+    logo_h = (lg.height + int(50 * k)) if lg else 0
+    block = logo_h + sum(heights) + sum(g for *_, g in rows)
+    y = (H - block) // 2 - int(30 * k)
+    if lg:
+        _paste_logo(img, lg, W // 2, y + lg.height // 2)
+        y += logo_h
+    for (t, f, c, g), h in zip(rows, heights):
+        w = dr.textlength(t, font=f)
+        dr.text(((W - w) / 2, y), t, font=f, fill=c)
+        y += h + g
     return _bgr(img)
 
 

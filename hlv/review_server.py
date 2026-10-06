@@ -21,7 +21,8 @@ from .config import DetectConfig
 from .pipeline import CACHE_DIRNAME
 
 STATIC = Path(__file__).parent / "static"
-EDITABLE = {"snap", "end", "labeled", "keep", "notes", "spotlight", "zoom", "hit", "no_hit", "ring_off", "side", "limit"}
+EDITABLE = {"snap", "end", "labeled", "keep", "notes", "spotlight", "zoom", "hit", "no_hit", "ring_off", "side", "limit",
+            "star"}
 ZOOM_LEVELS = (0, 1.25, 1.5, 1.8)
 
 
@@ -273,6 +274,7 @@ class ReviewApp:
         players = profiles.load(lib)
         pl = profiles.get(lib, s.get("player"))
         rows = []
+        recruit = {c["id"] for c in reel.recruit_plays(proj)}
         for c in reel.ordered_items(proj):
             if photos.is_photo(c):
                 rows.append({"id": c["id"], "type": "photo", "source": c["source"], "group": c.get("group", ""),
@@ -286,6 +288,7 @@ class ReviewApp:
                 "id": c["id"], "source": c["source"], "group": c.get("group", ""), "kind": c["kind"],
                 "included": reel.included(c), "keep": r.get("keep"), "labeled": bool(r.get("labeled")),
                 "spotlight": spot, "zoom": r.get("zoom") or 0, "hit_set": r.get("hit") is not None, "no_hit": bool(r.get("no_hit")),
+                "star": bool(r.get("star")), "recruit": c["id"] in recruit,
                 # False: he isn't found at the snap, so this play won't freeze (None: unknown / not wanted)
                 "freeze_ok": camera.freeze_found(self.cache, c) if spot and s.get("freeze", True) else None,
                 "seconds": round(max(0.0, t1 - max(0.0, t0)) + (segment.FREEZE_S if spot and s.get("freeze") else 0), 2),
@@ -301,7 +304,22 @@ class ReviewApp:
             "credit_ready": library.branding_ready(library.branding()),
             "clips": rows, "job": self.job, "photo_count": sum(1 for r in rows if r.get("type") == "photo"),
             "last_reel": self._reel_entry(s), "last_vertical": self._reel_entry(s, True),
+            "outputs": self._outputs(s), "recruit_max_s": reel.RECRUIT_MAX_S,
         }
+
+    def _outputs(self, s: dict) -> list[dict]:
+        """Every finished video this project has for its player (reel / recruiting cut, wide /
+        vertical), newest first."""
+        pl = s.get("player")
+        out = []
+        for rec in (False, True):
+            for vert in (False, True):
+                f = self.root / reel.OUT_DIRNAME / reel.output_name(pl, vert, rec) if pl else None
+                if f and f.exists():
+                    out.append({"file": f.name, "path": str(f), "vertical": vert, "recruiting": rec,
+                                "label": ("Recruiting cut" if rec else "Highlight reel") + (" · vertical 9:16" if vert else ""),
+                                "built": datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="minutes")})
+        return sorted(out, key=lambda o: o["built"], reverse=True)
 
     # ---------------- player profiles ----------------
     def players_info(self) -> dict:
@@ -456,9 +474,16 @@ class ReviewApp:
         return {"path": str(f), "file": f.name,
                 "built": datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="minutes")}
 
-    def reveal_reel(self, action: str, vertical: bool = False) -> dict:
-        """Open the finished reel in Windows' video player, or show it in File Explorer."""
-        f = self._last_reel(vertical=vertical)
+    def reveal_reel(self, action: str, vertical: bool = False, file: str | None = None) -> dict:
+        """Open a finished video in Windows' video player, or show it in File Explorer."""
+        if file:
+            self._need()
+            if not re.fullmatch(r"[A-Za-z0-9_.-]+\.mp4", file):
+                raise ValueError("bad file name")
+            f = self.root / reel.OUT_DIRNAME / file
+            f = f if f.exists() else None
+        else:
+            f = self._last_reel(vertical=vertical)
         if f is None:
             raise ValueError("no reel built yet")
         if action == "open":
@@ -502,13 +527,19 @@ class ReviewApp:
             try:
                 with self.lock:
                     s = project.settings(project.load(root))
-                fmt = s.get("format", "wide")
-                res = None
-                if fmt in ("wide", "both"):
-                    res = reel.build(root, s.get("player"), s.get("transition"), progress=progress)
-                if fmt in ("vertical", "both"):
-                    rv = reel.build(root, s.get("player"), s.get("transition"), progress=progress, vertical=True)
-                    res = rv if res is None else {**res, "vertical_output": rv["output"]}
+                fmt, cut = s.get("format", "wide"), s.get("cut", "reel")
+                res, outs = None, []
+                for rec in ([False] if cut == "reel" else [True] if cut == "recruit" else [False, True]):
+                    for vert in ([False] if fmt == "wide" else [True] if fmt == "vertical" else [False, True]):
+                        r = reel.build(root, s.get("player"), s.get("transition"), progress=progress,
+                                       vertical=vert, recruiting=rec)
+                        outs.append(r)
+                        if res is None:
+                            res = r
+                res = {**res, "outputs": [{"file": Path(r["output"]).name, "path": r["output"], "vertical": r["vertical"],
+                                           "recruiting": r["recruiting"], "plays": r["plays"], "duration": r["duration"],
+                                           "label": ("Recruiting cut" if r["recruiting"] else "Highlight reel")
+                                           + (" · vertical 9:16" if r["vertical"] else "")} for r in outs]}
                 self.job.update(state="done", result=res, step="done")
             except Exception as e:  # noqa: BLE001 - report any failure to the page
                 self.job.update(state="error", error=str(e))
@@ -532,6 +563,8 @@ class ReviewApp:
                 s["compose_seed"] = int(patch["compose_seed"]) % 1000
             if patch.get("format") in ("wide", "vertical", "both"):
                 s["format"] = patch["format"]
+            if patch.get("cut") in reel.CUTS:
+                s["cut"] = patch["cut"]
             if patch.get("intro") in ("animated", "inferno", "storm", "shatter", "stadium",
                                       "glitch", "smoke", "neon", "warp", "gold", "classic"):
                 s["intro"] = patch["intro"]
@@ -630,6 +663,8 @@ class ReviewApp:
                 patch["ring_off"] = _clean_ring_off(patch["ring_off"], clip["probe"]["duration"])
             if "side" in patch and patch["side"] not in ("O", "D", None):
                 patch.pop("side")
+            if "star" in patch:
+                patch["star"] = bool(patch["star"])
             if "no_hit" in patch:
                 patch["no_hit"] = bool(patch["no_hit"])
             if "hit" in patch:
@@ -897,7 +932,8 @@ def make_handler(app: ReviewApp):
             if self.path == "/api/reel/reveal":
                 try:
                     body = json.loads(self.rfile.read(n) or b"{}")
-                    return self._json(app.reveal_reel(str(body.get("action")), bool(body.get("vertical"))))
+                    return self._json(app.reveal_reel(str(body.get("action")), bool(body.get("vertical")),
+                                                      body.get("file") or None))
                 except ValueError as e:
                     return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
             if self.path == "/api/reel/build":

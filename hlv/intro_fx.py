@@ -28,7 +28,7 @@ from . import graphics
 from .graphics import _detail_line, _rgb
 from .intro import (FPS, H, SR, W, Sparks, _fx_color, _glow, _impact_sfx, _outline, _paste, _paste_blur,
                     _shadow, _shake, _text_layer, _vignette, background_frame, beat_times, ease_in, ease_out,
-                    ease_out_back, smooth)
+                    ease_out_back, fit, layout, smooth)
 
 STYLES = ("inferno", "storm", "shatter", "stadium")
 QW, QH = W // 4, H // 4
@@ -71,26 +71,23 @@ class Card:
         first, last = (" ".join(parts[:-1]), parts[-1]) if len(parts) > 1 else ("", parts[0] if parts else "")
         fill = num_fill or self.accent
         stroke = num_stroke or self.team
-        self.num = _text_layer(num_txt, 600, tuple(fill[::-1]) + (255,), stroke=16,
-                               stroke_fill=tuple(stroke[::-1])) if num_txt else None
+        self.num = fit(_text_layer(num_txt, 600, tuple(fill[::-1]) + (255,), stroke=16,
+                                   stroke_fill=tuple(stroke[::-1])), W - 60) if num_txt else None
         self.last_size = 300 if len(last) <= 8 else 230
-        self.first = _text_layer(first, 130, white + (255,), spacing=16) if first else None
-        self.last = _text_layer(last, self.last_size, white + (255,), stroke=4,
-                                stroke_fill=tuple(self.team[::-1])) if last else None
+        self.first = fit(_text_layer(first, 130, white + (255,), spacing=16)) if first else None
+        self.last = fit(_text_layer(last, self.last_size, white + (255,), stroke=4,
+                                    stroke_fill=tuple(self.team[::-1]))) if last else None
         det = _detail_line(pl)
-        self.det = _text_layer(det, 54, (225, 230, 238, 255), style="SemiBold Condensed", spacing=2) if det else None
-        self.school = _text_layer((pl.get("school") or "").upper(), 54, tuple(self.accent[::-1]) + (255,),
-                                  style="SemiBold Condensed", spacing=3) if pl.get("school") else None
+        self.det = fit(_text_layer(det, 54, (225, 230, 238, 255), style="SemiBold Condensed", spacing=2)) if det else None
+        self.school = fit(_text_layer((pl.get("school") or "").upper(), 54, tuple(self.accent[::-1]) + (255,),
+                                      style="SemiBold Condensed", spacing=3)) if pl.get("school") else None
         lg = graphics._logo(lib_root, pl, 380)
         self.logo = np.array(lg)[:, :, [2, 1, 0, 3]].copy() if lg is not None else None
-        # layout (as Slam): logo left, name block right; centred when there's no logo
-        self.tx = 1180 if self.logo is not None else W // 2
-        self.logo_c = (470, 520)
-        self.y_first = 300
-        self.y_last = 300 + 75 + self.last_size // 2 + 5
-        self.y_bar = self.y_last + self.last_size // 2 + 30
-        self.y_det, self.y_school = self.y_bar + 70, self.y_bar + 140
-        self.num_c = (self.tx, 500)
+        # layout (as Slam): logo left, name block right; centred when there's no logo; stacked in portrait
+        lay = layout(self.logo is not None, self.last_size)
+        self.tx, self.logo_c, self.num_c = lay["tx"], lay["logo_c"], lay["num_c"]
+        self.y_first, self.y_last, self.y_bar = lay["y_first"], lay["y_last"], lay["y_bar"]
+        self.y_det, self.y_school = lay["y_det"], lay["y_school"]
 
     def details(self, frame, t, T3, T4, glow_col=None):
         """Details + school slide up at T3, logo pops at T4 (all styles)."""
@@ -176,7 +173,8 @@ class FireSim:
     shed wisps at the top. Hot spots along the base sway slowly, so flames gather into
     columns. Runs at a third of the frame size; ~8 steps a frame."""
 
-    def __init__(self, rng, w: int = W // 3, h: int = H // 3):
+    def __init__(self, rng, w: int | None = None, h: int | None = None):
+        w, h = w or W // 3, h or H // 3
         self.rng, self.w, self.h = rng, w, h
         self.heat = np.zeros((h, w), np.float32)
         self.cool = _noise(rng, h * 4, w, 3)                  # scrolls up one row per step

@@ -196,6 +196,8 @@ function render() {
             ${field('height_weight', 'Height / weight', '6\'0" 180')}
             ${field('school', 'School', 'Example High School', true)}
             ${field('contact', 'Contact line (end card)', 'email, phone or Hudl link', true)}
+            ${field('gpa', 'GPA (recruiting cut)', '3.8')}
+            ${field('hudl', 'Hudl link (recruiting cut)', 'hudl.com/profile/…')}
           </div>
         </div>
         <div class="card">
@@ -326,7 +328,7 @@ $('list').addEventListener('click', e => {
 $('add').onclick = () => {
   const team = players[0] || {};
   players.push({ id: '', name: '', number: '', position: '', class_year: '', school: team.school || '',
-                 height_weight: '', contact: '', logo: team.logo || '',
+                 height_weight: '', contact: '', gpa: '', hudl: '', logo: team.logo || '',
                  color: team.color || '#1f4fd1', accent: team.accent || '#ffd23f' });
   sel = players.length - 1; render();
   document.querySelector('[data-k="name"]').focus();
