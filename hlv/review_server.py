@@ -598,6 +598,14 @@ class ReviewApp:
             raise KeyError(clip_id)
         return r.stdout
 
+    def prepare(self, clip_id: str) -> None:
+        """You're about to click your player (F): load the clip for tracking now, in the
+        background, so the ring shows straight after the click."""
+        from . import camera
+        if self.root is None or not proxy.proxy_path(self.cache, clip_id).exists():
+            return
+        threading.Thread(target=camera.prepare, args=(self.cache, clip_id), daemon=True).start()
+
     def plan(self, clip_id: str, progressive: bool = False) -> dict:
         from . import camera
         self._need()
@@ -974,6 +982,10 @@ def make_handler(app: ReviewApp):
                     return self._json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
             if self.path == "/api/settings":
                 return self._json(app.update_settings(json.loads(self.rfile.read(n) or b"{}")))
+            m = re.fullmatch(r"/api/clips/([a-z0-9-]+)/prepare", self.path)
+            if m:
+                app.prepare(m.group(1))
+                return self._json({"ok": True})
             m = re.fullmatch(r"/api/clips/([a-z0-9-]+)/plan(\?progressive=1)?", self.path)
             if m:
                 try:

@@ -68,6 +68,14 @@ def _proxy_frames(cache: Path, cid: str) -> np.ndarray:
     return f
 
 
+def prepare(cache: Path, cid: str) -> None:
+    """Decode a clip's frames ahead of a first click (best effort)."""
+    try:
+        _proxy_frames(cache, cid)
+    except Exception:  # noqa: BLE001 - the click will just load it itself
+        pass
+
+
 def _proxy_size(cache: Path, cid: str) -> tuple[int, int]:
     """Size of the analysis frames (proxy scaled to TRACK_W) without decoding them."""
     info = probe(proxy.proxy_path(cache, cid))
@@ -113,7 +121,7 @@ def freeze_found(cache: Path, clip: dict) -> str | None:
 
 _live: dict[str, dict] = {}          # clip id -> unfinished tracker runs (track.Tracking live)
 _jobs: dict[str, "_Job"] = {}        # clip id -> latest tracking job
-CHUNK = 12                           # frames tracked between looks at "stop" (~0.4 s)
+CHUNK = 6                            # frames tracked between looks at "stop" (~0.2 s)
 
 
 class _Job(threading.Thread):
@@ -214,16 +222,20 @@ def player_track(cache: Path, clip: dict, need_runs: bool = False) -> np.ndarray
         # Stopped by a newer click on the page: wait our turn and track these clicks again.
 
 
-def player_track_progressive(cache: Path, clip: dict, wait: float = 0.5) -> tuple[np.ndarray | None, float]:
-    """For the review page: the track if it's ready within `wait` s, else what's tracked so
-    far. Returns (smoothed track, progress 0..1); a new click stops tracking older clicks."""
+def player_track_progressive(cache: Path, clip: dict, wait: float = 2.0) -> tuple[np.ndarray | None, float]:
+    """For the review page: what's tracked so far, as soon as there's something around the
+    clicks (or the whole track if it's done first; gives up waiting after `wait` s).
+    Returns (smoothed track, progress 0..1); a new click stops tracking older clicks."""
     if not anchors_of(clip):
         return None, 1.0
     f = _track_file(cache, clip)
     if f.exists():
         return track.smooth_track(np.load(f), FPS), 1.0
     j = _job(cache, clip, preempt=True)
-    j.finished.wait(wait)
+    end = time.time() + wait
+    while not j.finished.is_set() and time.time() < end and (
+            j.tracking is None or (j.tracking.done_frames < 2 * CHUNK and not j.tracking.finished)):
+        time.sleep(0.03)
     if j.error is not None:
         raise j.error
     res, prog = j.peek()

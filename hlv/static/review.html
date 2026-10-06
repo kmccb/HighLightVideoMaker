@@ -1000,6 +1000,8 @@ function setPicking(on) {
   $('bSpot').classList.toggle('on', on);
   if (!on) $('loupe').hidden = true;
   if (on) { video.pause(); if (zoomedView) { zoomedView = false; renderState(); } }
+  // Load the clip for tracking while you find your player, so the ring shows right after the click.
+  if (on) fetch('/api/clips/' + data.clips[idx].id + '/prepare', { method: 'POST' }).catch(() => {});
 }
 
 ov.addEventListener('pointerdown', e => {
