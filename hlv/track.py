@@ -108,65 +108,97 @@ def _step_matrix(cam: np.ndarray, i: int, step: int) -> np.ndarray:
     return np.linalg.inv(m)[:2]
 
 
+class Run:
+    """One tracker run from a click, frame by frame in one direction (step +1 or -1).
+
+    Can be paused and picked up again (`advance` with a limit), so the review page can show
+    the ring around a new click straight away and fill in the rest as it's tracked. A run
+    advanced in pieces gives exactly the same answer as one done in one go.
+    out = {frame: (cx, cy, w, h, frames_from_anchor, similarity)} in px.
+    """
+
+    def __init__(self, frames: np.ndarray, start: int, box_px: tuple, step: int,
+                 cam: np.ndarray | None = None):
+        self.start, self.step, self.cam = start, step, cam
+        self.tr = _csrt()
+        self.tr.init(frames[start], tuple(int(round(v)) for v in box_px))
+        x, y, bw, bh = box_px
+        self.ref = _hist(frames[start], x, y, bw, bh)
+        self.out = {start: (x + bw / 2, y + bh / 2, bw, bh, 0, 1.0)}
+        self.prev = (x + bw / 2, y + bh / 2)
+        self.grass_run = 0
+        self.ghosts: list[tuple] = []   # (frame, where a field-fixed point at the box would be now)
+        self.next = start + step        # next frame to track
+        self.broke = False              # the tracker lost him; nothing more to track
+
+    def reached(self, stop: int) -> bool:
+        return self.broke or (self.next >= stop if self.step > 0 else self.next <= stop)
+
+    def advance(self, frames: np.ndarray, stop: int, limit: int | None = None) -> int:
+        """Track toward `stop` (exclusive), at most `limit` frames. Returns frames tracked."""
+        w = frames.shape[2]
+        step, out, done = self.step, self.out, 0
+        win = int(STUCK_S * 30)
+        while not self.reached(stop) and (limit is None or done < limit):
+            i = self.next
+            k = abs(i - self.start)
+            done += 1
+            ok, (x, y, bw, bh) = self.tr.update(frames[i])
+            c = (x + bw / 2, y + bh / 2)
+            if not ok or bw <= 2 or bh <= 2:
+                self.broke = True
+                break
+            if np.hypot(c[0] - self.prev[0], c[1] - self.prev[1]) > MAX_STEP * w:
+                # Big move: a fast camera pan moves everyone. Only call it lost if the box moved
+                # far more than the camera did.
+                exp = _camera_moved(frames[i - step], frames[i], self.prev)
+                if np.hypot(c[0] - exp[0], c[1] - exp[1]) > MAX_STEP * w:
+                    self.broke = True
+                    break
+            # Lost if the box is basically empty turf for a moment (tracker latched onto grass).
+            if _body_frac(frames[i], x, y, bw, bh) < 0.08:
+                self.grass_run += 1
+                if self.grass_run >= 6:
+                    for j in range(i - step * 5, i, step):   # drop the frames already on grass
+                        out.pop(j, None)
+                    self.broke = True
+                    break
+            else:
+                self.grass_run = 0
+            # Tracking the scenery? (Off by default: a player holding a block while the camera
+            # pans looks the same as a goalpost, so this hid the ring on good plays.)
+            if self.cam is not None:
+                m = _step_matrix(self.cam, i, step)
+                self.ghosts = [(j, _apply(m, g), o) for j, g, o in self.ghosts]
+                self.ghosts.append((i, c, c))
+                if len(self.ghosts) > win:
+                    self.ghosts.pop(0)
+                    j, g, origin = self.ghosts[0]
+                    panned = np.hypot(g[0] - origin[0], g[1] - origin[1]) / w
+                    moved = np.hypot(c[0] - g[0], c[1] - g[1]) / w
+                    if panned > STUCK_PAN and moved < STUCK_STILL:
+                        for jj, _, _ in self.ghosts:      # the whole window was on scenery
+                            out.pop(jj, None)
+                        self.broke = True
+                        break
+            cur_h = _hist(frames[i], x, y, bw, bh)
+            sim = _similar(self.ref, cur_h)
+            out[i] = (c[0], c[1], bw, bh, k, sim)
+            # Let the reference follow slow lighting changes while we're clearly on him.
+            if sim > 0.6 and cur_h is not None and self.ref is not None:
+                self.ref = cv2.normalize(0.92 * self.ref + 0.08 * cur_h, None)
+            self.prev = c
+            self.next = i + step
+        return done
+
+
 def _run(frames: np.ndarray, start: int, stop: int, box_px: tuple, step: int,
          cam: np.ndarray | None = None) -> dict[int, tuple]:
-    """Track from frame `start` toward `stop` (exclusive), step +1 or -1.
-    Returns {frame: (cx, cy, w, h, frames_from_anchor, similarity)} in px, until the
-    tracker fails."""
-    h, w = frames.shape[1:3]
-    out = {}
-    win = int(STUCK_S * 30)
-    ghosts: list[tuple] = []   # (frame, where a field-fixed point at the box would be now)
-    tr = _csrt()
-    tr.init(frames[start], tuple(int(round(v)) for v in box_px))
-    x, y, bw, bh = box_px
-    ref = _hist(frames[start], x, y, bw, bh)
-    out[start] = (x + bw / 2, y + bh / 2, bw, bh, 0, 1.0)
-    prev = (x + bw / 2, y + bh / 2)
-    grass_run = 0
-    for k, i in enumerate(range(start + step, stop, step), 1):
-        ok, (x, y, bw, bh) = tr.update(frames[i])
-        c = (x + bw / 2, y + bh / 2)
-        if not ok or bw <= 2 or bh <= 2:
-            break
-        if np.hypot(c[0] - prev[0], c[1] - prev[1]) > MAX_STEP * w:
-            # Big move: a fast camera pan moves everyone. Only call it lost if the box moved
-            # far more than the camera did.
-            exp = _camera_moved(frames[i - step], frames[i], prev)
-            if np.hypot(c[0] - exp[0], c[1] - exp[1]) > MAX_STEP * w:
-                break
-        # Lost if the box is basically empty turf for a moment (tracker latched onto grass).
-        if _body_frac(frames[i], x, y, bw, bh) < 0.08:
-            grass_run += 1
-            if grass_run >= 6:
-                for j in range(i - step * 5, i, step):   # drop the frames already on grass
-                    out.pop(j, None)
-                break
-        else:
-            grass_run = 0
-        # Tracking the scenery? (Off by default: a player holding a block while the camera
-        # pans looks the same as a goalpost, so this hid the ring on good plays.)
-        if cam is not None:
-            m = _step_matrix(cam, i, step)
-            ghosts = [(j, _apply(m, g), o) for j, g, o in ghosts]
-            ghosts.append((i, c, c))
-            if len(ghosts) > win:
-                ghosts.pop(0)
-                j, g, origin = ghosts[0]
-                panned = np.hypot(g[0] - origin[0], g[1] - origin[1]) / w
-                moved = np.hypot(c[0] - g[0], c[1] - g[1]) / w
-                if panned > STUCK_PAN and moved < STUCK_STILL:
-                    for jj, _, _ in ghosts:      # the whole window was on scenery
-                        out.pop(jj, None)
-                    break
-        cur_h = _hist(frames[i], x, y, bw, bh)
-        sim = _similar(ref, cur_h)
-        out[i] = (c[0], c[1], bw, bh, k, sim)
-        # Let the reference follow slow lighting changes while we're clearly on him.
-        if sim > 0.6 and cur_h is not None and ref is not None:
-            ref = cv2.normalize(0.92 * ref + 0.08 * cur_h, None)
-        prev = c
-    return out
+    """Track from frame `start` toward `stop` (exclusive), step +1 or -1, until the
+    tracker fails. See Run."""
+    r = Run(frames, start, box_px, step, cam)
+    r.advance(frames, stop)
+    return r.out
 
 
 DEFAULT_BOX = (0.032, 0.09)   # what the page sends for a plain click (no drag)
@@ -260,28 +292,119 @@ def fit_anchor(frame: np.ndarray, a: dict) -> dict:
     return refine_anchor(frame, a) if is_click(a) else tighten_box(frame, a)
 
 
-def _cached_run(run_cache: dict | None, frames: np.ndarray, start: int, stop: int,
-                box_px: tuple, step: int, cam: np.ndarray | None) -> dict[int, tuple]:
-    """_run, reusing an earlier run from the same click when it already covers `stop`.
+def _prefix(run: dict, stop: int, step: int) -> dict:
+    return {i: v for i, v in run.items() if (i < stop if step > 0 else i > stop)}
 
-    A run is deterministic, so a run toward a nearer stop is just a prefix of a longer one.
-    Adding a click between two others then only tracks the frames between its neighbours
-    instead of re-tracking the whole clip (CSRT is ~25 ms a frame).
+
+class Tracking:
+    """Track the player from every click and fuse the runs, a piece at a time.
+
+    run_cache: optional dict kept per clip between calls (and saved to disk), so a new click
+    only tracks what's new. A run is deterministic, so a run toward a nearer stop is just a
+    prefix of a longer one: adding a click between two others only tracks the frames between
+    its neighbours instead of re-tracking the whole clip (CSRT is ~30 ms a frame).
+    live: optional dict of unfinished Run objects kept in memory, so tracking that was
+    stopped part-way (a newer click came in) carries on from where it got to.
+    span: (first, last) frame worth tracking; runs beyond the outer clicks stop there.
     """
-    if run_cache is None or cam is not None:
-        return _run(frames, start, stop, box_px, step, cam)
-    key = (start, step, tuple(round(float(v), 2) for v in box_px))
-    hit = run_cache.get(key)
-    if hit is not None:
-        done_stop, run = hit
-        last = max(run) if step > 0 else min(run)
-        broke = last != done_stop - step           # tracker gave up before its stop
-        covers = (stop <= done_stop) if step > 0 else (stop >= done_stop)
-        if covers or broke:
-            return {i: v for i, v in run.items() if (i < stop if step > 0 else i > stop)}
-    run = _run(frames, start, stop, box_px, step, cam)
-    run_cache[key] = (stop, run)
-    return run
+
+    def __init__(self, frames: np.ndarray, fps: float, anchors: list[dict],
+                 cam: np.ndarray | None = None, run_cache: dict | None = None,
+                 span: tuple[int, int] | None = None, live: dict | None = None):
+        self.frames, self.fps, self.cam = frames, fps, cam
+        self.run_cache = None if cam is not None else run_cache
+        self.live = live if self.run_cache is not None else None
+        n, H, W = frames.shape[:3]
+        self.n = n
+        self.ks = sorted(anchors, key=lambda a: a["t"])
+        self.idx = [int(np.clip(round(a["t"] * fps), 0, n - 1)) for a in self.ks]
+        self.ks = [fit_anchor(frames[i], a) for a, i in zip(self.ks, self.idx)]
+        # One task per run: [key, start, stop, box, step, Run or finished dict]
+        self.tasks = []
+        for j, (a, i0) in enumerate(zip(self.ks, self.idx)):
+            box = (a["x"] * W, a["y"] * H, max(a["w"] * W, 6), max(a["h"] * H, 10))
+            lo, hi = (-1, n) if span is None else (min(span[0], i0) - 1, max(span[1], i0) + 1)
+            fwd_stop = self.idx[j + 1] + 1 if j + 1 < len(self.idx) else min(n, hi)
+            bwd_stop = self.idx[j - 1] - 1 if j > 0 else max(-1, lo)
+            for stop, step in ((fwd_stop, +1), (bwd_stop, -1)):
+                key = (i0, step, tuple(round(float(v), 2) for v in box))
+                self.tasks.append([key, i0, stop, box, step, self._source(key, i0, stop, box, step)])
+        self.total = sum(self._todo(t) for t in self.tasks) or 1
+        self.done_frames = 0
+
+    def _source(self, key, start, stop, box, step):
+        """A finished run (dict) if the cache already covers it, else a Run to advance."""
+        if self.run_cache is not None:
+            hit = self.run_cache.get(key)
+            if hit is not None:
+                done_stop, run = hit
+                last = max(run) if step > 0 else min(run)
+                broke = last != done_stop - step           # tracker gave up before its stop
+                covers = (stop <= done_stop) if step > 0 else (stop >= done_stop)
+                if covers or broke:
+                    return _prefix(run, stop, step)
+            if self.live is not None and key in self.live:
+                return self.live[key]                     # carry on from where it got to
+        r = Run(self.frames, start, box, step, self.cam)
+        if self.live is not None:
+            self.live[key] = r
+        return r
+
+    @staticmethod
+    def _todo(t) -> int:
+        _, _, stop, _, step, src = t
+        if isinstance(src, dict) or src.reached(stop):
+            return 0
+        return max(0, (stop - src.next) * step)
+
+    @property
+    def finished(self) -> bool:
+        return all(self._todo(t) == 0 for t in self.tasks)
+
+    @property
+    def progress(self) -> float:
+        return min(1.0, self.done_frames / self.total) if not self.finished else 1.0
+
+    def work(self, limit: int | None = None) -> bool:
+        """Track up to `limit` frames, a few at a time across the unfinished runs so the
+        ring grows outward from each click on both sides. True when everything is tracked."""
+        chunk = 8
+        budget = limit
+        while budget is None or budget > 0:
+            busy = [t for t in self.tasks if self._todo(t)]
+            if not busy:
+                break
+            for t in busy:
+                take = chunk if budget is None else min(chunk, budget)
+                did = t[5].advance(self.frames, t[2], take)
+                self.done_frames += did
+                if budget is not None:
+                    budget -= did
+                    if budget <= 0:
+                        break
+        self._save()
+        return self.finished
+
+    def _save(self):
+        """Note how far each run got in the run cache (same format as a finished run)."""
+        if self.run_cache is None:
+            return
+        for key, _, stop, _, step, src in self.tasks:
+            if isinstance(src, dict):
+                continue
+            last = max(src.out) if step > 0 else min(src.out)
+            done_stop = last + 2 * step if src.broke else src.next
+            old = self.run_cache.get(key)
+            if old is None or (done_stop - old[0]) * step > 0 or src.broke:
+                self.run_cache[key] = (done_stop, src.out)
+            if src.broke and self.live is not None:
+                self.live.pop(key, None)
+
+    def result(self) -> np.ndarray:
+        """The fused track from whatever has been tracked so far. See track_player."""
+        runs = [src if isinstance(src, dict) else _prefix(src.out, stop, step)
+                for _, _, stop, _, step, src in self.tasks]
+        return _fuse(self.frames.shape, self.fps, self.ks, self.idx, runs)
 
 
 def track_player(frames: np.ndarray, fps: float, anchors: list[dict],
@@ -291,21 +414,18 @@ def track_player(frames: np.ndarray, fps: float, anchors: list[dict],
     Returns (N, 5): cx, cy, w, h, conf - normalised, NaN where unknown.
     run_cache: optional dict kept per clip between calls, so a new click is cheap.
     span: (first, last) frame worth tracking; runs beyond the outer clicks stop there."""
-    n, H, W = frames.shape[:3]
+    if not anchors or len(frames) == 0:
+        return np.full((len(frames), 5), np.nan, np.float32)
+    t = Tracking(frames, fps, anchors, cam, run_cache, span)
+    t.work()
+    return t.result()
+
+
+def _fuse(shape: tuple, fps: float, ks: list[dict], idx: list[int], runs: list[dict]) -> np.ndarray:
+    """Combine the runs (forward and backward from each click, in click order) into one track."""
+    n, H, W = shape[:3]
     res = np.full((n, 5), np.nan, np.float32)
-    if not anchors or n == 0:
-        return res
-    ks = sorted(anchors, key=lambda a: a["t"])
-    idx = [int(np.clip(round(a["t"] * fps), 0, n - 1)) for a in ks]
-    ks = [fit_anchor(frames[i], a) for a, i in zip(ks, idx)]
-    runs = []  # (dict, anchor_idx)
-    for j, (a, i0) in enumerate(zip(ks, idx)):
-        box = (a["x"] * W, a["y"] * H, max(a["w"] * W, 6), max(a["h"] * H, 10))
-        lo, hi = (-1, n) if span is None else (min(span[0], i0) - 1, max(span[1], i0) + 1)
-        fwd_stop = idx[j + 1] + 1 if j + 1 < len(idx) else min(n, hi)
-        bwd_stop = idx[j - 1] - 1 if j > 0 else max(-1, lo)
-        runs.append(_cached_run(run_cache, frames, i0, fwd_stop, box, +1, cam))
-        runs.append(_cached_run(run_cache, frames, i0, bwd_stop, box, -1, cam))
+    runs = [dict(r) for r in runs]   # the size clamp below mustn't change the cached runs
 
     # The tracker's own size estimate drifts (boxes balloon in pile-ups), which drags the
     # "feet" down. Keep size within +-25% of what was marked, interpolated between clicks.

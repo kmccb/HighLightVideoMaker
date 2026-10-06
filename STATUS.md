@@ -1,6 +1,6 @@
 # Project status: Highlight Reel Maker
 
-_Last updated: 2026-10-03 (animated intro). This is the hand-off note for the next session; read it first, then README.md for usage details._
+_Last updated: 2026-10-06 (instant spotlight ring). This is the hand-off note for the next session; read it first, then README.md for usage details._
 
 ## What this is
 A local Python tool that turns a folder of football clips into a finished highlight reel for Tom's son **Caleb Scott (#12, WR / DB, class of 2027)** and his friends. The clips are iPhone 4K video shot from the stands (lots of pan and zoom), plus Hudl screen recordings and one TV highlight. It runs on Windows 11 with Python 3.12 in `.venv`, and needs ffmpeg/ffprobe on PATH. Tom edits in **free DaVinci Resolve**, so there's no scripting there; the tool exports FCPXML instead.
@@ -13,7 +13,7 @@ Test project folder: `TestClips\Caleb_Footbal\` (23 clips across Scrimmage, Week
 .venv\Scripts\python -m hlv review                              # main UI: http://127.0.0.1:8765 (start screen: project list)
 .venv\Scripts\python -m hlv review "TestClips\Caleb_Footbal"     # or straight into one project
 .venv\Scripts\python -m hlv reel   "TestClips\Caleb_Footbal"     # build the reel from the command line (same as the Build button)
-.venv\Scripts\python -m pytest -q tests                          # 68 tests, all passing
+.venv\Scripts\python -m pytest -q tests                          # 69 tests, all passing
 ```
 In the Claude desktop app, `.claude/launch.json` has a `review` preview config (use `preview_start name=review`). **Restart the server after any Python change**; static HTML changes only need a page reload. **Never restart while a reel is building** (check `/api/reel/status`); the build runs inside the server process.
 
@@ -71,7 +71,7 @@ All pages share `hlv/static/theme.css` (tokens: graphite surfaces, one forge-ora
 
    Brody's folder (`assets\brody`) isn't a project yet. It has 21 plays plus photos, and `ScreenRecording_09-19-2026 08-40-29_1` appears three times (.mov, .mp4, "(1).mp4"), probably duplicates.
 7. **Brody reel rebuilt 2026-10-04** (7 plays + 19 photos, 2:28, 5/7 hits on the beat; sent to Tom on Telegram as a 720p copy, since bot uploads are limited to 50 MB). IMG_1416 and IMG_1432 still don't freeze until Tom clicks Brody at the snap. **Photos: just being tried by Tom** (Brody's project: 20 plays + 19 photos; photos are also listed under the clips on the left, where a click previews the slide). Tested on a scratch copy of Caleb's project plus 5 of Brody's photos (4 plays + 5 photos, 72 s, built in 91 s, all hits and photo cuts within 16 ms of a beat). Brody's PNGs (IMG_8227/8237/8239/8251) are phone screenshots and look like a small picture in a frame; Tom will probably untick them. Brody's project was set up by Tom on 2026-10-03 (player brody-gensler, DMX song); `ScreenRecording_09-19-2026 08-40-29_1.mov` wasn't added (duplicate of the .mp4 copies).
-8. **Spotlight speed:** Tom still finds highlighting the slowest part and says it "takes a while to move on and highlight after I click". Time it during a real session before changing anything (first click on a clip tracks from scratch, 10-20 s).
+8. **Spotlight speed (2026-10-06): ring now shows ~0.6-0.9 s after a click** (first click on an untracked clip ~1.6-2 s, mostly loading the clip), instead of after the whole play is tracked (was 4-13 s per click, measured). Tracking runs in a background job per clip (`camera._Job`) a chunk at a time (`track.Tracking.work`); the page polls `/plan?progressive=1` every 0.3 s, shows the ring as soon as part is tracked, badge counts "Tracking the rest of the play… N%", untracked frames grey on the strip. A newer click stops the old job; unfinished runs are kept in memory (`camera._live`, `track.Run`) and carry on, so nothing is re-tracked. Result is bit-identical to tracking in one go (checked on IMG_1420/0926 against the old code, plus a test). Total tracking time is unchanged: CSRT itself is ~30 ms/frame; smaller `template_size` would be 2x faster but moves the ring up to ~5 player-widths, so it needs the held-out-click benchmark before trying. Threads don't help (CSRT already uses the cores).
 
 ## Lessons learned / gotchas (please read)
 - **Memory:** the box has 16 GB. Never load whole clips into RAM unnecessarily; `camera.plan` only decodes frames when tracking or zoom needs them, and `frames.read_frames` pre-allocates. Renders run with `-j 3`.

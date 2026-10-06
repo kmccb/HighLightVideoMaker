@@ -776,15 +776,24 @@ async function refreshPlan() {
   const c = data.clips[idx], seq = ++planSeq;
   if (!cur.zoom && !cur.spotlight.length) { plan = null; setTracking(false); drawConfStrip(); return; }
   setTracking(cur.spotlight.length > 0);
-  setStatus(cur.spotlight.length ? 'tracking player… (a few seconds)' : 'planning camera…');
+  setStatus(cur.spotlight.length ? 'tracking player…' : 'planning camera…');
   try {
-    const res = await fetch('/api/clips/' + c.id + '/plan', { method: 'POST' });
-    if (!res.ok) throw new Error(res.status);
-    const p = await res.json();
-    if (seq !== planSeq || data.clips[idx] !== c) return;   // moved on meanwhile
-    plan = p;
-    setStatus(p.mode === 'player' ? 'zoom follows your spotlighted player'
-            : p.mode === 'play' ? 'zoom frames the play gently (spotlight a player for tighter framing)'
+    // The server answers within about half a second with what's tracked so far (around your
+    // newest click first) and keeps tracking; ask again until it's done. Keep working meanwhile.
+    for (;;) {
+      const res = await fetch('/api/clips/' + c.id + '/plan?progressive=1', { method: 'POST' });
+      if (!res.ok) throw new Error(res.status);
+      const p = await res.json();
+      if (seq !== planSeq || data.clips[idx] !== c) return;   // moved on meanwhile
+      if (p.player || !p.partial) plan = p;
+      if (!p.partial) break;
+      setTracking(!p.player, p.player ? Math.round(p.progress * 100) : null);
+      try { redraw(); } catch (e) { console.error(e); }
+      await new Promise(r => setTimeout(r, 300));
+      if (seq !== planSeq || data.clips[idx] !== c) return;
+    }
+    setStatus(plan.mode === 'player' ? 'zoom follows your spotlighted player'
+            : plan.mode === 'play' ? 'zoom frames the play gently (spotlight a player for tighter framing)'
             : 'tracking ready · press Z to zoom', 'saved');
   } catch (e) { setStatus('camera plan failed: ' + e.message, 'err'); }
   if (seq !== planSeq) return;
@@ -794,9 +803,11 @@ async function refreshPlan() {
 }
 
 // While a new track is computed the old ring is in the wrong place: hide it, and say so on the video.
-function setTracking(on) {
+// Once part of the new track is in (pct given), the ring shows and the badge counts up.
+function setTracking(on, pct = null) {
   tracking = on;
-  $('trk').hidden = !on;
+  $('trk').hidden = !on && pct == null;
+  $('trk').textContent = pct == null ? 'Tracking your player…' : `Tracking the rest of the play… ${pct}%`;
   drawConfStrip();
 }
 
@@ -816,6 +827,7 @@ function drawConfStrip() {
   const ts = cur.spotlight.map(a => a.t), first = Math.min(...ts), last = Math.max(...ts);
   for (let x = 0; x < w; x++) {
     const i = Math.min(n - 1, Math.floor(x / w * n)), p = plan.player[i], t = i / plan.fps;
+    if (plan.partial && p[0] < 0) { g.fillStyle = '#4a4a52'; g.fillRect(x, 0, 1, h); continue; }   // not tracked yet
     let c = p[0] < 0 ? 0 : p[4];
     if (t < first - CLICK_REACH || t > last + CLICK_REACH) c = Math.min(c, 0.49);
     g.fillStyle = c >= 0.5 ? '#3ecf6e' : c >= 0.25 ? '#f5b942' : '#ff5c5c';

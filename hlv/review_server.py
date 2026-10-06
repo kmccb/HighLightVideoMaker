@@ -598,7 +598,7 @@ class ReviewApp:
             raise KeyError(clip_id)
         return r.stdout
 
-    def plan(self, clip_id: str) -> dict:
+    def plan(self, clip_id: str, progressive: bool = False) -> dict:
         from . import camera
         self._need()
         with self.lock:
@@ -606,7 +606,7 @@ class ReviewApp:
         clip = next((c for c in proj["clips"] if c["id"] == clip_id), None)
         if clip is None:
             raise KeyError(clip_id)
-        return camera.plan(self.cache, clip)
+        return camera.plan(self.cache, clip, progressive=progressive)
 
     def update(self, clip_id: str, patch: dict) -> dict:
         self._need()
@@ -974,10 +974,10 @@ def make_handler(app: ReviewApp):
                     return self._json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
             if self.path == "/api/settings":
                 return self._json(app.update_settings(json.loads(self.rfile.read(n) or b"{}")))
-            m = re.fullmatch(r"/api/clips/([a-z0-9-]+)/plan", self.path)
+            m = re.fullmatch(r"/api/clips/([a-z0-9-]+)/plan(\?progressive=1)?", self.path)
             if m:
                 try:
-                    return self._json(app.plan(m.group(1)))
+                    return self._json(app.plan(m.group(1), progressive=bool(m.group(2))))
                 except KeyError:
                     return self.send_error(HTTPStatus.NOT_FOUND)
             m = re.fullmatch(r"/api/clips/([a-z0-9-]+)", self.path)

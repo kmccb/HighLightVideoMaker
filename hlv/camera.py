@@ -111,29 +111,123 @@ def freeze_found(cache: Path, clip: dict) -> str | None:
     return "none" if t is None else ("snap" if at_snap else "late")
 
 
+_live: dict[str, dict] = {}          # clip id -> unfinished tracker runs (track.Tracking live)
+_jobs: dict[str, "_Job"] = {}        # clip id -> latest tracking job
+CHUNK = 12                           # frames tracked between looks at "stop" (~0.4 s)
+
+
+class _Job(threading.Thread):
+    """Tracks one clip's clicks in the background, a few frames at a time, so the page can
+    show what's tracked so far and a newer click can stop it (finished runs are kept)."""
+
+    def __init__(self, cache: Path, clip: dict):
+        super().__init__(daemon=True)
+        self.cache, self.clip, self.cid = cache, clip, clip["id"]
+        self.file = _track_file(cache, clip)
+        self.cancel = False
+        self.finished = threading.Event()
+        self.result: np.ndarray | None = None
+        self.error: Exception | None = None
+        self.tracking: track.Tracking | None = None
+        self.snapshot: tuple[np.ndarray, float] | None = None   # (raw track so far, progress)
+        self.want = threading.Event()        # the page asked what's tracked so far
+        self.handed = threading.Event()      # ...and it's in self.snapshot
+
+    def run(self):
+        from . import segment   # (segment imports this module)
+        try:
+            with _clip_lock(self.cid):   # one job per clip at a time
+                if self.cancel:
+                    return
+                fr = _proxy_frames(self.cache, self.cid)
+                t0, t1 = segment.extents(self.clip, len(fr) / FPS)
+                runs = _runs(self.cache, self.cid)
+                with _lock:
+                    live = _live.setdefault(self.cid, {})
+                self.tracking = track.Tracking(fr, FPS, anchors_of(self.clip), run_cache=runs,
+                                               span=(int(t0 * FPS), int(np.ceil(t1 * FPS))), live=live)
+                done = self.tracking.finished
+                while not done and not self.cancel:
+                    if self.want.is_set():   # between chunks, so the runs aren't changing
+                        self.want.clear()
+                        self.snapshot = (self.tracking.result(), self.tracking.progress)
+                        self.handed.set()
+                    done = self.tracking.work(CHUNK)
+                f = _runs_path(self.cache, self.cid)
+                f.parent.mkdir(parents=True, exist_ok=True)
+                f.write_bytes(pickle.dumps(runs))   # so the next click is quick, even after a restart
+                if done:
+                    res = self.tracking.result()
+                    np.save(self.file, res)   # raw track cached; smoothing is cheap and tweakable
+                    self.result = res
+        except Exception as e:  # noqa: BLE001 - reported to whoever waits on the job
+            self.error = e
+        finally:
+            self.finished.set()
+            self.handed.set()
+
+    def peek(self) -> tuple[np.ndarray | None, float]:
+        """What's tracked so far (raw track) and how far along (waits at most one chunk)."""
+        if self.result is None and self.tracking is not None and not self.finished.is_set():
+            self.handed.clear()
+            self.want.set()
+            self.handed.wait(2.0)
+        if self.result is not None:
+            return self.result, 1.0
+        return self.snapshot if self.snapshot is not None else (None, 0.0)
+
+
+def _job(cache: Path, clip: dict, preempt: bool) -> _Job:
+    """The tracking job for this clip's current clicks, started if needed.
+    preempt: stop a job tracking other clicks (the page, after a new click). Without it
+    (renders, warm-up) a job for other clicks is left to finish first."""
+    key = _track_file(cache, clip)
+    while True:
+        with _lock:
+            j = _jobs.get(clip["id"])
+            if j is not None and j.file == key and not (j.finished.is_set() and j.result is None):
+                return j
+            if j is None or j.finished.is_set() or preempt:
+                if j is not None:
+                    j.cancel = True
+                j = _jobs[clip["id"]] = _Job(cache, clip)
+                j.start()
+                return j
+        j.finished.wait()
+
+
 def player_track(cache: Path, clip: dict, need_runs: bool = False) -> np.ndarray | None:
     """need_runs: track even if the result is cached, when the per-click runs aren't saved
     yet (so the next click on this clip is quick)."""
-    anchors = anchors_of(clip)
-    if not anchors:
+    if not anchors_of(clip):
         return None
-    from . import segment   # (segment imports this module)
     f = _track_file(cache, clip)
-    with _clip_lock(clip["id"]):   # the page and the background warm-up may ask at once
+    while True:
         if f.exists() and not (need_runs and not _runs_path(cache, clip["id"]).exists()):
-            res = np.load(f)
-        else:
-            fr = _proxy_frames(cache, clip["id"])
-            t0, t1 = segment.extents(clip, len(fr) / FPS)
-            runs = _runs(cache, clip["id"])
-            n_before = len(runs)
-            res = track.track_player(fr, FPS, anchors, run_cache=runs,
-                                     span=(int(t0 * FPS), int(np.ceil(t1 * FPS))))
-            f.parent.mkdir(parents=True, exist_ok=True)
-            np.save(f, res)   # raw track cached; smoothing is cheap and tweakable
-            if len(runs) != n_before:
-                _runs_path(cache, clip["id"]).write_bytes(pickle.dumps(runs))
-    return track.smooth_track(res, FPS)
+            return track.smooth_track(np.load(f), FPS)
+        j = _job(cache, clip, preempt=False)
+        j.finished.wait()
+        if j.error is not None:
+            raise j.error
+        if j.result is not None:
+            return track.smooth_track(j.result, FPS)
+        # Stopped by a newer click on the page: wait our turn and track these clicks again.
+
+
+def player_track_progressive(cache: Path, clip: dict, wait: float = 0.5) -> tuple[np.ndarray | None, float]:
+    """For the review page: the track if it's ready within `wait` s, else what's tracked so
+    far. Returns (smoothed track, progress 0..1); a new click stops tracking older clicks."""
+    if not anchors_of(clip):
+        return None, 1.0
+    f = _track_file(cache, clip)
+    if f.exists():
+        return track.smooth_track(np.load(f), FPS), 1.0
+    j = _job(cache, clip, preempt=True)
+    j.finished.wait(wait)
+    if j.error is not None:
+        raise j.error
+    res, prog = j.peek()
+    return (None if res is None else track.smooth_track(res, FPS)), prog
 
 
 def warm(cache: Path, clips: list[dict], busy=lambda: False, log=print, stop=lambda: False) -> None:
@@ -185,8 +279,10 @@ def _motion_box(cache: Path, clip: dict) -> np.ndarray:
     return box
 
 
-def plan(cache: Path, clip: dict) -> dict:
-    """Everything the review page needs to preview the camera for one clip."""
+def plan(cache: Path, clip: dict, progressive: bool = False) -> dict:
+    """Everything the review page needs to preview the camera for one clip.
+    progressive: don't wait for tracking to finish; "partial" says it's still going (ask
+    again to get more) and "progress" how far along it is."""
     r = clip.get("review") or {}
     d = clip["detection"]
     snap = r.get("snap") if r.get("snap") is not None else d["snap"]
@@ -197,11 +293,17 @@ def plan(cache: Path, clip: dict) -> dict:
     if level <= 1 and not anchors_of(clip):
         # Nothing to plan: don't touch the frames at all (they're big).
         return {"fps": FPS, "mode": "off", "level": level, "rects": None, "player": None}
-    player = player_track(cache, clip)
+    progress = 1.0
+    if progressive:
+        player, progress = player_track_progressive(cache, clip)
+    else:
+        player = player_track(cache, clip)
     rects, mode = None, "off"
     if level > 1:
         if player is not None:
             rects, mode = autozoom.plan_follow(player, W, H, content, snap, end, level), "player"
+        elif progress < 1.0:
+            pass   # still loading the clip for tracking: no zoom yet
         else:
             # No spotlight: frame the busiest part of the play, gently.
             x0, y0, cw, ch = content
@@ -212,6 +314,7 @@ def plan(cache: Path, clip: dict) -> dict:
     norm = np.array([W, H, W, H], np.float64)
     return {
         "fps": FPS, "mode": mode, "level": level,
+        "partial": progress < 1.0, "progress": round(progress, 3),
         "rects": None if rects is None else np.round(rects / norm, 4).tolist(),
         "player": None if player is None else np.round(np.nan_to_num(player, nan=-1), 4).tolist(),
     }

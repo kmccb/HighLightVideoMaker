@@ -336,6 +336,29 @@ def test_adding_a_click_reuses_runs_and_matches_fresh_track():
                           track.track_player(frames, 30, three), equal_nan=True)
 
 
+def test_tracking_in_pieces_matches_one_go():
+    from hlv import track
+    # The review page shows the ring while tracking is still going, and a newer click stops
+    # it part-way; carrying on later (live runs) must give the same track as one go.
+    n, H, W = 60, 120, 200
+    frames = np.full((n, H, W, 3), 60, np.uint8)
+    frames[..., 1] = 140
+    for i in range(n):
+        x = 20 + 2 * i
+        frames[i, 50:70, x:x + 10] = (230, 230, 230)
+    box = lambda t: {"t": t, "x": (20 + 60 * t) / W, "y": 48 / H, "w": 14 / W, "h": 24 / H}
+    cache, live = {}, {}
+    t = track.Tracking(frames, 30, [box(0.9)], run_cache=cache, live=live)
+    assert not t.work(10) and 0 < t.progress < 1
+    part = t.result()
+    assert np.isfinite(part[27:30, 0]).all() and np.isnan(part[0, 0])   # around the click first
+    three = [box(0.2), box(0.9), box(1.6)]
+    t = track.Tracking(frames, 30, three, run_cache=cache, live=live)
+    while not t.work(7):
+        pass
+    assert np.array_equal(t.result(), track.track_player(frames, 30, three), equal_nan=True)
+
+
 def test_no_hit_play_keeps_natural_timing():
     from hlv import reel, segment
     grid = {"beats": [0.25 + 0.5 * k for k in range(200)], "strength": [1.0] * 200}
