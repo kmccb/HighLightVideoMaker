@@ -20,11 +20,24 @@ _model = None
 _model_lock = threading.Lock()
 
 
+def _import_ultralytics():
+    """Importing ultralytics calls cv2.setNumThreads(0), which made the spotlight tracker
+    (OpenCV CSRT) run on one core for the rest of the session: ~40 ms a frame instead of ~21.
+    Put OpenCV's thread count back."""
+    import cv2
+    n = cv2.getNumThreads()
+    try:
+        import ultralytics
+    finally:
+        cv2.setNumThreads(n)
+    return ultralytics
+
+
 def available() -> bool:
     if not MODEL.exists():
         return False
     try:
-        import ultralytics  # noqa: F401
+        _import_ultralytics()
     except ImportError:
         return False
     return True
@@ -34,8 +47,7 @@ def _get_model():
     global _model
     with _model_lock:
         if _model is None:
-            from ultralytics import YOLO
-            _model = YOLO(str(MODEL))
+            _model = _import_ultralytics().YOLO(str(MODEL))
         return _model
 
 
