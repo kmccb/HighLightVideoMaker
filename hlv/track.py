@@ -15,6 +15,9 @@ import numpy as np
 
 TRUST_S = 10.0         # anchor trust halves every this many seconds of tracking (drift)
 MAX_STEP = 0.06        # a jump bigger than this (fraction of frame width) per frame = lost
+STRIDE = 1             # track every Nth frame and fill in between. Kept at 1: every 2nd/3rd frame
+                       # was 2-3x faster and as accurate at held-out clicks, but slid off him onto
+                       # the grass on fast moves (IMG_0761 leap, IMG_1420)
 
 
 def _csrt():
@@ -129,6 +132,8 @@ class Run:
         self.grass_run = 0
         self.ghosts: list[tuple] = []   # (frame, where a field-fixed point at the box would be now)
         self.next = start + step        # next frame to track
+        self.last = start               # last frame the tracker looked at
+        self.stride = STRIDE
         self.broke = False              # the tracker lost him; nothing more to track
 
     def reached(self, stop: int) -> bool:
@@ -140,26 +145,29 @@ class Run:
         step, out, done = self.step, self.out, 0
         win = int(STUCK_S * 30)
         while not self.reached(stop) and (limit is None or done < limit):
-            i = self.next
+            i = self.next + (self.stride - 1) * step       # skip ahead, but never past stop
+            if (i >= stop) if step > 0 else (i <= stop):
+                i = stop - step
+            gap = abs(i - self.last)
             k = abs(i - self.start)
-            done += 1
+            done += abs(i - self.next) + 1
             ok, (x, y, bw, bh) = self.tr.update(frames[i])
             c = (x + bw / 2, y + bh / 2)
             if not ok or bw <= 2 or bh <= 2:
                 self.broke = True
                 break
-            if np.hypot(c[0] - self.prev[0], c[1] - self.prev[1]) > MAX_STEP * w:
+            if np.hypot(c[0] - self.prev[0], c[1] - self.prev[1]) > MAX_STEP * w * gap:
                 # Big move: a fast camera pan moves everyone. Only call it lost if the box moved
                 # far more than the camera did.
-                exp = _camera_moved(frames[i - step], frames[i], self.prev)
-                if np.hypot(c[0] - exp[0], c[1] - exp[1]) > MAX_STEP * w:
+                exp = _camera_moved(frames[self.last], frames[i], self.prev)
+                if np.hypot(c[0] - exp[0], c[1] - exp[1]) > MAX_STEP * w * gap:
                     self.broke = True
                     break
             # Lost if the box is basically empty turf for a moment (tracker latched onto grass).
             if _body_frac(frames[i], x, y, bw, bh) < 0.08:
                 self.grass_run += 1
                 if self.grass_run >= 6:
-                    for j in range(i - step * 5, i, step):   # drop the frames already on grass
+                    for j in range(i - step * 5 * gap, i, step):   # drop the frames already on grass
                         out.pop(j, None)
                     self.broke = True
                     break
@@ -184,6 +192,13 @@ class Run:
             cur_h = _hist(frames[i], x, y, bw, bh)
             sim = _similar(self.ref, cur_h)
             out[i] = (c[0], c[1], bw, bh, k, sim)
+            if gap > 1:   # frames skipped over: in between, straight from the last answer
+                a = np.array(out[self.last][:4], float)
+                b = np.array(out[i][:4], float)
+                for f in range(self.last + step, i, step):
+                    u = abs(f - self.last) / gap
+                    out[f] = tuple((a + u * (b - a)).tolist()) + (abs(f - self.start), sim)
+            self.last = i
             # Let the reference follow slow lighting changes while we're clearly on him.
             if sim > 0.6 and cur_h is not None and self.ref is not None:
                 self.ref = cv2.normalize(0.92 * self.ref + 0.08 * cur_h, None)
@@ -366,15 +381,16 @@ class Tracking:
         return min(1.0, self.done_frames / self.total) if not self.finished else 1.0
 
     def work(self, limit: int | None = None) -> bool:
-        """Track up to `limit` frames, a few at a time across the unfinished runs so the
-        ring grows outward from each click on both sides. True when everything is tracked."""
-        chunk = 8
+        """Track up to `limit` frames, a few at a time across the unfinished runs. Forward runs
+        get 3x the frames: you usually play on from a click, and tracking (~30-45 frames a
+        second) then stays ahead of the video. True when everything is tracked."""
         budget = limit
         while budget is None or budget > 0:
             busy = [t for t in self.tasks if self._todo(t)]
             if not busy:
                 break
             for t in busy:
+                chunk = 9 if t[4] > 0 else 3
                 take = chunk if budget is None else min(chunk, budget)
                 did = t[5].advance(self.frames, t[2], take)
                 self.done_frames += did

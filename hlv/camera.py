@@ -22,8 +22,9 @@ from .probe import probe
 FPS = 30.0
 TRACK_W = 960
 _frames_cache: OrderedDict = OrderedDict()
+_size_cache: dict[tuple, tuple[int, int]] = {}
 _run_cache: dict[str, dict] = {}     # clip id -> tracker runs per click (see track._cached_run)
-RUNS_VERSION = "r1"                  # bump when track._run changes, so saved runs are dropped
+RUNS_VERSION = "r1"                  # bump when track.Run changes, so saved runs are dropped
 _clip_locks: dict[str, threading.Lock] = {}
 _lock = threading.Lock()
 
@@ -78,8 +79,12 @@ def prepare(cache: Path, cid: str) -> None:
 
 def _proxy_size(cache: Path, cid: str) -> tuple[int, int]:
     """Size of the analysis frames (proxy scaled to TRACK_W) without decoding them."""
-    info = probe(proxy.proxy_path(cache, cid))
-    return TRACK_W, int(round(info.height * TRACK_W / info.width / 2)) * 2
+    p = proxy.proxy_path(cache, cid)
+    key = (str(p), p.stat().st_mtime)
+    if key not in _size_cache:   # (ffprobe is ~75 ms, and the page asks several times a second)
+        info = probe(p)
+        _size_cache[key] = (TRACK_W, int(round(info.height * TRACK_W / info.width / 2)) * 2)
+    return _size_cache[key]
 
 
 def content_rect(clip: dict, W: int, H: int) -> tuple:
@@ -121,7 +126,7 @@ def freeze_found(cache: Path, clip: dict) -> str | None:
 
 _live: dict[str, dict] = {}          # clip id -> unfinished tracker runs (track.Tracking live)
 _jobs: dict[str, "_Job"] = {}        # clip id -> latest tracking job
-CHUNK = 6                            # frames tracked between looks at "stop" (~0.2 s)
+CHUNK = 12                           # frames tracked between looks at "stop" (~0.3 s)
 
 
 class _Job(threading.Thread):
@@ -140,6 +145,9 @@ class _Job(threading.Thread):
         self.snapshot: tuple[np.ndarray, float] | None = None   # (raw track so far, progress)
         self.want = threading.Event()        # the page asked what's tracked so far
         self.handed = threading.Event()      # ...and it's in self.snapshot
+        self.page = False                    # started by a click on the review page
+        self.t_start = time.time()
+        self.t_ring: float | None = None     # first time the page got part of the track
 
     def run(self):
         from . import segment   # (segment imports this module)
@@ -147,7 +155,9 @@ class _Job(threading.Thread):
             with _clip_lock(self.cid):   # one job per clip at a time
                 if self.cancel:
                     return
+                t_lock = time.time()
                 fr = _proxy_frames(self.cache, self.cid)
+                t_frames = time.time()
                 t0, t1 = segment.extents(self.clip, len(fr) / FPS)
                 runs = _runs(self.cache, self.cid)
                 with _lock:
@@ -159,6 +169,8 @@ class _Job(threading.Thread):
                     if self.want.is_set():   # between chunks, so the runs aren't changing
                         self.want.clear()
                         self.snapshot = (self.tracking.result(), self.tracking.progress)
+                        if self.t_ring is None and self.tracking.done_frames:
+                            self.t_ring = time.time()
                         self.handed.set()
                     done = self.tracking.work(CHUNK)
                 f = _runs_path(self.cache, self.cid)
@@ -168,6 +180,13 @@ class _Job(threading.Thread):
                     res = self.tracking.result()
                     np.save(self.file, res)   # raw track cached; smoothing is cheap and tweakable
                     self.result = res
+                t_end = time.time()
+                n = self.tracking.done_frames
+                rel = lambda t: "-" if t is None else f"{t - self.t_start:.2f}s"   # noqa: E731
+                _log(f"{self.cid} clicks={len(anchors_of(self.clip))} {'page' if self.page else 'background'} "
+                     f"{'done' if done else 'stopped'}: waited {t_lock - self.t_start:.2f}s, "
+                     f"frames loaded {rel(t_frames)}, ring {rel(self.t_ring)}, end {rel(t_end)}; "
+                     f"tracked {n} frames, {1000 * (t_end - t_frames) / max(n, 1):.0f} ms/frame")
         except Exception as e:  # noqa: BLE001 - reported to whoever waits on the job
             self.error = e
         finally:
@@ -185,6 +204,18 @@ class _Job(threading.Thread):
         return self.snapshot if self.snapshot is not None else (None, 0.0)
 
 
+def _log(msg: str) -> None:
+    """Timing of each tracking job, for working out why a click felt slow."""
+    try:
+        from . import library
+        f = library.home() / "logs" / "tracking.log"
+        f.parent.mkdir(parents=True, exist_ok=True)
+        with f.open("a", encoding="utf-8") as fh:
+            fh.write(time.strftime("%Y-%m-%d %H:%M:%S ") + msg + "\n")
+    except Exception:  # noqa: BLE001 - logging must never break tracking
+        pass
+
+
 def _job(cache: Path, clip: dict, preempt: bool) -> _Job:
     """The tracking job for this clip's current clicks, started if needed.
     preempt: stop a job tracking other clicks (the page, after a new click). Without it
@@ -199,6 +230,7 @@ def _job(cache: Path, clip: dict, preempt: bool) -> _Job:
                 if j is not None:
                     j.cancel = True
                 j = _jobs[clip["id"]] = _Job(cache, clip)
+                j.page = preempt
                 j.start()
                 return j
         j.finished.wait()
@@ -234,7 +266,7 @@ def player_track_progressive(cache: Path, clip: dict, wait: float = 2.0) -> tupl
     j = _job(cache, clip, preempt=True)
     end = time.time() + wait
     while not j.finished.is_set() and time.time() < end and (
-            j.tracking is None or (j.tracking.done_frames < 2 * CHUNK and not j.tracking.finished)):
+            j.tracking is None or (j.tracking.done_frames < CHUNK and not j.tracking.finished)):
         time.sleep(0.03)
     if j.error is not None:
         raise j.error

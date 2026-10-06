@@ -224,6 +224,10 @@ main { padding: 20px 24px 28px; gap: 14px; }
 .overlay { left: 14px; top: 12px; font: 600 14px var(--mono); background: rgba(6,8,10,.72); padding: 5px 10px; border-radius: 6px; }
 .overlay .rate { color: var(--hit); }
 .trackbadge { font-family: var(--sans); color: var(--spot); border-color: var(--spot); }
+/* Ring already showing, rest of the play still tracking: a small chip, not a wait sign. */
+.trackbadge.quiet { left: auto; right: 10px; bottom: 10px; transform: none; font-size: 11px; padding: 3px 9px;
+  opacity: .8; border-color: rgba(255,255,255,.25); color: rgba(255,255,255,.85); }
+.trackbadge.quiet::before { width: 7px; height: 7px; margin-right: 6px; border-color: rgba(255,255,255,.7); border-right-color: transparent; }
 .pickhint { font-family: var(--sans); background: var(--spot); border-radius: 6px; }
 .timeline { height: 76px; background: #0F1216; border-color: var(--line); border-radius: var(--r-lg); overflow: visible; }
 .tl-track { top: 22px; height: 30px; background: #151920; border-radius: 4px; }
@@ -807,7 +811,8 @@ async function refreshPlan() {
 function setTracking(on, pct = null) {
   tracking = on;
   $('trk').hidden = !on && pct == null;
-  $('trk').textContent = pct == null ? 'Tracking your player…' : `Tracking the rest of the play… ${pct}%`;
+  $('trk').textContent = pct == null ? 'Tracking your player…' : `tracking the rest ${pct}%`;
+  $('trk').classList.toggle('quiet', pct != null);
   drawConfStrip();
 }
 
