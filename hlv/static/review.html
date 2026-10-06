@@ -187,20 +187,128 @@ video { display: block; max-width: 100%; max-height: 58vh; }
   aside { border-right: 0; border-bottom: 1px solid var(--line); }
 }
 </style>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="icon" href="/static/mark.svg">
+<style>
+/* ===== Broadcast Night layout (overrides the base rules above) ===== */
+html, body { font: 14px/1.4 var(--sans); }
+.app { height: calc(100vh - 56px); grid-template-columns: 290px 1fr; }
+.hr-prog { display: flex; align-items: center; gap: 10px; min-width: 240px; }
+.hr-prog .progress { flex: 1; height: 6px; background: var(--sel); }
+.hr-prog .progress > div { background: var(--accent); }
+.hr-prog .progress-label { margin: 0; white-space: nowrap; font-size: 13px; }
+.projlink { font-size: 15px; color: var(--dim); }
+#projName { margin: 0; }
+aside { background: var(--rail); }
+.rail-head { padding: 16px 16px 10px; display: flex; align-items: baseline; gap: 8px; border-bottom: 1px solid var(--line); }
+.list { padding: 4px 8px 16px; }
+.group { padding: 14px 10px 6px; color: var(--faint); font-size: 11px; font-weight: 600; letter-spacing: .14em; }
+.item { padding: 8px 10px; border-radius: var(--r); border-left: 0; gap: 10px; color: var(--text); }
+.item:hover { background: var(--panel-2); }
+.item.active { background: #1C2128; box-shadow: inset 0 0 0 1px var(--accent); }
+.item .name { font: 500 12.5px var(--mono); }
+.item.skipped .name { color: var(--faint); }
+.item .inc { width: 16px; height: 16px; accent-color: var(--accent); }
+.dot { width: 12px; height: 12px; border: 1.5px solid #3A424D; }
+.dot.done { background: var(--ok); border-color: var(--ok); }
+.dot.edited { border-color: var(--warn); }
+.item.active .dot:not(.done) { border-color: var(--accent); }
+.tag { font-size: 10px; font-weight: 600; letter-spacing: .04em; padding: 2px 6px; border-radius: 4px; background: var(--panel-2); border-color: var(--line-2); }
+.tag.warn { color: var(--warn); border-color: rgba(255,181,71,.35); }
+main { padding: 20px 24px 28px; gap: 14px; }
+.titlebar { align-items: center; }
+.titlebar h2 { font: italic 800 30px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; }
+.titlebar .meta { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 13px; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--soft); font-size: 13px; }
+.titlebar .meta:empty, .note:empty { display: none; }
+.stage { border-radius: var(--r-lg); box-shadow: 0 0 0 1px var(--line); }
+.overlay { left: 14px; top: 12px; font: 600 14px var(--mono); background: rgba(6,8,10,.72); padding: 5px 10px; border-radius: 6px; }
+.overlay .rate { color: var(--hit); }
+.trackbadge { font-family: var(--sans); color: var(--spot); border-color: var(--spot); }
+.pickhint { font-family: var(--sans); background: var(--spot); border-radius: 6px; }
+.timeline { height: 76px; background: #0F1216; border-color: var(--line); border-radius: var(--r-lg); overflow: visible; }
+.tl-track { top: 22px; height: 30px; background: #151920; border-radius: 4px; }
+.tl-window { top: 22px; height: 30px; background: var(--window); border-left: 1px solid rgba(255,107,26,.45); border-right: 1px solid rgba(255,107,26,.45); }
+.tl-mark span { font-family: var(--mono); }
+.tl-mark::before { border-radius: 3px; }
+.tl-head { border-left-color: #fff; box-shadow: 0 0 6px rgba(0,0,0,.7); }
+.tl-ticks i { color: #6F7984; }
+/* tool groups */
+.controls { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); gap: 10px; align-items: stretch; }
+.tgroup { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 10px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.tgroup > .hr-eyebrow { margin: 0 4px; color: var(--faint); }
+.tg-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.tg-btns .btn { flex: 1 1 auto; }
+.btn { background: var(--panel-2); border: 1px solid var(--line-2); padding: 0 10px; min-height: 40px; font-weight: 500; color: var(--text); }
+.btn:hover { border-color: #3A424D; background: var(--raised); }
+.btn kbd { min-width: 22px; height: 22px; display: inline-grid; place-items: center; padding: 0 5px; border-radius: 4px; border-color: #2E3540; background: #0F1216; color: var(--dim); box-sizing: border-box; }
+.btn .val, .btn .zl { font-family: var(--mono); }
+.btn.on { border-color: var(--warn); color: var(--warn); }
+.btn.spot.on { border-color: var(--spot); color: var(--spot); }
+.btn.inreel { border-color: rgba(61,220,151,.45); color: var(--ok); }
+.btn.leftout { border-color: rgba(255,181,71,.45); color: var(--warn); }
+.row2 { gap: 12px; }
+.row2 input { height: 46px; background: var(--panel); border: 1px solid var(--line-2); border-radius: 9px; padding: 0 14px; font-size: 14px; }
+.row2 input:focus { border-color: var(--accent); }
+#bOk { min-height: 46px; padding: 0 20px; font-size: 15px; border-radius: 9px !important; }
+.status { min-width: 110px; }
+.help { border-top: 0; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px 16px; }
+.help[hidden] { display: none; }
+.help kbd { background: #0F1216; border-color: #2E3540; }
+/* build reel panel */
+.reel { top: 56px; left: 290px; padding: 22px 28px 48px; }
+.reel header h2 { font: italic 800 34px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; }
+.reel-grid { gap: 14px; }
+.card { border-radius: var(--r-lg); padding: 16px; gap: 12px; align-content: start; }
+.card .lbl { color: var(--dim); font-size: 13px; }
+.card select { background: #0F1216; border-color: var(--line-2); height: 34px; }
+.card input[type=range] { accent-color: var(--accent); }
+.card input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--accent); }
+.hint { color: var(--faint); }
+.segctl { background: #0F1216; border-color: #232932; border-radius: var(--r); padding: 3px; gap: 3px; }
+.segctl button { background: transparent; border-right: 0; border-radius: 6px; padding: 7px 10px; color: var(--dim); font-weight: 600; font-size: 13px; }
+.segctl button:hover { color: var(--text); }
+.segctl button.on { background: var(--sel); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+#rIntro { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
+#rIntro button { border-bottom: 0; }
+.order-head { color: var(--dim); font-size: 13px; align-items: baseline; }
+.order-head::before { content: 'Reel order'; font: 700 22px var(--display); text-transform: uppercase; letter-spacing: .03em; color: var(--text); margin-right: 4px; }
+#rList li { border-radius: var(--r); padding: 8px 12px; background: var(--panel); }
+#rList li:hover { border-color: #3A424D; }
+#rList img.thumb { width: 56px; height: 32px; border-radius: 4px; }
+#rList .num, #rList .len { color: var(--faint); }
+#rList .mini { background: var(--panel-2); border-color: var(--line-2); border-radius: 6px; padding: 4px 10px; color: var(--text); }
+.build-bar { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-xl); padding: 16px 18px; gap: 16px; }
+.build-bar .progress { background: var(--sel); }
+.build-bar .progress > div { background: var(--accent); }
+#rBuild { min-height: 54px; padding: 0 28px; font: italic 800 24px var(--display); letter-spacing: .04em; text-transform: uppercase; border-radius: 10px !important; }
+#rResult video { border-radius: var(--r-lg); }
+.modal { background: rgba(4,5,7,.85); backdrop-filter: blur(4px); }
+.modal .box { border-radius: var(--r-xl); padding: 16px; }
+.hr-top .btn.reelbtn { margin: 0; width: auto; }
+@media (max-width: 760px) { .reel { left: 0; } .app { height: auto; } .hr-prog { min-width: 0; flex: 1 1 100%; order: 9; } }
+</style>
 </head>
 <body>
+<header class="hr-top">
+  <a class="hr-brand" href="/projects" aria-label="Projects">
+    <svg width="28" height="24" viewBox="0 0 30 26" aria-hidden="true"><path d="M7 1h22l-7 24H0z" fill="var(--accent)"/><path d="M11.5 7.5l7.5 5.5-7.5 5.5z" fill="#0A0C0F"/></svg>
+  </a>
+  <nav class="hr-crumb" aria-label="Breadcrumb">
+    <a href="/projects" id="toProjects" class="projlink">Projects</a>
+    <span class="sep">/</span>
+    <b id="projName">Play Review</b>
+  </nav>
+  <span class="hr-spacer"></span>
+  <div class="hr-prog"><div class="progress"><div id="prog"></div></div><div class="progress-label" id="progLabel"></div></div>
+  <a class="hr-ghost" href="/mark" title="Click your player and pick the hit on every play, one screen at a time">Mark plays</a>
+  <a class="hr-ghost" href="/players">Players</a>
+  <a class="hr-ghost hr-icon" href="/guide" title="How to use" aria-label="How to use">?</a>
+  <button class="hr-primary" id="openReel">Build reel
+    <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h8M7.5 3.5L11 7l-3.5 3.5"/></svg></button>
+</header>
 <div class="app">
   <aside>
-    <div class="brand">
-      <a href="/projects" id="toProjects" class="projlink">◂ Projects</a>
-      <h1 id="projName">Play Review</h1>
-      <div class="progress"><div id="prog"></div></div>
-      <div class="progress-label" id="progLabel"></div>
-      <button class="btn reelbtn" id="openReel">Build reel ▸</button>
-      <a class="btn reelbtn" href="/guide" style="background:var(--panel-2);border-color:var(--line);text-decoration:none;color:var(--text)">? How to use</a>
-      <a class="btn reelbtn" href="/mark" title="Click your player and pick the hit on every play, one screen at a time" style="background:var(--panel-2);border-color:var(--line);text-decoration:none;color:var(--text)">Mark plays ▸</a>
-      <a class="btn reelbtn" href="/players" style="background:var(--panel-2);border-color:var(--line);text-decoration:none;color:var(--text)">Player profiles ▸</a>
-    </div>
+    <div class="rail-head"><h2 class="hr-h2">Plays</h2></div>
     <div class="list" id="list"></div>
   </aside>
 
@@ -209,6 +317,10 @@ video { display: block; max-width: 100%; max-height: 58vh; }
       <h2 id="title">Loading…</h2>
       <span class="meta" id="meta"></span>
       <span class="note" id="note"></span>
+      <span class="spacer"></span>
+      <button class="hr-ghost" id="bKeys" title="Show or hide all keyboard shortcuts (?)">
+        <svg width="20" height="14" viewBox="0 0 20 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x=".75" y=".75" width="18.5" height="12.5" rx="2"/><path d="M4 4.5h1M8 4.5h1M12 4.5h1M16 4.5h0M4 8h1M15 8h1M7 10h6" stroke-linecap="round"/></svg>
+        Shortcuts</button>
     </div>
 
     <div class="stage">
@@ -241,29 +353,34 @@ video { display: block; max-width: 100%; max-height: 58vh; }
     </div>
 
     <div class="controls">
-      <button class="btn" id="bPlay"><kbd>Space</kbd> Play</button>
-      <button class="btn snap" id="bSnap"><kbd>S</kbd> Snap <span class="val" id="vSnap">–</span></button>
-      <button class="btn end" id="bEnd"><kbd>E</kbd> End <span class="val" id="vEnd">–</span></button>
-      <button class="btn" id="bWin"><kbd>P</kbd> Play clip window</button>
-      <button class="btn" id="bSkip" title="include this clip in the reel or leave it out"><kbd>X</kbd> <span id="skipLbl">In reel</span></button>
-      <button class="btn" id="bReset"><kbd>R</kbd> Reset to auto</button>
-      <button class="btn spot" id="bSpot"><kbd>F</kbd> Spotlight player <span class="zl" id="spotN"></span></button>
-      <button class="btn" id="bZoom"><kbd>Z</kbd> Zoom <span class="zl" id="zoomLbl">off</span></button>
-      <button class="btn" id="bView"><kbd>V</kbd> <span id="viewLbl">Show zoomed</span></button>
-      <button class="btn" id="bHl"><kbd>H</kbd> Highlight <span class="zl" id="hlLbl">ring</span></button>
-      <button class="btn" id="bRing" title="Hide the highlight from here (e.g. once he's in a pile); press again where it should come back"><kbd>O</kbd> <span id="ringLbl">Ring off here</span></button>
-      <button class="btn hit" id="bHit" title="K marks the hit at the playhead"><kbd>K</kbd> Hit <span class="val" id="vHit">–</span><span class="x" id="bNoHit" title="No hit on this play: no punch, no slow-mo, timing left alone (N)">✕</span></button>
-      <span class="spacer"></span>
-      <button class="btn primary" id="bOk"><kbd>Enter</kbd> Confirm &amp; next</button>
+      <div class="tgroup"><span class="hr-eyebrow">Trim the play</span><div class="tg-btns">
+          <button class="btn" id="bPlay"><kbd>Space</kbd> Play</button>
+          <button class="btn snap" id="bSnap"><kbd>S</kbd> Snap <span class="val" id="vSnap">–</span></button>
+          <button class="btn end" id="bEnd"><kbd>E</kbd> End <span class="val" id="vEnd">–</span></button>
+          <button class="btn" id="bWin"><kbd>P</kbd> Play clip window</button>
+      </div></div>
+      <div class="tgroup"><span class="hr-eyebrow">Your player</span><div class="tg-btns">
+          <button class="btn spot" id="bSpot"><kbd>F</kbd> Spotlight player <span class="zl" id="spotN"></span></button>
+          <button class="btn" id="bZoom"><kbd>Z</kbd> Zoom <span class="zl" id="zoomLbl">off</span></button>
+          <button class="btn" id="bView"><kbd>V</kbd> <span id="viewLbl">Show zoomed</span></button>
+          <button class="btn" id="bHl"><kbd>H</kbd> Highlight <span class="zl" id="hlLbl">ring</span></button>
+          <button class="btn" id="bRing" title="Hide the highlight from here (e.g. once he's in a pile); press again where it should come back"><kbd>O</kbd> <span id="ringLbl">Ring off here</span></button>
+      </div></div>
+      <div class="tgroup"><span class="hr-eyebrow">Big moment &amp; reel</span><div class="tg-btns">
+          <button class="btn hit" id="bHit" title="K marks the hit at the playhead"><kbd>K</kbd> Hit <span class="val" id="vHit">–</span><span class="x" id="bNoHit" title="No hit on this play: no punch, no slow-mo, timing left alone (N)">✕</span></button>
+          <button class="btn" id="bSkip" title="include this clip in the reel or leave it out"><kbd>X</kbd> <span id="skipLbl">In reel</span></button>
+          <button class="btn" id="bReset"><kbd>R</kbd> Reset to auto</button>
+      </div></div>
     </div>
 
     <div class="row2">
       <input id="notes" placeholder="Notes (e.g. Caleb #22 tackle, multiple plays, bad angle)…" autocomplete="off">
       <span class="warnline" id="warn"></span>
       <span class="status" id="status"></span>
+      <button class="btn primary" id="bOk"><kbd>Enter</kbd> Confirm &amp; next</button>
     </div>
 
-    <div class="help">
+    <div class="help" id="help" hidden>
       <div><kbd>Space</kbd> play / pause</div>
       <div><kbd>←</kbd><kbd>→</kbd> step 1 frame</div>
       <div><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> jump 0.5 s</div>
@@ -1343,7 +1460,22 @@ tl.addEventListener('pointerup', () => {
 });
 window.addEventListener('beforeunload', flushSave);
 
-load();
+// Shortcuts panel: hidden by default, remembered per browser. "?" toggles it.
+(function () {
+  const help = $('help'), key = 'hlvShowKeys';
+  try { help.hidden = localStorage.getItem(key) !== '1'; } catch (e) {}
+  const flip = () => { help.hidden = !help.hidden; try { localStorage.setItem(key, help.hidden ? '0' : '1'); } catch (e) {} };
+  $('bKeys').onclick = flip;
+  document.addEventListener('keydown', e => {
+    if (e.key === '?' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); flip(); }
+  });
+})();
+load().then(() => {
+  // "Build reel" on the Projects page lands here with the panel open.
+  let go = false;
+  try { go = sessionStorage.getItem('hlvOpenReel') === '1'; sessionStorage.removeItem('hlvOpenReel'); } catch (e) {}
+  if (go) openReel();
+});
 </script>
 </body>
 </html>

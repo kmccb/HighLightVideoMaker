@@ -19,6 +19,9 @@ In the Claude desktop app, `.claude/launch.json` has a `review` preview config (
 
 **Git:** private repo https://github.com/kmccb/HighLightVideoMaker (branch `main`). Media, caches, `reel/`, `previews/` and `assets/` are git-ignored, because the footage and song are personal.
 
+## UI theme: "Broadcast Night" (2026-10-06)
+All pages share `hlv/static/theme.css` (tokens: graphite surfaces, one forge-orange accent `--accent`, marker colours snap/end/hit/whistle) and bundled fonts in `hlv/static/fonts` (Barlow, Barlow Condensed, JetBrains Mono; OFL). Served by the new `/static/...` route in `review_server.py` (css/woff2/svg only), so **the server needs a restart once** to pick it up. Each page links theme.css after its own `<style>`, plus a page-specific override block. Projects page has a "pick up where you left off" hero and poster cards (team colour + number + logo); review page has a top bar (breadcrumb, progress, Mark plays / Players / ? / Build reel), tools grouped Trim / Your player / Big moment, and the shortcut list behind the **Shortcuts** button or `?` (remembered in localStorage). "Build reel" on the Projects hero opens the review page with the reel panel open (sessionStorage `hlvOpenReel`). Design mockups live in the Claude Design canvas "Highlight Reels — UI refresh".
+
 ## Built so far (all working)
 | Phase | What | Key files |
 |---|---|---|

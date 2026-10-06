@@ -729,6 +729,10 @@ def make_handler(app: ReviewApp):
                 return self._file(STATIC / page, "text/html; charset=utf-8")
             if path == "/projects":
                 return self._file(STATIC / "start.html", "text/html; charset=utf-8")
+            m = re.fullmatch(r"/static/((?:fonts/)?[A-Za-z0-9_.-]+\.(css|woff2|svg))", path)
+            if m:   # shared theme (theme.css), bundled fonts and the app mark
+                ctype = {"css": "text/css; charset=utf-8", "woff2": "font/woff2", "svg": "image/svg+xml"}[m.group(2)]
+                return self._file(STATIC / m.group(1), ctype)
             if path == "/review":
                 if app.root is None:
                     return self._redirect("/")

@@ -5,80 +5,122 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Highlight Reels</title>
 <style>
-:root {
-  --bg: #0f1113; --panel: #171a1d; --panel-2: #1e2226; --line: #2a2f35;
-  --text: #e6e8ea; --dim: #8b939b; --faint: #5a626a;
-  --ok: #3ecf6e; --bad: #ff5c5c; --warn: #f5b942; --accent: #4aa3ff;
-  --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
-}
 * { box-sizing: border-box; }
-html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font: 14px/1.45 system-ui, "Segoe UI", sans-serif; }
+html, body { margin: 0; min-height: 100%; font: 15px/1.45 var(--sans); }
 button { font: inherit; color: inherit; }
-a { color: var(--accent); text-decoration: none; }
-a:hover { text-decoration: underline; }
-.wrap { max-width: 980px; margin: 0 auto; padding: 28px 16px 48px; }
-header { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; margin-bottom: 20px; }
-header h1 { margin: 0; font-size: 20px; font-weight: 650; }
+a { text-decoration: none; }
+.wrap { max-width: 1280px; margin: 0 auto; padding: 36px 32px 64px; display: grid; gap: 40px; }
 .spacer { flex: 1; }
-.btn { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 8px 14px; cursor: pointer; }
-.btn:hover:not(:disabled) { border-color: #3a4048; }
+.btn { background: var(--raised); border: 1px solid var(--line-2); padding: 0 16px; height: 40px; cursor: pointer; display: inline-flex; align-items: center; gap: 8px; color: var(--text); }
+.btn:hover:not(:disabled) { border-color: #3A424D; }
 .btn:disabled { opacity: .5; cursor: not-allowed; }
-.btn.primary { background: #1d3b2a; border-color: #2f6b47; }
-.btn.danger { color: var(--bad); }
-.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 14px; }
-.card { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 10px;
-  text-align: left; cursor: pointer; position: relative; border-top: 4px solid var(--pc, var(--line)); }
-.card:hover { border-color: #3a4048; border-top-color: var(--pc, #3a4048); background: #1a1d21; }
-.card.missing { cursor: default; opacity: .7; }
-.card.missing:hover { background: var(--panel); }
-.who { display: flex; align-items: center; gap: 12px; }
-.logo { width: 52px; height: 52px; border-radius: 8px; background: var(--panel-2); display: grid; place-items: center; overflow: hidden; flex: none;
-  color: var(--faint); font-size: 22px; font-weight: 700; }
-.logo img { width: 100%; height: 100%; object-fit: contain; }
-.name { font-size: 16px; font-weight: 650; }
-.sub { color: var(--dim); font-size: 12px; }
-.folder { font: 12px var(--mono); color: var(--dim); word-break: break-all; }
-.stats { display: flex; gap: 14px; flex-wrap: wrap; font-size: 13px; }
-.stats b { font-weight: 600; }
-.tag { position: absolute; top: 10px; right: 12px; font-size: 11px; color: var(--ok); }
+.btn.danger { color: var(--bad); background: transparent; }
+.msg { min-height: 0; margin: 0; color: var(--bad); }
+.msg:empty { display: none; }
+
+/* resume hero */
+.hero { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(440px, 100%), 1fr)); background: var(--panel); border: 1px solid var(--line);
+  border-radius: var(--r-xl); overflow: hidden; }
+.hero[hidden] { display: none; }
+.hero-body { padding: 34px 40px; display: grid; gap: 18px; align-content: center; }
+.hero-eye { display: flex; align-items: center; gap: 10px; }
+.hero-eye i { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); }
+.hero h1 { margin: 0; font: italic 800 60px/.95 var(--display); text-transform: uppercase; letter-spacing: .01em; }
+.hero .sub { color: var(--dim); font-size: 16px; margin-top: 6px; }
+.ticks { display: flex; gap: 3px; }
+.ticks span { flex: 1; height: 8px; border-radius: 2px; background: var(--sel); }
+.ticks span.on { background: var(--accent); }
+.hero .line { display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; font-size: 14px; color: var(--dim); }
+.hero .line b { color: var(--text); font-weight: 600; }
+.hero .acts { display: flex; gap: 10px; flex-wrap: wrap; }
+.hero .acts .hr-primary, .hero .acts .hr-ghost { height: 48px; padding: 0 22px; font-size: 16px; border-radius: 9px; }
+
+/* poster (team colour panel with logo + big number) */
+.poster { position: relative; aspect-ratio: 16 / 9; overflow: hidden; background: #0B0D10; }
+.poster::before { content: ''; position: absolute; left: -12%; top: 0; bottom: 0; width: 56%; background: var(--pc, #1F242C); transform: skewX(-14deg); }
+.poster::after { content: ''; position: absolute; inset: 0; background: radial-gradient(ellipse at 70% 40%, rgba(255,255,255,.05), rgba(0,0,0,.35) 80%); pointer-events: none; }
+.poster .num { position: absolute; left: 6%; top: 50%; transform: translateY(-50%); font: italic 800 clamp(64px, 11vw, 160px)/.8 var(--display); color: rgba(0,0,0,.55); z-index: 1; }
+.poster .lg { position: absolute; right: 7%; top: 50%; transform: translateY(-50%); width: 34%; height: 62%; display: grid; place-items: center; z-index: 1; }
+.poster .lg img { max-width: 100%; max-height: 100%; object-fit: contain; filter: drop-shadow(0 6px 18px rgba(0,0,0,.5)); }
+.poster .lg span { font: italic 800 44px/1 var(--display); color: rgba(255,255,255,.18); }
+.poster .band { position: absolute; left: 0; right: 0; bottom: 0; height: 5px; background: var(--ac, var(--accent)); z-index: 1; }
+.pill { position: absolute; left: 12px; top: 12px; z-index: 2; display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 10px; border-radius: 13px;
+  background: rgba(8,10,12,.8); font-size: 12px; font-weight: 600; color: var(--sc); }
+.pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: var(--sc); }
+
+/* project grid */
+.sec-head { display: flex; align-items: center; gap: 16px; flex-wrap: wrap; margin-bottom: 18px; }
+.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(290px, 1fr)); gap: 20px; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 0; display: flex; flex-direction: column; overflow: hidden;
+  text-align: left; cursor: pointer; position: relative; color: var(--text); transition: border-color .15s, transform .15s; }
+.card:hover { border-color: #3A424D; transform: translateY(-2px); }
+.card.missing { cursor: default; opacity: .75; }
+.card.missing:hover { transform: none; border-color: var(--line); }
+.card .body { padding: 16px 18px 18px; display: grid; gap: 10px; }
+.name { font: 700 24px/1.1 var(--display); text-transform: uppercase; letter-spacing: .01em; }
+.sub { color: var(--dim); font-size: 14px; }
+.folder { font: 12px var(--mono); color: var(--faint); word-break: break-all; }
+.stats { display: flex; gap: 16px; flex-wrap: wrap; font-size: 13px; color: var(--dim); border-top: 1px solid var(--line); padding-top: 10px; }
+.stats b { font-weight: 600; color: var(--text); }
+.stats .when { margin-left: auto; }
 .warn { color: var(--warn); font-size: 13px; }
+.newcard { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; min-height: 280px; border: 1.5px dashed #2E3540;
+  border-radius: var(--r-lg); background: transparent; color: var(--dim); cursor: pointer; }
+.newcard:hover { border-color: var(--accent); color: var(--text); }
+.newcard .plus { width: 52px; height: 52px; border-radius: 50%; background: var(--panel-2); display: grid; place-items: center; color: var(--accent); }
+.newcard b { color: var(--text); font-size: 16px; }
+.newcard small { font-size: 13px; max-width: 230px; text-align: center; }
 .empty { color: var(--dim); padding: 30px 0; }
-.msg { min-height: 20px; margin: 0 0 12px; color: var(--bad); }
-.wiz { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 18px 20px; margin-bottom: 22px; display: grid; gap: 18px; }
+
+/* new project wizard */
+.wiz { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-xl); padding: 24px 28px; display: grid; gap: 22px; }
 .wiz[hidden] { display: none; }
-.wiz h2 { margin: 0; font-size: 17px; }
-.step { display: grid; gap: 10px; padding-left: 34px; position: relative; }
-.step::before { content: attr(data-n); position: absolute; left: 0; top: 0; width: 24px; height: 24px; border-radius: 50%;
-  background: var(--panel-2); border: 1px solid var(--line); display: grid; place-items: center; font-size: 12px; font-weight: 700; }
-.step.done::before { content: '✓'; background: #1d3b2a; border-color: #2f6b47; color: var(--ok); }
+.step { display: grid; gap: 10px; padding-left: 46px; position: relative; }
+.step::before { content: attr(data-n); position: absolute; left: 0; top: -2px; width: 30px; height: 30px; border-radius: 50%;
+  background: var(--accent); color: var(--accent-ink); display: grid; place-items: center; font: 700 15px var(--display); }
+.step.done::before { content: '✓'; background: var(--ok); color: #06140D; }
+.step.locked::before { background: var(--sel); color: var(--dim); }
 .step.locked { opacity: .45; pointer-events: none; }
-.step h3 { margin: 2px 0 0; font-size: 14px; }
+.step h3 { margin: 2px 0 0; font: 700 18px var(--display); text-transform: uppercase; letter-spacing: .03em; }
 .chips { display: flex; flex-wrap: wrap; gap: 8px; }
-.chip { display: flex; align-items: center; gap: 8px; padding: 7px 12px; border-radius: 18px; border: 1px solid var(--line); background: var(--panel-2); cursor: pointer; }
-.chip.on { border-color: var(--accent); background: #16283a; }
+.chip { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 14px; border-radius: 19px; border: 1px solid var(--line-2); background: var(--panel-2); cursor: pointer; font-weight: 500; }
+.chip:hover { border-color: #3A424D; }
+.chip.on { border-color: var(--accent); background: var(--accent-tint); }
 .chip .sw { width: 10px; height: 10px; border-radius: 50%; }
 .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
-input[type=text] { background: var(--panel-2); border: 1px solid var(--line); border-radius: 6px; padding: 7px 9px; color: var(--text); font: inherit; }
+input[type=text] { background: var(--panel-2); border: 1px solid var(--line-2); border-radius: var(--r); height: 40px; padding: 0 12px; color: var(--text); font: inherit; }
+input[type=text]:focus { outline: none; border-color: var(--accent); }
 .quick { display: grid; grid-template-columns: 2fr 70px 1fr 90px 2fr auto; gap: 8px; align-items: center; }
 .quick[hidden] { display: none; }
-.note { color: var(--dim); font-size: 12px; }
+.note { color: var(--dim); font-size: 13px; }
 .ok { color: var(--ok); }
 .bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
 .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+@media (max-width: 760px) { .quick { grid-template-columns: 1fr 1fr; } .hero-body { padding: 24px; } .hero h1 { font-size: 44px; } .wrap { padding: 24px 16px 48px; } }
 </style>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="icon" href="/static/mark.svg">
 </head>
 <body>
+<header class="hr-top">
+  <a class="hr-brand" href="/projects">
+    <svg width="30" height="26" viewBox="0 0 30 26" aria-hidden="true"><path d="M7 1h22l-7 24H0z" fill="var(--accent)"/><path d="M11.5 7.5l7.5 5.5-7.5 5.5z" fill="#0A0C0F"/></svg>
+    <span class="hr-word">Highlight Reels</span>
+  </a>
+  <nav class="hr-nav" aria-label="Main">
+    <a class="on" href="/projects">Projects</a>
+    <a href="/players">Players</a>
+    <a href="/guide">Guide</a>
+  </nav>
+  <span class="hr-spacer"></span>
+  <button class="hr-primary" id="newProj">
+    <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>
+    New reel</button>
+</header>
 <div class="wrap">
-  <header>
-    <h1>Highlight Reels</h1>
-    <span class="spacer"></span>
-    <a class="btn" href="/guide" style="color:var(--text);text-decoration:none">? Guide</a>
-    <a class="btn" href="/players" style="color:var(--text);text-decoration:none">Player profiles</a>
-    <button class="btn primary" id="newProj">+ New project</button>
-  </header>
   <div class="msg" id="msg"></div>
   <section class="wiz" id="wiz" hidden>
-    <div class="row"><h2>New project</h2><span class="spacer"></span><button class="btn" id="wCancel">Cancel</button></div>
+    <div class="row"><h2 class="hr-h2" style="font-size:26px">New reel</h2><span class="spacer"></span><button class="hr-ghost" id="wCancel">Cancel</button></div>
     <div class="step" id="s1" data-n="1">
       <h3>Who is this reel for?</h3>
       <div class="chips" id="wPlayers"></div>
@@ -107,12 +149,16 @@ input[type=text] { background: var(--panel-2); border: 1px solid var(--line); bo
       <div id="wSongInfo" class="note">Optional: you can add or change the song later in the Build reel panel.</div>
     </div>
     <div class="row">
-      <button class="btn primary" id="wCreate" disabled>Create project</button>
+      <button class="btn primary" id="wCreate" disabled style="height:46px;padding:0 22px;font-size:15px">Create project</button>
       <span id="wStatus" class="note"></span>
     </div>
     <div class="bar" id="wBar" hidden><div></div></div>
   </section>
-  <div class="grid" id="grid"></div>
+  <section class="hero" id="hero" hidden></section>
+  <section>
+    <div class="sec-head"><h2 class="hr-h2" style="font-size:28px">All projects</h2></div>
+    <div class="grid" id="grid"></div>
+  </section>
 </div>
 <script>
 const $ = id => document.getElementById(id);
@@ -120,34 +166,83 @@ const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': 
 const when = iso => iso ? new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' }) : null;
 let info = null;
 
+const PLUS = '<svg width="22" height="22" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 3v10M3 8h10"/></svg>';
+function statusOf(p) {
+  if (p.last_reel) return ['Reel built', 'var(--ok)'];
+  if (p.clips && p.confirmed >= p.clips) return ['Ready to build', 'var(--info)'];
+  return ['In review', 'var(--hit)'];
+}
+function poster(p) {
+  const pl = p.player;
+  const initials = pl ? (pl.name || pl.id).split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase() : '?';
+  const logo = pl && p.logo ? `<img src="/media/player/${esc(pl.id)}/logo" alt="">` : `<span>${esc(initials)}</span>`;
+  return `<span class="num">${esc(pl && pl.number || '')}</span><span class="lg">${logo}</span><span class="band"></span>`;
+}
+function subline(pl) {
+  if (!pl) return '';
+  return [pl.number ? '#' + pl.number : '', pl.position, pl.class_year ? 'Class of ' + pl.class_year : ''].filter(Boolean).map(esc).join(' · ');
+}
+function renderHero(p, i) {
+  const h = $('hero');
+  if (!p) { h.hidden = true; return; }
+  const pl = p.player, n = Math.max(1, p.clips || 0), done = Math.min(p.confirmed || 0, n);
+  const ticks = Array.from({ length: Math.min(n, 60) }, (_, k) => `<span class="${k < Math.round(done / n * Math.min(n, 60)) ? 'on' : ''}"></span>`).join('');
+  h.hidden = false;
+  h.style.setProperty('--pc', pl ? pl.color : '');
+  h.style.setProperty('--ac', pl ? (pl.accent || '') : '');
+  h.innerHTML = `<div class="poster">${poster(p)}</div>
+    <div class="hero-body">
+      <div class="hero-eye"><i></i><span class="hr-eyebrow" style="color:var(--dim)">${p.current ? 'Pick up where you left off' : 'Most recent project'}</span></div>
+      <div><h1>${esc(pl ? pl.name : p.name)}</h1><div class="sub">${subline(pl) || esc(p.folder)}</div></div>
+      <div style="display:grid;gap:8px"><div class="ticks" aria-hidden="true">${ticks}</div>
+        <div class="line"><span><b>${done} of ${p.clips}</b> plays reviewed</span><span>${p.last_reel ? 'Last reel ' + esc(when(p.last_reel)) : 'No reel built yet'}</span></div></div>
+      <div class="acts">
+        <button class="hr-primary" data-open="${i}"><svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true"><path d="M1 1l12 7-12 7z" fill="currentColor"/></svg>${p.current ? 'Resume review' : 'Open project'}</button>
+        <button class="hr-ghost" data-open="${i}" data-build="1"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="3.5" width="15" height="11" rx="2"/><path d="M1.5 7h15M5 3.5v3.5M9 3.5v3.5M13 3.5v3.5"/></svg>Build reel</button>
+      </div>
+    </div>`;
+}
+
 async function load() {
   info = await (await fetch('/api/projects')).json();
   const g = $('grid');
-  if (!info.projects.length) { g.innerHTML = '<div class="empty">No projects yet.</div>'; return; }
-  g.innerHTML = info.projects.map((p, i) => {
+  const ready = info.projects.map((p, i) => [p, i]).filter(([p]) => p.exists && p.ready);
+  const hero = ready.find(([p]) => p.current) || ready[0];
+  renderHero(hero && hero[0], hero && hero[1]);
+  const cards = info.projects.map((p, i) => {
     const pl = p.player;
-    const initials = pl ? (pl.name || pl.id).split(/\s+/).map(w => w[0]).join('').slice(0, 2).toUpperCase() : '?';
-    const logo = pl && p.logo ? `<img src="/media/player/${esc(pl.id)}/logo" alt="">` : esc(initials);
+    const vars = `--pc:${esc(pl ? pl.color : '')};--ac:${esc(pl ? (pl.accent || '') : '')}`;
     if (!p.exists || !p.ready) {
-      return `<div class="card missing" style="--pc:${esc(pl ? pl.color : '')}">
-        <div class="who"><div class="logo">${logo}</div><div><div class="name">${esc(pl ? pl.name : p.name)}</div></div></div>
+      return `<div class="card missing" style="${vars}">
+        <div class="poster">${poster(p)}<span class="pill" style="--sc:var(--warn)">${p.exists ? 'Not set up' : 'Folder missing'}</span></div>
+        <div class="body"><div class="name">${esc(pl ? pl.name : p.name)}</div>
         <div class="folder">${esc(p.folder)}</div>
         <div class="warn">${p.exists ? 'This folder isn\'t set up as a project yet' : 'Folder not found (moved or deleted?)'}</div>
-        <div><button class="btn danger" data-remove="${i}">Remove from list</button>
-          <span class="sub">(your files aren't touched)</span></div>
+        <div class="row"><button class="btn danger" data-remove="${i}">Remove from list</button>
+          <span class="note">your files aren't touched</span></div></div>
       </div>`;
     }
-    return `<button class="card" data-open="${i}" style="--pc:${esc(pl ? pl.color : '')}">
-      ${p.current ? '<span class="tag">open</span>' : ''}
-      <div class="who"><div class="logo">${logo}</div>
-        <div><div class="name">${esc(pl ? pl.name : 'No player linked')}${pl && pl.number ? ' #' + esc(pl.number) : ''}</div>
-          <div class="sub">${esc(pl && pl.position || '')}</div></div></div>
-      <div class="folder">${esc(p.folder)}</div>
-      <div class="stats"><span><b>${p.clips}</b> clips</span><span><b>${p.confirmed}</b> confirmed</span>
-        <span>${p.last_reel ? 'last reel ' + esc(when(p.last_reel)) : 'no reel yet'}</span></div>
+    const [st, sc] = statusOf(p);
+    return `<button class="card" data-open="${i}" style="${vars}" title="${esc(p.folder)}">
+      <div class="poster">${poster(p)}<span class="pill" style="--sc:${sc}">${p.current ? 'Open now' : st}</span></div>
+      <div class="body">
+        <div><div class="name">${esc(pl ? pl.name : 'No player linked')}</div><div class="sub">${subline(pl) || '&nbsp;'}</div></div>
+        <div class="stats"><span><b>${p.clips}</b> clips</span><span><b>${p.confirmed}</b> reviewed</span>
+          <span class="when">${p.last_reel ? 'Reel ' + esc(when(p.last_reel)) : 'No reel yet'}</span></div>
+      </div>
     </button>`;
-  }).join('');
+  });
+  cards.push(`<button class="newcard" id="newCard"><span class="plus">${PLUS}</span><b>Start a new reel</b><small>Pick a player, point at a folder of clips, add a song.</small></button>`);
+  g.innerHTML = info.projects.length ? cards.join('') : `<div class="empty">No projects yet.</div>` + cards[cards.length - 1];
 }
+document.addEventListener('click', e => { if (e.target.closest('#newCard')) { $('newProj').click(); window.scrollTo({ top: 0, behavior: 'smooth' }); } });
+$('hero').addEventListener('click', e => {
+  const o = e.target.closest('[data-open]');
+  if (!o) return;
+  const p = info.projects[+o.dataset.open];
+  if (o.dataset.build) sessionStorage.setItem('hlvOpenReel', '1');
+  openProject(p, o);
+});
 
 $('grid').addEventListener('click', async e => {
   const o = e.target.closest('[data-open]'), r = e.target.closest('[data-remove]');
@@ -159,7 +254,9 @@ $('grid').addEventListener('click', async e => {
     return load();
   }
   if (!o) return;
-  const p = info.projects[+o.dataset.open];
+  openProject(info.projects[+o.dataset.open], o);
+});
+async function openProject(p, o) {
   if (p.current) { location = '/review'; return; }
   if (info.building) { $('msg').textContent = 'A reel is building. Switch projects when it\'s finished.'; return; }
   $('msg').textContent = '';
@@ -167,7 +264,7 @@ $('grid').addEventListener('click', async e => {
   const res = await fetch('/api/projects/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: p.folder }) });
   if (!res.ok) { o.style.opacity = 1; $('msg').textContent = (await res.json()).error || 'could not open'; return; }
   location = '/review';
-});
+}
 // ---------- new project ----------
 const W = { player: null, folder: null, music: null, players: [] };
 const post = (url, body) => fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body || {}) })

@@ -67,18 +67,60 @@ input[type=file] { display: none; }
 @media (max-width: 900px) { .cols { grid-template-columns: 1fr; } }
 @media (max-width: 700px) { .app { grid-template-columns: 1fr; } aside { border-right: 0; border-bottom: 1px solid var(--line); } .grid2 { grid-template-columns: 1fr; } }
 </style>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="icon" href="/static/mark.svg">
+<style>
+html, body { font: 14px/1.45 var(--sans); }
+.app { min-height: calc(100vh - 56px); grid-template-columns: 270px 1fr; }
+aside { background: var(--rail); }
+.brand { padding: 18px 16px 12px; }
+.brand h1 { font: 700 20px/1.1 var(--display); text-transform: uppercase; letter-spacing: .03em; }
+.list { padding: 4px 8px; }
+.item { border-radius: var(--r); border-left: 0; padding: 10px 12px; color: var(--text); }
+.item:hover { background: var(--panel-2); }
+.item.active { background: #1C2128; box-shadow: inset 0 0 0 1px var(--accent); }
+.swatch { width: 16px; height: 16px; border-radius: 50%; }
+.item .num { font-family: var(--mono); }
+.add { height: 40px; }
+main { padding: 24px 28px 56px; gap: 18px; }
+.topbar h2 { font: italic 800 34px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; }
+.card { border-radius: var(--r-lg); padding: 18px; gap: 14px; }
+.card h3 { font: 700 18px var(--display); letter-spacing: .03em; color: var(--text); }
+label.f { font-size: 12px; font-weight: 600; color: var(--dim); gap: 6px; }
+input[type=text], select { background: #0F1216; border-color: var(--line-2); border-radius: var(--r); height: 40px; padding: 0 12px; }
+.color input[type=color] { height: 40px; border-color: var(--line-2); border-radius: var(--r); }
+.btn { background: var(--panel-2); border-color: var(--line-2); min-height: 38px; padding: 0 14px; color: var(--text); display: inline-flex; align-items: center; gap: 8px; }
+.btn:hover { border-color: #3A424D; }
+.btn.danger { background: transparent; color: var(--bad); }
+.logo-box { border-radius: var(--r-lg); border-color: var(--line-2); background: repeating-conic-gradient(#171B21 0% 25%, #111419 0% 50%) 50% / 16px 16px; }
+.previews img { border-radius: var(--r); border-color: var(--line); }
+.note b { color: var(--warn); }
+</style>
 </head>
 <body>
+<header class="hr-top">
+  <a class="hr-brand" href="/projects">
+    <svg width="30" height="26" viewBox="0 0 30 26" aria-hidden="true"><path d="M7 1h22l-7 24H0z" fill="var(--accent)"/><path d="M11.5 7.5l7.5 5.5-7.5 5.5z" fill="#0A0C0F"/></svg>
+    <span class="hr-word">Highlight Reels</span>
+  </a>
+  <nav class="hr-nav" aria-label="Main">
+    <a href="/projects">Projects</a>
+    <a href="/players" class="on">Players</a>
+    <a href="/guide">Guide</a>
+  </nav>
+  <span class="hr-spacer"></span>
+  
+</header>
 <div class="app">
   <aside>
     <div class="brand">
       <h1>Player profiles</h1>
-      <a href="/" id="back">← Back</a> · <a href="/guide">? Guide</a>
+      <a href="/" id="back" style="font-size:13px;color:var(--dim)">← Back to the app</a>
     </div>
     <div class="list" id="list"></div>
     <button class="btn add" id="add">+ Add player</button>
     <button class="item" id="brandItem" style="border-top:1px solid var(--line)">
-      <span class="swatch" style="background:#ff5a1f"></span><span>ScottForge card</span><span class="num">brand</span></button>
+      <span class="swatch" style="background:var(--accent)"></span><span>ScottForge card</span><span class="num">brand</span></button>
   </aside>
 
   <main id="main">

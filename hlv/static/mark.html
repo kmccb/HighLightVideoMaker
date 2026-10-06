@@ -59,10 +59,40 @@ main { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 
   z-index: 20; box-shadow: 0 4px 18px rgba(0,0,0,.6); background: #000; display: none; }
 .empty { color: var(--dim); padding: 40px; grid-column: 1 / -1; text-align: center; }
 </style>
+<link rel="stylesheet" href="/static/theme.css">
+<link rel="icon" href="/static/mark.svg">
+<style>
+body { font: 14px/1.4 var(--sans); }
+header { background: #0D1014; border-bottom-color: var(--line); padding: 10px 20px; min-height: 56px; gap: 16px; }
+header h1 { font: italic 800 26px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; }
+a.back { color: var(--dim); font-weight: 500; }
+.tabs { background: #0F1216; border-color: #232932; padding: 3px; gap: 3px; }
+.tabs button { background: transparent; color: var(--dim); border-radius: 6px; font-weight: 600; padding: 7px 16px; }
+.tabs button + button { border-left: 0; }
+.tabs button.on { background: var(--sel); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+label.flt input { accent-color: var(--accent); }
+.help { color: var(--dim); font-size: 14px; padding: 14px 20px 0; }
+main { gap: 18px; padding: 18px 20px 60px; }
+.card { border-radius: var(--r-lg); }
+.card.done { border-color: rgba(61,220,151,.45); }
+.card.focus { outline-color: var(--accent); }
+.head .name { font: 500 13px var(--mono); }
+.chip { font-weight: 600; padding: 3px 9px; border-color: var(--line-2); }
+.chip.ok { color: var(--ok); border-color: rgba(61,220,151,.4); }
+.chip.need { color: var(--warn); border-color: rgba(255,181,71,.4); }
+.chip.busy { color: var(--spot); border-color: rgba(255,200,61,.4); }
+.ctl button { background: var(--panel-2); border-color: var(--line-2); border-radius: var(--r); padding: 6px 11px; }
+.ctl button:hover { border-color: #3A424D; }
+.ctl .t { font-family: var(--mono); }
+.side { border-color: var(--line-2); border-radius: var(--r); }
+.side button.on { background: var(--sel) !important; box-shadow: inset 0 -2px 0 var(--accent); }
+.keys kbd { background: #0F1216; border-color: #2E3540; }
+</style>
 </head>
 <body>
 <header>
-  <a class="back" href="/review">◂ Review</a>
+  <a class="hr-brand" href="/projects" aria-label="Projects"><svg width="28" height="24" viewBox="0 0 30 26" aria-hidden="true"><path d="M7 1h22l-7 24H0z" fill="var(--accent)"/><path d="M11.5 7.5l7.5 5.5-7.5 5.5z" fill="#0A0C0F"/></svg></a>
+  <a class="back" href="/review">← Review</a>
   <h1>Mark plays</h1>
   <span class="tabs"><button data-tab="player">Player</button><button data-tab="hit">Hit</button></span>
   <label class="flt"><input type="checkbox" id="onlyNeed" checked> only plays that still need it</label>
