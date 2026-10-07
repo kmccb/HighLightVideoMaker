@@ -109,14 +109,14 @@ def _forge_frames(video: Path | None, n: int) -> list[np.ndarray] | None:
     return frames[:n] if frames else None
 
 
-def _grade() -> np.ndarray:
+def _grade(band_y: float = 705) -> np.ndarray:
     """Darkening like the site's hero: dim overall, darker at the edges and top, so the text reads."""
     yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
     r = np.sqrt(((xx - W / 2) / (W * 0.62)) ** 2 + ((yy - H * 0.55) / (H * 0.7)) ** 2)
     g = np.clip(0.62 - 0.38 * r ** 1.5, 0.1, 0.62)
     g *= np.clip(0.7 + 0.3 * yy / H, 0, 1)                       # a touch darker at the top
     # a soft dark band behind the website + invite lines: the hot bar sits right behind them
-    band = np.exp(-(((xx - W / 2) / (W * 0.42)) ** 2 + ((yy - 705) / 95) ** 2))
+    band = np.exp(-(((xx - W / 2) / (W * 0.42)) ** 2 + ((yy - band_y) / 95) ** 2))
     g *= 1 - 0.72 * band
     return g[..., None]
 
@@ -151,10 +151,47 @@ def _texts(b: dict) -> tuple[str, str, str]:
     return label, url, (b.get("invite") or "").strip()
 
 
+def _invite_layer(invite: str, max_w: float) -> np.ndarray:
+    """The invite line; on a narrow (portrait) frame it's split over two lines rather than shrunk."""
+    from .intro import fit
+    f = graphics.font(42, "SemiLight")
+    one = _layer(invite, f, PAPER_DIM)
+    words = invite.split()
+    if one.shape[1] <= max_w or len(words) < 2:
+        return fit(one, max_w)
+    f = graphics.font(46, "SemiLight")
+    # break after a "?" or "." if there is one, else at the middle word
+    cut = next((i + 1 for i, w in enumerate(words[:-1]) if w.endswith(("?", ".", "!"))), len(words) // 2)
+    a, b = (fit(_layer(" ".join(p), f, PAPER_DIM), max_w) for p in (words[:cut], words[cut:]))
+    gap = 14
+    out = np.zeros((a.shape[0] + gap + b.shape[0], max(a.shape[1], b.shape[1]), 4), np.uint8)
+    for L, y in ((a, 0), (b, a.shape[0] + gap)):
+        x = (out.shape[1] - L.shape[1]) // 2
+        out[y:y + L.shape[0], x:x + L.shape[1]] = L
+    return out
+
+
 def render(out: Path, b: dict, video: Path | None, seconds: float = OUTRO_S, seed: int = 11,
-           only_frame: float | None = None) -> Path | np.ndarray:
+           only_frame: float | None = None, size: tuple[int, int] | None = None) -> Path | np.ndarray:
     """Render the ending to out (mp4, silent stereo track). only_frame: return that one frame
-    (BGR uint8) instead, for the still preview."""
+    (BGR uint8) instead, for the still preview. size: (w, h), e.g. (1080, 1920) for the
+    vertical reel (logo stacked over the wordmark); default 1920x1080."""
+    global W, H
+    from . import intro
+    size = tuple(size) if size else (graphics.W, graphics.H)
+    # The drawing helpers (intro._paste etc.) clip to intro's frame size: switch both.
+    with intro.frame_size(*size):
+        old = W, H
+        W, H = size
+        try:
+            return _render(out, b, video, seconds, seed, only_frame)
+        finally:
+            W, H = old
+
+
+def _render(out: Path, b: dict, video: Path | None, seconds: float, seed: int,
+            only_frame: float | None) -> Path | np.ndarray:
+    from .intro import fit
     rng = np.random.default_rng(seed)
     n = int(round(seconds * FPS))
     ember = _rgb(b.get("accent"), (232, 93, 47))[::-1]              # BGR
@@ -164,31 +201,48 @@ def render(out: Path, b: dict, video: Path | None, seconds: float = OUTRO_S, see
     L_scott = _layer("Scott", fraunces(170), PAPER)
     L_forge = _layer("Forge", fraunces(170, italic=True), ember)
     L_forge_glow = _glow(L_forge, ember, 26)
-    mark_px = 190
+    tall = H > W
+    mark_px = 300 if tall else 190                  # portrait: the mark sits alone above the words
     L_anvil, L_dots = _mark(mark_px, ember)
     L_anvil_glow, L_dots_glow = _glow(L_anvil, ember, 18), _glow(L_dots, SPARK_YEL, 10)
-    L_label = _layer(label, _mono(30), ember, spacing=9) if label else None
-    L_url = _layer(url.upper(), graphics.font(64, "SemiBold"), PAPER, spacing=6) if url else None
+    L_label = _layer(label, _mono(38 if tall else 30), ember, spacing=9) if label else None
+    L_url = fit(_layer(url.upper(), graphics.font(64, "SemiBold"), PAPER, spacing=6), W - 100) if url else None
     L_url_glow = _glow(L_url, ember, 14) if L_url is not None else None
-    L_inv = _layer(invite, graphics.font(42, "SemiLight"), PAPER_DIM) if invite else None
+    L_inv = _invite_layer(invite, W - 100) if invite else None
 
-    # ---- layout: one centred lockup  [mark] Scott Forge
     gap = 26
     word_w = L_scott.shape[1] + 8 + L_forge.shape[1]
-    total_w = mark_px + gap + word_w
-    x0 = (W - total_w) / 2
-    y_logo = 470
-    mark_c = (x0 + mark_px / 2, y_logo - 6)
-    scott_c = (x0 + mark_px + gap + L_scott.shape[1] / 2, y_logo)
-    forge_c = (x0 + mark_px + gap + L_scott.shape[1] + 8 + L_forge.shape[1] / 2, y_logo + 6)
-    y_label, y_url, y_inv = 300, 660, 750
+    if H > W:
+        # ---- portrait: the mark on top, "Scott Forge" under it, the lines below
+        if word_w > W - 80:                         # (fits at 1080 wide; shrink if ever not)
+            k = (W - 80) / word_w
+            L_scott, L_forge = fit(L_scott, L_scott.shape[1] * k), fit(L_forge, L_forge.shape[1] * k)
+            L_forge_glow = _glow(L_forge, ember, 26)
+            word_w = L_scott.shape[1] + 8 + L_forge.shape[1]
+        x0 = (W - word_w) / 2
+        mark_c = (W / 2, int(H * 0.37))
+        y_logo = int(mark_c[1] + mark_px / 2 + 120)
+        scott_c = (x0 + L_scott.shape[1] / 2, y_logo)
+        forge_c = (x0 + L_scott.shape[1] + 8 + L_forge.shape[1] / 2, y_logo + 6)
+        y_label = int(mark_c[1] - mark_px / 2 - 90)
+        y_url = int(y_logo + 200)
+        y_inv = y_url + 70 + (L_inv.shape[0] // 2 if L_inv is not None else 0)
+    else:
+        # ---- wide: one centred lockup  [mark] Scott Forge
+        total_w = mark_px + gap + word_w
+        x0 = (W - total_w) / 2
+        y_logo = 470
+        mark_c = (x0 + mark_px / 2, y_logo - 6)
+        scott_c = (x0 + mark_px + gap + L_scott.shape[1] / 2, y_logo)
+        forge_c = (x0 + mark_px + gap + L_scott.shape[1] + 8 + L_forge.shape[1] / 2, y_logo + 6)
+        y_label, y_url, y_inv = 300, 660, 750
 
     style = b.get("style") if b.get("style") in STYLES else "forge"
     if style != "forge":
         frames = None                                             # only Forge uses the clip
     else:
         frames = _forge_frames(video, n) if only_frame is None else _forge_frames(video, int(only_frame * FPS) + 1)
-    grade = _grade()
+    grade = _grade(y_url + 45)
     embers = Embers(rng)
     T_MARK, T_SCOTT, T_FORGE = 0.5, 0.9, 1.2
     T_LABEL, T_URL, T_INV = 1.9, 2.25, 2.6
@@ -297,17 +351,18 @@ def video_path(lib_root: Path, b: dict) -> Path | None:
     return profiles.asset(lib_root, b.get("video", ""))
 
 
-def cache_key(b: dict, video: Path | None, seconds: float) -> str:
+def cache_key(b: dict, video: Path | None, seconds: float, size: tuple[int, int] | None = None) -> str:
     payload = {"v": OUTRO_VERSION, "b": {k: b.get(k) for k in ("title", "url", "invite", "accent", "style")},
-               "video": [str(video), video.stat().st_mtime] if video else None, "s": seconds}
+               "video": [str(video), video.stat().st_mtime] if video else None, "s": seconds,
+               **({"size": list(size)} if size and tuple(size) != (graphics.W, graphics.H) else {})}
     return hashlib.sha1(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:12]
 
 
-def build(cache: Path, lib_root: Path, b: dict, seconds: float = OUTRO_S) -> Path:
-    """Render (or reuse) the ending. cache: a project's .hlv_cache folder."""
+def build(cache: Path, lib_root: Path, b: dict, seconds: float = OUTRO_S, size: tuple[int, int] | None = None) -> Path:
+    """Render (or reuse) the ending. cache: a project's .hlv_cache folder. size: see render."""
     video = video_path(lib_root, b)
-    out = Path(cache) / "outro" / f"outro-{cache_key(b, video, seconds)}.mp4"
-    return out if out.exists() else render(out, b, video, seconds)
+    out = Path(cache) / "outro" / f"outro-{cache_key(b, video, seconds, size)}.mp4"
+    return out if out.exists() else render(out, b, video, seconds, size=size)
 
 
 def still(lib_root: Path, b: dict) -> np.ndarray:

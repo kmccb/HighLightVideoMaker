@@ -36,7 +36,7 @@ FPS = 30
 SR = 48000
 INTRO_VERSION = 2
 HOLD_EXTRA = 1.5        # seconds the finished name card stays up before the flash into the first play
-_size_lock = threading.Lock()
+_size_lock = threading.RLock()
 
 
 @contextmanager

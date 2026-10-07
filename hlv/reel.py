@@ -248,14 +248,12 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     brand = library.branding()
     if settings.get("scottforge_card") and library.branding_ready(brand):
         credit = seg_dir / f"{len(seq) + 2:02d}_scottforge.mp4"
-        _link_or_copy(outro.build(lib / "cache", lib, brand, CREDIT_S), credit)
+        _link_or_copy(outro.build(lib / "cache", lib, brand, CREDIT_S, size=size), credit)   # native 9:16 when vertical
     if vertical:                                    # 16:9 cards: place them on a tall frame
         if not animated and not recruiting:
             title = _to_vertical(title, seg_dir / "00_title_v.mp4")
         if not recruiting:
             endc = _to_vertical(endc, endc.with_name(endc.stem + "_v.mp4"))
-        if credit is not None:
-            credit = _to_vertical(credit, credit.with_name(credit.stem + "_v.mp4"))
     done += 1
     say("cards", done, total)
     linked = []
