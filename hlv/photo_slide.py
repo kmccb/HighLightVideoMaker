@@ -16,7 +16,7 @@ import cv2
 import numpy as np
 from PIL import Image
 
-from . import graphics
+from . import encoder, graphics
 from .photos import open_image
 from .pipeline import CACHE_DIRNAME
 
@@ -78,7 +78,7 @@ def render(root: Path, photo: dict, seconds: float, zoom_out: bool = False,
     enc = subprocess.Popen(
         ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}", "-r", str(FPS),
          "-i", "pipe:0", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", f"{n / FPS:.4f}",
-         "-c:v", "libx264", "-preset", "fast", "-crf", "17", "-pix_fmt", "yuv420p", "-r", str(FPS),
+         *encoder.h264(17), "-r", str(FPS),
          "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(tmp)],
         stdin=subprocess.PIPE)
     try:

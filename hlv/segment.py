@@ -16,7 +16,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from . import camera, graphics, project, slowmo
+from . import camera, encoder, graphics, project, slowmo
 from .autozoom import _smoothstep, draw_highlight
 from .pipeline import CACHE_DIRNAME
 from .probe import probe
@@ -364,8 +364,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
         labels.append(f"[q{n_pc}]")
     fc.append("".join(labels) + f"concat=n={len(labels)}:v=0:a=1,atrim=0:{total_out:.4f}[aout]")
     cmd += ["-filter_complex", ";".join(fc), "-map", "0:v", "-map", "[aout]",
-            "-c:v", "libx264", "-preset", "fast", "-crf", "17", "-pix_fmt", "yuv420p",
-            "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out)]
+            *encoder.h264(17), "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out)]
     enc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
 
     vf = ([f"crop={crop['w']}:{crop['h']}:{crop['x']}:{crop['y']}"] if crop else []) + [f"fps={D}", "format=bgr24"]
@@ -482,7 +481,7 @@ def card(out: Path, img: np.ndarray, seconds: float, fade_in: bool) -> Path:
     vf = "format=yuv420p" + (",fade=t=in:st=0:d=0.6" if fade_in else "")
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-loop", "1", "-framerate", str(FPS), "-i", str(png),
                     "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", f"{seconds:.3f}",
-                    "-vf", vf, "-c:v", "libx264", "-preset", "fast", "-crf", "17", "-r", str(FPS),
+                    "-vf", vf, *encoder.h264(17), "-r", str(FPS),
                     "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out)],
                    check=True)
     png.unlink(missing_ok=True)

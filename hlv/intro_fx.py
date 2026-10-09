@@ -24,7 +24,7 @@ from pathlib import Path
 import cv2
 import numpy as np
 
-from . import graphics
+from . import encoder, graphics
 from .graphics import _detail_line, _rgb
 from .intro import (FPS, H, SR, W, Sparks, _fx_color, _glow, _impact_sfx, _outline, _paste, _paste_blur,
                     _shadow, _shake, _text_layer, _vignette, background_frame, beat_times, ease_in, ease_out,
@@ -126,8 +126,8 @@ def _encoder(out: Path, dur: float, hits, sfx: bool, rng):
         wv.writeframes((np.clip(audio, -1, 1) * 32767).astype(np.int16).tobytes())
     enc = subprocess.Popen(
         ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}", "-r", str(FPS),
-         "-i", "pipe:0", "-i", str(wav), "-map", "0:v", "-map", "1:a", "-c:v", "libx264", "-preset", "fast",
-         "-crf", "17", "-pix_fmt", "yuv420p", "-c:a", "aac", "-b:a", "192k", "-shortest",
+         "-i", "pipe:0", "-i", str(wav), "-map", "0:v", "-map", "1:a", *encoder.h264(17),
+         "-c:a", "aac", "-b:a", "192k", "-shortest",
          "-movflags", "+faststart", str(out)], stdin=subprocess.PIPE)
     return enc, wav
 

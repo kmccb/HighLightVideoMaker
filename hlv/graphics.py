@@ -241,12 +241,31 @@ def composite(frame: np.ndarray, overlay: tuple[np.ndarray, np.ndarray], alpha: 
     if alpha <= 0:
         return
     bgr, a = overlay
+    r0, r1 = _alpha_rows(a)                  # only the rows the overlay covers (a banner is ~1/8 of the frame)
+    if r1 <= r0:
+        return
+    bgr, a = bgr[r0:r1], a[r0:r1]
     if slide_px:
         bgr = np.roll(bgr, -slide_px, axis=1)
         a = np.roll(a, -slide_px, axis=1)
         a[:, frame.shape[1] - slide_px:] = 0
     a = (a * alpha)[..., None]
-    frame[:] = (frame.astype(np.float32) * (1 - a) + bgr * a).astype(np.uint8)
+    f = frame[r0:r1]
+    f[:] = (f.astype(np.float32) * (1 - a) + bgr * a).astype(np.uint8)
+
+
+_rows_cache: dict[int, tuple] = {}
+
+
+def _alpha_rows(a: np.ndarray) -> tuple[int, int]:
+    """First and last+1 row where the overlay's alpha is non-zero (remembered per overlay)."""
+    hit = _rows_cache.get(id(a))
+    if hit is None or hit[0] is not a:
+        r = np.flatnonzero(a.max(axis=1) > 0)
+        if len(_rows_cache) > 16:
+            _rows_cache.clear()
+        hit = _rows_cache[id(a)] = (a, (int(r[0]), int(r[-1]) + 1) if len(r) else (0, 0))
+    return hit[1]
 
 
 def scottforge_card(root: Path, b: dict) -> np.ndarray:

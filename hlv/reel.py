@@ -18,7 +18,7 @@ from xml.sax.saxutils import escape
 
 import numpy as np
 
-from . import graphics, library, outro, photo_slide, photos, profiles, project, segment
+from . import encoder, graphics, library, outro, photo_slide, photos, profiles, project, segment
 
 # Beat choice: per second away from the play's natural timing, and extra per second of
 # stretching. With beats ~0.5 s apart, a beat one step further must be ~0.5 stronger.
@@ -136,7 +136,7 @@ def _to_vertical(src: Path, dst: Path) -> Path:
     subprocess.run(["ffmpeg", "-v", "error", "-y", "-i", str(src), "-filter_complex",
                     f"[0:v]split[a][b];[a]scale=-2:{H_},crop={W_}:{H_},boxblur=28:2,eq=brightness=-0.22[bg];"
                     f"[b]scale={W_}:-2[fg];[bg][fg]overlay=(W-w)/2:(H-h)/2,format=yuv420p[v]",
-                    "-map", "[v]", "-map", "0:a?", "-c:v", "libx264", "-preset", "fast", "-crf", "17",
+                    "-map", "[v]", "-map", "0:a?", *encoder.h264(17),
                     "-c:a", "copy", "-movflags", "+faststart", str(dst)], check=True)
     return dst
 
@@ -523,7 +523,7 @@ def _assemble(items: list[list[tuple]], transition: str, music: Path | None, mus
     script = out.with_suffix(".filter.txt")
     script.write_text(";\n".join(f), encoding="utf-8")   # long graphs exceed the command-line limit
     cmd += ["-filter_complex_script", str(script), "-map", "[vout]", "-map", "[aout]",
-            "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+            *encoder.h264(18, "medium"),
             "-c:a", "aac", "-b:a", "192k", "-movflags", "+faststart", "-t", f"{total:.3f}", str(out)]
     try:
         subprocess.run(cmd, check=True)

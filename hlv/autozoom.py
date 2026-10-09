@@ -234,41 +234,61 @@ def draw_highlight(img: np.ndarray, style: str, cx: float, cy: float, bw: float,
     if style == "shadow":
         # Dim everything except a soft elliptical pool of light around the player.
         R = max(bh * 1.0, 28 * k)
-        yy, xx = np.ogrid[:H, :W]
-        d = np.sqrt(((xx - cx) / (0.8 * R)) ** 2 + ((yy - cy) / R) ** 2)
-        lit = np.clip((1.0 - d) / 0.45, 0, 1)      # 1 inside, soft edge, 0 outside
-        # outside the pool goes darker; a strong dim also lifts the player a touch, like a spotlight
-        gain = 1.0 - dim * alpha * (1.0 - lit) + max(0.0, dim - 0.5) * 0.5 * alpha * lit
-        img[:] = np.clip(img.astype(np.float32) * gain[..., None], 0, 255).astype(np.uint8)
+        # outside the pool goes darker; a strong dim also lifts the player a touch, like a spotlight.
+        # The pool only touches a box around him: the rest of the frame gets one flat gain (fast).
+        g0 = 1.0 - dim * alpha
+        x0, x1 = max(0, int(cx - 0.8 * R) - 1), min(W, int(cx + 0.8 * R) + 2)
+        y0, y1 = max(0, int(cy - R) - 1), min(H, int(cy + R) + 2)
+        orig = img[y0:y1, x0:x1].astype(np.float32) if x1 > x0 and y1 > y0 else None
+        cv2.convertScaleAbs(img, dst=img, alpha=g0)
+        if orig is not None:
+            xx = ((np.arange(x0, x1, dtype=np.float32) - cx) / (0.8 * R)) ** 2
+            yy = ((np.arange(y0, y1, dtype=np.float32) - cy) / R) ** 2
+            lit = np.clip((1.0 - np.sqrt(xx[None, :] + yy[:, None])) / 0.45, 0, 1)   # 1 inside, soft edge
+            gain = g0 + (dim * alpha + max(0.0, dim - 0.5) * 0.5 * alpha) * lit
+            img[y0:y1, x0:x1] = np.clip(orig * gain[..., None] + 0.5, 0, 255).astype(np.uint8)
     if style == "ring" or (style == "shadow" and ring):
         # Sized from height (arms make width jumpy); feet sit in the back half of the ring.
         rx = max(bh * 0.38, 12 * k)
         ry = max(rx * 0.3, 4 * k)
         feet -= ry * 0.25
-        layer = np.zeros_like(img)
         thick = max(2, int(round((2 if style == "shadow" else 3) * k)))
-        cv2.ellipse(layer, (int(cx), int(feet)), (int(rx), int(ry)), 0, 0, 360,
-                    tuple(int(v) for v in col), thick, cv2.LINE_AA)
-        glow = cv2.GaussianBlur(layer, (0, 0), 4 * k)
-        fill = np.zeros_like(img)
-        cv2.ellipse(fill, (int(cx), int(feet)), (int(rx), int(ry)), 0, 0, 360,
-                    tuple(int(v) for v in col), -1, cv2.LINE_AA)
-        out = img.astype(np.float32)
-        out += alpha * 0.18 * fill.astype(np.float32)
-        out += alpha * 0.9 * glow.astype(np.float32)
-        m = layer.any(axis=2)
-        out[m] = (1 - alpha) * out[m] + alpha * layer[m].astype(np.float32)
-        img[:] = np.clip(out, 0, 255).astype(np.uint8)
+        # work in a box around the ring (wide enough for the glow's blur), not the whole frame
+        pad = int(np.ceil(4 * k * 4)) + thick + 2
+        x0, x1 = max(0, int(cx - rx) - pad), min(W, int(cx + rx) + pad + 1)
+        y0, y1 = max(0, int(feet - ry) - pad), min(H, int(feet + ry) + pad + 1)
+        if x1 > x0 and y1 > y0:
+            sub = img[y0:y1, x0:x1]
+            c = (int(cx) - x0, int(feet) - y0)
+            layer = np.zeros_like(sub)
+            cv2.ellipse(layer, c, (int(rx), int(ry)), 0, 0, 360, tuple(int(v) for v in col), thick, cv2.LINE_AA)
+            glow = cv2.GaussianBlur(layer, (0, 0), 4 * k)
+            fill = np.zeros_like(sub)
+            cv2.ellipse(fill, c, (int(rx), int(ry)), 0, 0, 360, tuple(int(v) for v in col), -1, cv2.LINE_AA)
+            out = sub.astype(np.float32)
+            out += alpha * 0.18 * fill.astype(np.float32)
+            out += alpha * 0.9 * glow.astype(np.float32)
+            m = layer.any(axis=2)
+            out[m] = (1 - alpha) * out[m] + alpha * layer[m].astype(np.float32)
+            sub[:] = np.clip(out, 0, 255).astype(np.uint8)
     elif style == "arrow":
         s = max(bh * 0.28, 11 * k)
         tip_y = cy - bh / 2 - 6 * k + np.sin(t * 5) * 2.5 * k
         pts = np.array([[cx, tip_y], [cx - s / 2, tip_y - s * 0.9], [cx, tip_y - s * 0.62],
                         [cx + s / 2, tip_y - s * 0.9]], np.float32)
-        layer = img.copy()
-        shadow = img.copy()
-        cv2.fillPoly(shadow, [(pts + [1.5 * k, 2 * k]).astype(np.int32)], (0, 0, 0), cv2.LINE_AA)
-        cv2.fillPoly(layer, [pts.astype(np.int32)], tuple(int(v) for v in col), cv2.LINE_AA)
-        cv2.polylines(layer, [pts.astype(np.int32)], True, (20, 20, 20), max(1, int(k)), cv2.LINE_AA)
-        img[:] = cv2.addWeighted(img, 1 - 0.5 * alpha, shadow, 0.5 * alpha, 0)
-        m = np.any(layer != img, axis=2)
-        img[m] = ((1 - alpha) * img[m] + alpha * layer[m]).astype(np.uint8)
+        # only the box around the arrow (and its drop shadow) changes
+        pad = int(np.ceil(3 * k)) + 3
+        x0, x1 = max(0, int(pts[:, 0].min()) - pad), min(W, int(pts[:, 0].max()) + pad + 1)
+        y0, y1 = max(0, int(pts[:, 1].min()) - pad), min(H, int(pts[:, 1].max()) + pad + 1)
+        if x1 <= x0 or y1 <= y0:
+            return
+        sub = img[y0:y1, x0:x1]
+        p = pts - [x0, y0]
+        layer = sub.copy()
+        shadow = sub.copy()
+        cv2.fillPoly(shadow, [(p + [1.5 * k, 2 * k]).astype(np.int32)], (0, 0, 0), cv2.LINE_AA)
+        cv2.fillPoly(layer, [p.astype(np.int32)], tuple(int(v) for v in col), cv2.LINE_AA)
+        cv2.polylines(layer, [p.astype(np.int32)], True, (20, 20, 20), max(1, int(k)), cv2.LINE_AA)
+        sub[:] = cv2.addWeighted(sub, 1 - 0.5 * alpha, shadow, 0.5 * alpha, 0)
+        m = np.any(layer != sub, axis=2)
+        sub[m] = ((1 - alpha) * sub[m] + alpha * layer[m]).astype(np.uint8)
