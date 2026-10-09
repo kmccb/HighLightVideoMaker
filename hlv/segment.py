@@ -115,11 +115,63 @@ def segment_key(clip: dict, pl: dict | None, settings: dict, plan: dict, src: Pa
             payload["vcrop"] = 2                       # vertical framing on cropped clips was off by the crop
     if settings.get("_banner", True):
         payload["banner_hold"] = BANNER_FREEZE          # only the banner play re-renders
-    if settings.get("freeze", True) and not settings.get("freeze_ring", True):
+    if (settings.get("freeze", True) or settings.get("highlight") == "shadow") and not settings.get("freeze_ring", True):
         payload["freeze_ring"] = False         # only keyed when off, so old renders stay valid
     if r.get("ring_off"):                      # only keyed when used, so old renders stay valid
         payload["ring_off"] = r["ring_off"]
+    if settings.get("_body") is not None:      # freeze spotlight fitted to his whole body
+        payload["body"] = settings["_body"]
     return hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:12]
+
+
+def _detect_one(cache: Path, clip: dict, t: float) -> np.ndarray:
+    """People in one frame (normalised cx, cy, w, h, conf), for a play the detector hasn't seen yet."""
+    from . import detect, proxy
+    src = proxy.proxy_path(cache, clip["id"])
+    if not src.exists() or not detect.available():
+        return np.zeros((0, 5), np.float32)
+    raw = subprocess.run(["ffmpeg", "-v", "error", "-ss", f"{t:.3f}", "-i", str(src), "-frames:v", "1",
+                          "-f", "image2pipe", "-vcodec", "png", "-"], capture_output=True).stdout
+    img = cv2.imdecode(np.frombuffer(raw, np.uint8), cv2.IMREAD_COLOR) if raw else None
+    if img is None:
+        return np.zeros((0, 5), np.float32)
+    H, W = img.shape[:2]
+    r = detect._get_model().predict([img], imgsz=detect.IMGSZ, conf=detect.CONF, classes=[0], verbose=False)[0]
+    b, c = r.boxes.xyxy.cpu().numpy(), r.boxes.conf.cpu().numpy()
+    return np.c_[(b[:, 0] + b[:, 2]) / 2 / W, (b[:, 1] + b[:, 3]) / 2 / H,
+                 (b[:, 2] - b[:, 0]) / W, (b[:, 3] - b[:, 1]) / H, c] if len(b) else np.zeros((0, 5), np.float32)
+
+
+def body_fit(cache: Path, clip: dict, player: np.ndarray, t: float) -> list[float] | None:
+    """The tracker's box is often just his chest (the click box was small), so the freeze
+    spotlight missed his head and legs. Find the person detection that holds the tracker's box
+    at t and return it relative to that box: (dx, dy) in box widths/heights, (sw, sh) scale.
+    None when no detection fits (then the tracker's box is used as before)."""
+    from . import detect
+    k = int(round(t * FPS))
+    if player is None or not len(player):
+        return None
+    p = player[min(max(k, 0), len(player) - 1)]
+    if p[0] < 0 or np.isnan(p[0]) or p[2] <= 0 or p[3] <= 0:
+        return None
+    dets = detect.cached(cache, clip) or {}
+    near = [i for i in dets if abs(i - k) <= 2]
+    boxes = dets[min(near, key=lambda i: abs(i - k))] if near else _detect_one(cache, clip, t)
+    tx0, ty0, tx1, ty1 = p[0] - p[2] / 2, p[1] - p[3] / 2, p[0] + p[2] / 2, p[1] + p[3] / 2
+    best, best_s = None, 0.0
+    for b in boxes:
+        if b[4] < 0.3 or not (0.8 * p[3] <= b[3] <= 5 * p[3]):
+            continue
+        ix = max(0.0, min(tx1, b[0] + b[2] / 2) - max(tx0, b[0] - b[2] / 2))
+        iy = max(0.0, min(ty1, b[1] + b[3] / 2) - max(ty0, b[1] - b[3] / 2))
+        held = ix * iy / (p[2] * p[3])                   # how much of the tracker's box it covers
+        score = held - 0.5 * abs(b[0] - p[0]) / b[2]     # and centred on him, not a neighbour
+        if held >= 0.6 and score > best_s:
+            best, best_s = b, score
+    if best is None:
+        return None
+    return [round(float(v), 3) for v in ((best[0] - p[0]) / p[2], (best[1] - p[1]) / p[3],
+                                         best[2] / p[2], best[3] / p[3])]
 
 
 def render(root: Path, clip: dict, pl: dict | None, settings: dict, log=print) -> Path:
@@ -130,6 +182,13 @@ def render(root: Path, clip: dict, pl: dict | None, settings: dict, log=print) -
     src = root / clip["source"]
     plan = camera.plan(cache, clip)
     settings = {**settings, "_hit": hits.hit_of(root, clip)[0]}
+    if settings.get("freeze", True) and plan.get("player"):
+        player = np.array(plan["player"])
+        t0, t1 = extents(clip, probe(src).duration)
+        ft, _ = freeze_time(player, _window(clip)[2], t0, t1, _window(clip)[1],
+                            [a["t"] for a in camera.anchors_of(clip)])
+        if ft is not None:
+            settings["_body"] = body_fit(cache, clip, player, min(max(ft, t0), t1))
     out = cache / "segments" / f"{clip['id']}-{segment_key(clip, pl, settings, plan, src)}.mp4"
     if out.exists() and out.with_suffix(".json").exists():
         return out
@@ -247,14 +306,19 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
 
     ring_off = (clip.get("review") or {}).get("ring_off") or []
 
-    fring = settings.get("freeze_ring", True)    # ring under him during the freeze, or just the light
+    fring = settings.get("freeze_ring", True)    # ring under the spotlight (freeze and spot-shadow style), or just the light
 
-    def highlight(img, t, rect, style_, alpha_mul=1.0, dim=0.5, ring=True):
+    body = settings.get("_body")                 # whole-body box relative to the tracker's (freeze only)
+
+    def highlight(img, t, rect, style_, alpha_mul=1.0, dim=0.5, ring=True, whole=False):
         if player is None or alpha_mul <= 0:
             return
         p = lerp_row(player, t)
         if p[0] < 0 or np.isnan(p[0]):
             return
+        if whole and body:
+            dx, dy, sw, sh = body
+            p = np.array([p[0] + dx * p[2], p[1] + dy * p[3], p[2] * sw, p[3] * sh, p[4]])
         x, y, w, h = rect
         s = OW / w
         a = float(np.clip((p[4] - 0.2) / 0.3, 0, 1)) * alpha_mul
@@ -350,7 +414,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
             img, rect = picture(t)
             if img is None:
                 break
-            highlight(img, t, rect, style, ring_visibility(ring_off, t))
+            highlight(img, t, rect, style, ring_visibility(ring_off, t), ring=fring)
             enc.stdin.write(img.tobytes())
             written += 1
         for jz in range(nfz):
@@ -358,7 +422,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
             img, rect = picture(split_t, 1 + (PUSH_IN - 1) * _smoothstep(u))
             if img is None:
                 break
-            highlight(img, split_t, rect, "shadow", _smoothstep(jz / 8), dim=FREEZE_DIM, ring=fring)
+            highlight(img, split_t, rect, "shadow", _smoothstep(jz / 8), dim=FREEZE_DIM, ring=fring, whole=True)
             if banner is not None:
                 ba = _smoothstep((jz - 4) / 10)
                 graphics.composite(img, banner, ba, slide_px=int(60 * (1 - ba)))
@@ -371,9 +435,9 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
                 img, rect = picture(t, 1 + (PUSH_IN - 1) * (1 - v))
                 if img is None:
                     break
-                highlight(img, t, rect, "shadow", 1 - v, dim=FREEZE_DIM, ring=fring)
+                highlight(img, t, rect, "shadow", 1 - v, dim=FREEZE_DIM, ring=fring, whole=True)
                 if style != "shadow":
-                    highlight(img, t, rect, style, v * ring_visibility(ring_off, t))
+                    highlight(img, t, rect, style, v * ring_visibility(ring_off, t), ring=fring)
                 if banner is not None:
                     graphics.composite(img, banner, 1 - v)
             else:
@@ -382,7 +446,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
                 img, rect = picture(t, bump)
                 if img is None:
                     break
-                highlight(img, t, rect, style, ring_visibility(ring_off, t))
+                highlight(img, t, rect, style, ring_visibility(ring_off, t), ring=fring)
                 if 0 <= hj < 5:
                     a = 0.35 * (1 - hj / 5)                               # white flash
                     img[:] = (img.astype(np.float32) * (1 - a) + 255 * a).astype(np.uint8)

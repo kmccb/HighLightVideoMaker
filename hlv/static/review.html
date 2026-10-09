@@ -488,8 +488,8 @@ main { padding: 20px 24px 28px; gap: 14px; }
           </span><span class="hint">fitted to the beat</span></label>
         <label class="row"><span class="lbl">Freeze intro</span><input type="checkbox" id="rFreeze">
           <span class="hint">freeze + spotlight + name at the snap (plays with a spotlight click)</span></label>
-        <label class="row"><span class="lbl">Ring in freeze</span><input type="checkbox" id="rFreezeRing">
-          <span class="hint">the ring under his feet during the freeze; untick for just the spotlight</span></label>
+        <label class="row"><span class="lbl">Ring with spotlight</span><input type="checkbox" id="rFreezeRing">
+          <span class="hint">the ring under his feet with the spotlight (freeze, and the spot-shadow highlight); untick for just the light</span></label>
         <label class="row"><span class="lbl">Game audio</span><input type="range" id="rGame" min="0" max="100" step="5"><span id="rGameV" class="hint"></span></label>
         <div class="hint">Highlight style: <b id="rStyle"></b> (change with H while reviewing)</div>
       </div>
@@ -1163,7 +1163,7 @@ async function loadReel() {
     `Music: ${a.music ? '<span class="ok">' + esc(a.music.split(/[\\/]/).pop()) + '</span>' : '<span class="bad">' + (a.music_missing ? 'file not found' : 'none yet') + ' (game audio only)</span>'}`;
   document.querySelectorAll('#rTrans button').forEach(b => b.classList.toggle('on', b.dataset.v === s.transition));
   $('rFreeze').checked = !!s.freeze;
-  $('rFreezeRing').checked = s.freeze_ring !== false; $('rFreezeRing').disabled = !s.freeze;
+  $('rFreezeRing').checked = s.freeze_ring !== false; $('rFreezeRing').disabled = !s.freeze && s.highlight !== 'shadow';
   $('rCredit').checked = !!s.scottforge_card;
   $('rCredit').disabled = !reelInfo.credit_ready;
   document.querySelectorAll('#rBanner button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.name_banner || 'first')));
