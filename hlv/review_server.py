@@ -858,6 +858,12 @@ def make_handler(app: ReviewApp):
                          ".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".aac": "audio/aac", ".wav": "audio/wav",
                          ".flac": "audio/flac", ".ogg": "audio/ogg"}
                 return self._file(f, types.get(f.suffix.lower(), "application/octet-stream"))
+            if path == "/api/dupes":
+                from . import dupes
+                app._need()
+                with app.lock:
+                    proj = project.load(app.root)
+                return self._json({"pairs": dupes.find(app.root, reel.ordered_items(proj), app.cache)})
             if path == "/api/reel":
                 return self._json(app.reel_info())
             m = re.fullmatch(r"/api/clips/([a-z0-9-]+)/hit", path)

@@ -215,6 +215,10 @@ aside { background: var(--rail); }
 .item.active .dot:not(.done) { border-color: var(--accent); }
 .tag { font-size: 10px; font-weight: 600; letter-spacing: .04em; padding: 2px 6px; border-radius: 4px; background: var(--panel-2); border-color: var(--line-2); }
 .tag.warn { color: var(--warn); border-color: rgba(255,181,71,.35); }
+.dupewarn { border: 1px solid rgba(255,181,71,.45); background: rgba(255,181,71,.07); border-radius: var(--r); padding: 10px 14px; margin: 0 0 12px; display: grid; gap: 8px; }
+.dupewarn[hidden] { display: none; }
+.dupewarn b { color: var(--warn); }
+.dupewarn .grp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 main { padding: 20px 24px 28px; gap: 14px; }
 .titlebar { align-items: center; }
 .titlebar h2 { font: italic 800 30px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; }
@@ -516,6 +520,7 @@ main { padding: 20px 24px 28px; gap: 14px; }
           <span class="hint">seconds into the song (skip a slow intro)</span></label>
       </div>
     </div>
+    <div id="rDupes" class="dupewarn" hidden></div>
     <div class="order-head"><span>Plays and photos in reel order: drag to reorder, untick to leave out</span><span id="rCount"></span><span id="rLen"></span></div>
     <ol id="rList"></ol>
     <div class="build-bar">
@@ -1153,6 +1158,7 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 async function openReel() {
   video.pause(); flushSave();
   reelOpen = true; $('reel').hidden = false;
+  loadDupes();
   await loadReel();
   if (reelInfo.job && reelInfo.job.state === 'running') pollBuild();
   else showLastReel();
@@ -1205,8 +1211,55 @@ async function loadReel() {
   showJob(reelInfo.job);
 }
 
+// Duplicate footage (same play added twice, a Hudl clip recorded twice, a photo added twice).
+let dupePairs = null, dupeBusy = false;
+async function loadDupes() {
+  if (dupeBusy) return;
+  dupeBusy = true;
+  $('rDupes').hidden = false; $('rDupes').innerHTML = '<span class="hint">Checking for duplicate clips…</span>';
+  try { dupePairs = (await (await fetch('/api/dupes')).json()).pairs || []; } catch (e) { dupePairs = []; }
+  dupeBusy = false;
+  if (reelInfo) renderReelList();
+}
+function renderDupes(rows, numOf) {
+  const box = $('rDupes');
+  if (!dupePairs) return;
+  const inc = new Set(rows.filter(c => c.included).map(c => c.id));
+  const par = {};
+  const find = x => (par[x] === undefined || par[x] === x) ? x : (par[x] = find(par[x]));
+  for (const p of dupePairs) if (inc.has(p.a) && inc.has(p.b)) par[find(p.a)] = find(p.b);
+  const groups = {};
+  for (const id of inc) if (par[id] !== undefined || Object.values(par).includes(id)) (groups[find(id)] ||= []).push(id);
+  const gs = Object.values(groups).filter(g => g.length > 1).map(g => g.sort((x, y) => numOf[x] - numOf[y]));
+  if (!gs.length) { box.hidden = true; return; }
+  const name = id => { const c = rows.find(r => r.id === id); return esc((c ? c.source : id).split('/').pop()); };
+  box.hidden = false;
+  box.innerHTML = `<b>⚠ Looks like the same footage is in the reel more than once</b>` + gs.map(g =>
+    `<div class="grp">${g.map(id => `<span>#${numOf[id]} ${name(id)}</span>` +
+      ` <button class="mini" data-dupe-out="${id}" title="untick it: keep the other one">Leave out #${numOf[id]}</button>`).join('<span class="hint">=</span>')}</div>`).join('') +
+    '<span class="hint">Pick which one to keep: Preview them below if you are not sure.</span>';
+}
+$('rDupes').addEventListener('click', async e => {
+  const b = e.target.closest('[data-dupe-out]'); if (!b) return;
+  const id = b.dataset.dupeOut, c = reelInfo.clips.find(x => x.id === id);
+  b.disabled = true;
+  if (c && c.type === 'photo') {
+    await fetch('/api/photos/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keep: false }) });
+    const dp = (data.photos || []).find(p => p.id === id); if (dp) dp.keep = false;
+  } else {
+    await fetch('/api/clips/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keep: false }) });
+    const dc = data.clips.find(x => x.id === id); if (dc) dc.review.keep = false;
+  }
+  await loadReel(); renderList();
+});
+
 function renderReelList() {
   const rows = reelInfo.clips;
+  const numOf = {};
+  { let k = 0; for (const c of rows) if (c.included) numOf[c.id] = ++k; }
+  const dupeOf = id => (dupePairs || []).map(p => p.a === id ? p.b : p.b === id ? p.a : null).filter(x => x && numOf[x]);
+  const dupeTag = id => { const d = dupeOf(id); return numOf[id] && d.length ? `<span class="tag warn" title="same footage as ${d.map(x => '#' + numOf[x]).join(', ')}">duplicate of ${d.map(x => '#' + numOf[x]).join(', ')}</span>` : ''; };
+  renderDupes(rows, numOf);
   let n = 0;
   $('rList').innerHTML = rows.map(c => {
     if (c.type === 'photo') {
@@ -1217,12 +1270,13 @@ function renderReelList() {
       <input type="checkbox" data-act="inc" ${c.included ? 'checked' : ''}>
       <img class="thumb" src="${c.thumb}" alt="" loading="lazy" onerror="this.style.visibility='hidden'">
       <span class="name">${esc(c.source.split('/').pop())}</span><span class="game">${esc(c.group || when)}</span>
-      <span class="tag" title="photo: slow pan and zoom">📷 photo</span>${c.group && when ? `<span class="tag">${esc(when)}</span>` : ''}
+      <span class="tag" title="photo: slow pan and zoom">📷 photo</span>${c.group && when ? `<span class="tag">${esc(when)}</span>` : ''}${dupeTag(c.id)}
       <span class="len">${c.seconds.toFixed(1)}s</span>
       <button class="mini" data-act="up">↑</button><button class="mini" data-act="down">↓</button>
       <button class="mini" data-act="preview">Preview</button></li>`;
     }
     const badges = [
+      dupeTag(c.id),
       c.kind === 'pre_edited' ? '<span class="tag warn">TV</span>' : '',
       c.labeled ? '' : '<span class="tag warn" title="snap/end not confirmed: uses the auto trim">unconfirmed</span>',
       c.spotlight ? '<span class="tag" style="color:var(--spot)">★ spotlight</span>' : '<span class="tag" title="no spotlight click: no freeze or highlight">no spotlight</span>',
