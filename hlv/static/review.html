@@ -476,6 +476,15 @@ main { padding: 20px 24px 28px; gap: 14px; }
           </span></label>
         <div class="row"><span class="lbl">Intro</span>
           <button class="btn stylepick" id="rIntroPick" data-kind="intro" title="see every intro and pick one"><span class="thumb"></span><span class="spname"></span><span class="spchg">Change ▸</span></button></div>
+        <label class="row"><span class="lbl">Intro timing</span>
+          <span class="segctl" id="rIntroSync">
+            <button data-v="beat" title="number, name and logo land on the song's steady beat">Steady beat</button><button data-v="hits" title="number, name and logo slam in on the song's heaviest hits, and the intro ends on the biggest one">Big hits</button>
+          </span></label>
+        <label class="row"><span class="lbl">Into first play</span>
+          <span class="segctl" id="rIntroOut">
+            <button data-v="fade" title="the intro fades into the first play">Crossfade</button><button data-v="bricks" title="on the big hit the intro cracks into bricks that blast out at the camera, revealing the first play">Bricks 💥</button><button data-v="smoke" title="on the big hit the intro bursts into smoke from the centre, revealing the first play">Smoke 💨</button>
+          </span></label>
+        <div class="hint" id="rIntroOutHint" hidden>Hard cut on a big hit of the song. ▶ With my player (in the intro picker) shows the intro blowing into your first play.</div>
         <label class="row"><span class="lbl">Impact sounds</span><input type="checkbox" id="rIntroSfx">
           <span class="hint">whoosh + boom on each slam of the animated intro</span></label>
         <label class="row"><span class="lbl">Name banner</span>
@@ -1179,6 +1188,9 @@ async function loadReel() {
   document.querySelectorAll('#rCut button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.cut || 'reel')));
   document.querySelectorAll('#rPhotoS button').forEach(b => b.classList.toggle('on', +b.dataset.v === (s.photo_s || 4)));
   $('rIntroSfx').checked = !!s.intro_sfx;
+  document.querySelectorAll('#rIntroSync button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.intro_sync || 'beat')));
+  document.querySelectorAll('#rIntroOut button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.intro_out || 'fade')));
+  $('rIntroOutHint').hidden = (s.intro_out || 'fade') === 'fade';
   $('rIntroSfx').disabled = (s.intro || 'animated') !== 'animated';
   $('rGame').value = Math.round((s.game_audio ?? 0.3) * 100);
   $('rGameV').textContent = $('rGame').value + '% under music';
@@ -1512,6 +1524,8 @@ document.querySelectorAll('#rFormat button').forEach(b => b.onclick = () => save
 document.querySelectorAll('#rCut button').forEach(b => b.onclick = () => saveReelSetting({ cut: b.dataset.v }));
 document.querySelectorAll('#rPhotoS button').forEach(b => b.onclick = () => saveReelSetting({ photo_s: +b.dataset.v }));
 $('rIntroSfx').onchange = e => saveReelSetting({ intro_sfx: e.target.checked });
+document.querySelectorAll('#rIntroSync button').forEach(b => b.onclick = e => { e.preventDefault(); saveReelSetting({ intro_sync: b.dataset.v }); });
+document.querySelectorAll('#rIntroOut button').forEach(b => b.onclick = e => { e.preventDefault(); saveReelSetting({ intro_out: b.dataset.v }); });
 $('rIntroPv').onclick = async e => {
   e.preventDefault();
   const btn = $('rIntroPv'), old = btn.textContent;

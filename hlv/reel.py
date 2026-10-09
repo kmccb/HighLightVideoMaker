@@ -224,16 +224,21 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     elif music and settings.get("beat_sync", True):
         grid = beatmod.cached(music, root / ".hlv_cache")
     animated = settings.get("intro", "animated") != "classic" and not recruiting
+    burst_mov = None                                                 # the intro blowing apart into the first play
     if animated:
         from . import intro
         say("animating the intro", done, total)
         intro_grid = grid or (beatmod.cached(music, root / ".hlv_cache") if music else None)
+        intro_grid = intro.timing_grid(intro_grid, music, root / ".hlv_cache", settings)   # heavy hits / burst
         intro_slams = intro.beat_times(intro_grid, music_start)[0] if intro_grid else []
         src, title_s = intro.build(root, lib, pl, clips, intro_grid, music_start,
                                    sfx=bool(settings.get("intro_sfx", False)), style=settings.get("intro", "animated"),
                                    size=size)                       # rendered natively for the vertical reel
         title = seg_dir / "00_title.mp4"
         _link_or_copy(src, title)
+        if intro_grid and intro_grid.get("burst"):
+            from . import burst
+            burst_mov = burst.render(root / ".hlv_cache", src, settings.get("intro_out"), title_s, pl.get("color"))
     elif recruiting:
         intro_slams = []
         title_s = TITLE_S
@@ -278,7 +283,8 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         metas.append({"lay": lay, "lead_nom": lay.get("split", snap) - t_in,
                       "post_nom": lay.get("post_nom", t_out - lay.get("split", snap)),
                       "hit": _hit_in_play(lay, hits.hit_of(root, c)[0], snap)})
-    timing = plan_timing(metas, grid, music_start, title_s - d, d)
+    d0 = 0.0 if burst_mov else d                     # a burst is a hard cut on the hit, not a crossfade
+    timing = plan_timing(metas, grid, music_start, title_s - d0, d)
 
     items = [[(title, 0.0, title_s)]]
     for p, m, tm in zip(linked, metas, timing):
@@ -300,14 +306,14 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         say("composing the soundtrack", done, total)
         music = composer.build(root / ".hlv_cache", settings.get("compose_style", "rock"),
                                _timeline(items, metas, timing, d, intro_slams if animated else [],
-                                         credit is not None),
+                                         credit is not None, first_d=d0),
                                int(settings.get("compose_seed", 1)))
 
     # 4) assemble
     out = out_dir / output_name(pl["id"], vertical, recruiting)
     # Intro impact sounds play at full level; game audio sits under the music.
     gains = [1.0] + [None] * (len(items) - 1)
-    _assemble(items, transition, music, music_start, settings, out, gains)
+    _assemble(items, transition, music, music_start, settings, out, gains, burst=burst_mov)
     done += 1
     say("assembled", done, total)
 
@@ -345,10 +351,12 @@ def _fr(s: float) -> float:
     return round(s * segment.FPS) / segment.FPS
 
 
-def _timeline(items, metas, timing, d, slams, has_credit) -> dict:
-    """Where everything happens in the finished reel (seconds), for the composer."""
+def _timeline(items, metas, timing, d, slams, has_credit, first_d=None) -> dict:
+    """Where everything happens in the finished reel (seconds), for the composer.
+    first_d: the intro-to-first-item overlap if it differs from d (0 for a burst cut)."""
     durs = [sum(du for _, _, du in it) for it in items]
-    starts = [sum(durs[:i]) - i * d for i in range(len(items))]
+    first_d = d if first_d is None else first_d
+    starts = [sum(durs[:i]) - (first_d + (i - 1) * d if i else 0.0) for i in range(len(items))]
     plays, pics = [], []
     for k, (m, tm) in enumerate(zip(metas, timing), 1):
         s0, s1 = starts[k], starts[k] + durs[k]
@@ -460,9 +468,11 @@ def plan_timing(metas: list[dict], grid: dict | None, music_start: float, t_firs
 
 
 def _assemble(items: list[list[tuple]], transition: str, music: Path | None, music_start: float,
-              settings: dict, out: Path, gains: list | None = None) -> None:
+              settings: dict, out: Path, gains: list | None = None, burst: Path | None = None) -> None:
     """items: per timeline item, a list of (file, start, duration) pieces played in order.
-    gains: per-item audio level (None = game-audio level under the music)."""
+    gains: per-item audio level (None = game-audio level under the music).
+    burst: an overlay (.mov with alpha) of the intro blowing apart: the intro hard-cuts to item 1
+    and this plays on top of its first moments."""
     kind, d = TRANSITIONS[transition]
     files = []
     for it in items:
@@ -474,6 +484,8 @@ def _assemble(items: list[list[tuple]], transition: str, music: Path | None, mus
         cmd += ["-i", str(p)]
     if music:
         cmd += ["-ss", f"{music_start:.3f}", "-stream_loop", "-1", "-i", str(music)]
+    if burst is not None:
+        cmd += ["-i", str(burst)]
     f, durs = [], []
     for n_it, it in enumerate(items):
         parts = []
@@ -490,7 +502,13 @@ def _assemble(items: list[list[tuple]], transition: str, music: Path | None, mus
                      f"atrim=start_sample={f0 * spf}:end_sample={(f0 + nf) * spf},asetpts=PTS-STARTPTS[i{n_it}a{j}]")
             parts.append(f"[i{n_it}v{j}][i{n_it}a{j}]")
             n_frames += nf
-        f.append("".join(parts) + f"concat=n={len(it)}:v=1:a=1[v{n_it}][r{n_it}]")
+        if burst is not None and n_it == 1:
+            bi = len(files) + (1 if music else 0)
+            f.append("".join(parts) + f"concat=n={len(it)}:v=1:a=1[v{n_it}pre][r{n_it}]")
+            f.append(f"[{bi}:v]setpts=PTS-STARTPTS,settb=AVTB,fps={segment.FPS},format=yuva420p[bst]")
+            f.append(f"[v{n_it}pre][bst]overlay=0:0:eof_action=pass,format=yuv420p[v{n_it}]")
+        else:
+            f.append("".join(parts) + f"concat=n={len(it)}:v=1:a=1[v{n_it}][r{n_it}]")
         g = (gains[n_it] if gains and gains[n_it] is not None
              else (float(settings.get("game_audio", 0.3)) if music else 1.0))
         f.append(f"[r{n_it}]volume={g}[a{n_it}]")
@@ -502,6 +520,10 @@ def _assemble(items: list[list[tuple]], transition: str, music: Path | None, mus
     else:
         v, a, t = "v0", "a0", durs[0]
         for i in range(1, n):
+            if i == 1 and burst is not None:            # hard cut on the hit; the burst covers it
+                f.append(f"[{v}][{a}][v1][a1]concat=n=2:v=1:a=1[vx1][ax1]")
+                v, a, t = "vx1", "ax1", t + durs[1]
+                continue
             # Offset just *under* the exact frame time: a rounded-up offset (10.467 for
             # 10.46667) starts the transition a frame late and every hit after it slips.
             f.append(f"[{v}][v{i}]xfade=transition={kind}:duration={d:.6f}:offset={t - d - 1e-4:.6f}[vx{i}]")

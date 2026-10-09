@@ -102,6 +102,41 @@ def analyze(path: Path) -> dict:
             "duration": round(len(x) / SR, 2)}
 
 
+HITS_VERSION = 1
+
+
+def heavy_hits(path: Path, cache_dir: Path) -> list[list[float]]:
+    """The song's big hits - the slams you'd cut on (a drop, a band stab, a bell), not just
+    every beat: [[time s, score 0..~1.2], ...]. A hit scores for a strong onset (kick/bass
+    weighted) and above all for a jump in loudness out of something quieter. Cached."""
+    from scipy.signal import find_peaks
+    st = path.stat()
+    f = cache_dir / "beats" / f"{path.stem}-{st.st_size}-{int(st.st_mtime)}-hits{HITS_VERSION}.json"
+    if f.exists():
+        return json.loads(f.read_text())
+    x = read_audio(path)
+    env, _ = onset_envelope(x)
+    n = len(x) // HOP
+    rms = np.sqrt(x[:n * HOP].reshape(n, HOP).astype(np.float64) ** 2).mean(axis=1) + 1e-12
+    db = 10 * np.log10(rms)
+    pk, _ = find_peaks(env, distance=max(1, int(0.2 * FPS)), height=1.0)
+    p99 = max(1.0, float(np.percentile(env, 99)))
+    top = float(np.percentile(db, 95))
+    a, b = int(0.15 * FPS), int(0.35 * FPS)
+    out = []
+    for k in pk:
+        after = db[k + 1:k + 1 + a].mean() if k + 1 < n else db[-1]
+        before = db[max(0, k - b):k].mean() if k > 0 else after
+        score = 1.5 * env[k] / p99 + 0.15 * (after - before) + 0.05 * (after - top)
+        out.append([float(k / FPS + LAG_S), float(score)])
+    if out:
+        ref = max(1e-6, float(np.percentile([s for _, s in out], 98)))
+        out = [[round(t, 3), round(float(np.clip(s / ref, 0, 1.2)), 3)] for t, s in out if s > 0]
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(json.dumps(out))
+    return out
+
+
 def cached(path: Path, cache_dir: Path) -> dict:
     st = path.stat()
     f = cache_dir / "beats" / f"{path.stem}-{st.st_size}-{int(st.st_mtime)}.json"

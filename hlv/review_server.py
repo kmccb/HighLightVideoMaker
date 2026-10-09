@@ -509,8 +509,18 @@ class ReviewApp:
         music = project.music_path(self.root, s)
         ms = float(s.get("music_start") or 0)
         grid = beatmod.cached(music, self.cache) if music else None
-        mp4, _ = intro.build(self.root, lib, pl, clips, grid, ms, sfx=bool(s.get("intro_sfx", False)),
-                             style=s.get("intro", "animated") if s.get("intro") != "classic" else "animated")
+        grid = intro.timing_grid(grid, music, self.cache, s)          # heavy hits / burst, as in the reel
+        mp4, cut = intro.build(self.root, lib, pl, clips, grid, ms, sfx=bool(s.get("intro_sfx", False)),
+                               style=s.get("intro", "animated") if s.get("intro") != "classic" else "animated")
+        if grid and grid.get("burst"):
+            from . import burst, proxy, segment
+            first = next((c for c in clips if proxy.proxy_path(self.cache, c["id"]).exists()), None)
+            if first is not None:
+                bmov = burst.render(self.cache, mp4, s.get("intro_out"), cut, pl.get("color"))
+                t_in, _, snap = segment._window(first)
+                out = mp4.with_name(f"{mp4.stem}-{s.get('intro_out')}-preview.mp4")
+                return burst.preview(mp4, cut, bmov, proxy.proxy_path(self.cache, first["id"]), max(t_in, snap - 1.0),
+                                     music, ms, out).name
         return intro.preview(self.root, mp4, music, ms, s).name
 
     def start_build(self) -> dict:
@@ -570,6 +580,10 @@ class ReviewApp:
                 s["intro"] = patch["intro"]
             if "intro_sfx" in patch:
                 s["intro_sfx"] = bool(patch["intro_sfx"])
+            if patch.get("intro_sync") in ("beat", "hits"):
+                s["intro_sync"] = patch["intro_sync"]
+            if patch.get("intro_out") in ("fade", "bricks", "smoke"):
+                s["intro_out"] = patch["intro_out"]
             if patch.get("name_banner") in reel.BANNER_MODES:
                 s["name_banner"] = patch["name_banner"]
             if "photo_s" in patch and float(patch["photo_s"]) in (3, 4, 5):

@@ -108,8 +108,60 @@ def _cover(img: np.ndarray) -> np.ndarray:
 
 
 # ---------------------------------------------------------------- timing
+BURST_PAD = 0.35        # with a burst cut, render this far past the hit so the style's own flash-out falls after it
+
+
 def beat_times(grid: dict | None, music_start: float) -> tuple[list[float], float]:
-    """Slam times T1..T4 and total length, snapped to the song's beats when available."""
+    """Slam times T1..T4 and total length to render. With grid["hits"] (the song's heavy hits, see
+    beats.heavy_hits) the intro can follow the big hits (grid["sync"] == "hits") and end on one;
+    with grid["burst"] it ends on a hit that blows apart into the first play, and renders
+    BURST_PAD past it (cut_point() is where the reel cuts)."""
+    T, end = _times(grid, music_start)
+    pad = BURST_PAD if grid and grid.get("burst") else 0.0
+    return T, round((end + pad) * FPS) / FPS
+
+
+def cut_point(grid: dict | None, music_start: float) -> float:
+    """Where the reel cuts from the intro to the first play (the end, less any burst pad)."""
+    return round(_times(grid, music_start)[1] * FPS) / FPS
+
+
+def _times(grid: dict | None, music_start: float) -> tuple[list[float], float]:
+    T, end = _grid_times(grid, music_start)
+    hits = [(t - music_start, s) for t, s in (grid or {}).get("hits") or []]
+    if not hits or not (grid.get("sync") == "hits" or grid.get("burst")):
+        return T, end
+    beats = np.array(grid.get("beats") or []) - music_start
+    bs = grid.get("strength") or [0.5] * len(beats)
+    pool = [h for h in hits + [(float(t), 0.55 * float(s)) for t, s in zip(beats, bs)] if 0.45 <= h[0] <= 9.5]
+    if grid.get("sync") != "hits":
+        # steady-beat slams; only the end moves onto the biggest hit a little after the logo lands
+        cand = [h for h in pool if T[3] + 0.9 <= h[0] <= T[3] + 3.5]
+        if cand:
+            end = max(cand, key=lambda h: h[1] - 0.05 * abs(h[0] - (T[3] + 1.6)))[0]
+        return T, round(end * FPS) / FPS
+    endc = [h for h in pool if 4.2 <= h[0] <= 9.0]
+    if not endc:
+        return T, end
+    end = max(endc, key=lambda h: h[1] - 0.02 * h[0])[0]
+    early = [h for h in pool if h[0] <= 2.3]
+    t1 = max(early, key=lambda h: h[1])[0] if early else min(T[0], end - 3.0)
+    picks = [t1]
+    for t, _ in sorted((h for h in pool if t1 + 0.5 <= h[0] <= end - 0.9), key=lambda h: -h[1]):
+        if all(abs(t - p) >= 0.5 for p in picks):
+            picks.append(t)
+        if len(picks) == 4:
+            break
+    picks.sort()
+    while len(picks) < 4:                                   # not enough hits: spread the rest evenly
+        gaps = np.diff(picks + [end - 0.9])
+        i = int(np.argmax(gaps))
+        picks.insert(i + 1, picks[i] + gaps[i] / 2)
+    return [round(t * FPS) / FPS for t in picks], round(end * FPS) / FPS
+
+
+def _grid_times(grid: dict | None, music_start: float) -> tuple[list[float], float]:
+    """Slam times on the song's steady beat grid (or fixed ones without a song)."""
     if not grid or not grid.get("beats"):
         return [0.5, 1.3, 2.1, 2.6], 4.2 + HOLD_EXTRA
     b = np.array(grid["beats"]) - music_start
@@ -593,7 +645,8 @@ def cache_key(pl: dict, logo: Path | None, grid: dict | None, music_start: float
                **({"size": list(size)} if size and tuple(size) != (graphics.W, graphics.H) else {}), "pl": {k: pl.get(k) for k in ("name", "number", "position", "class_year", "tagline",
                                                                   "height_weight", "school", "color", "accent")},
                "logo": [str(logo), logo.stat().st_mtime] if logo else None,
-               "beats": beat_times(grid, music_start), "bg": bg_id, "sfx": sfx}
+               "beats": beat_times(grid, music_start), "bg": bg_id, "sfx": sfx,
+               **({"cut": cut_point(grid, music_start)} if grid and grid.get("burst") else {})}
     return hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:12]
 
 
@@ -631,14 +684,31 @@ def build(root: Path, lib_root: Path, pl: dict, clips: list[dict], grid: dict | 
     size = tuple(size) if size else (graphics.W, graphics.H)
     key = cache_key(pl, logo, grid, music_start, bg_id, sfx, style, size)
     out = root / ".hlv_cache" / "intro" / f"intro-{key}.mp4"
-    _, dur = beat_times(grid, music_start)
-    if out.exists():
-        return out, round(dur * FPS) / FPS
-    with frame_size(*size):
-        if style != "animated":
-            from . import intro_fx
-            return intro_fx.render(style, out, lib_root, pl, grid, music_start, bg, sfx=sfx)
-        return render(out, lib_root, pl, grid, music_start, bg, sfx=sfx)
+    cut = cut_point(grid, music_start)                 # the reel uses the intro up to here
+    if not out.exists():
+        with frame_size(*size):
+            if style != "animated":
+                from . import intro_fx
+                intro_fx.render(style, out, lib_root, pl, grid, music_start, bg, sfx=sfx)
+            else:
+                render(out, lib_root, pl, grid, music_start, bg, sfx=sfx)
+    return out, cut
+
+
+def timing_grid(grid: dict | None, music: Path | None, cache: Path, settings: dict) -> dict | None:
+    """The beat grid plus what the intro's timing needs from the settings: the song's heavy hits
+    (Intro timing: Big hits) and whether it ends in a burst into the first play."""
+    from . import beats, burst
+    if not grid:
+        return grid
+    sync = settings.get("intro_sync", "beat")
+    out = settings.get("intro_out", "fade")
+    if sync != "hits" and out not in burst.STYLES:
+        return grid
+    g = {**grid, "sync": sync, "burst": out in burst.STYLES}
+    if music:
+        g["hits"] = beats.heavy_hits(music, cache)
+    return g
 
 
 def preview(root: Path, intro_mp4: Path, music: Path | None, music_start: float, settings: dict) -> Path:
