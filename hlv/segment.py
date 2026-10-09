@@ -58,15 +58,19 @@ def _window(clip: dict) -> tuple[float, float, float]:
     limit = r.get("limit")                       # never show past this (e.g. a screen recording's controls)
     if limit is not None:
         t1 = min(t1, float(limit))
+    floor = r.get("floor")                       # never show before this (e.g. controls still on screen)
+    if floor is not None:
+        t0 = max(t0, float(floor))
     return max(0.0, t0), t1, snap
 
 
 def extents(clip: dict, duration: float) -> tuple[float, float]:
     """What we actually render: extra lead and tail so the reel can re-time without re-rendering."""
     t_in, t_out, snap = _window(clip)
-    limit = (clip.get("review") or {}).get("limit")
+    r = clip.get("review") or {}
+    limit, floor = r.get("limit"), r.get("floor")
     end = min(duration, t_out + TAIL_EXTRA, float(limit) if limit is not None else duration)
-    return max(0.0, min(t_in, snap - LEAD_MAX)), end
+    return max(0.0, min(t_in, snap - LEAD_MAX), float(floor) if floor is not None else 0.0), end
 
 
 def freeze_time(player, snap: float, t0: float, t1: float, t_out: float,
@@ -107,6 +111,8 @@ def segment_key(clip: dict, pl: dict | None, settings: dict, plan: dict, src: Pa
     }
     if settings.get("_aspect") == "9:16":
         payload["aspect"] = "9:16"
+        if clip.get("crop"):
+            payload["vcrop"] = 2                       # vertical framing on cropped clips was off by the crop
     if settings.get("_banner", True):
         payload["banner_hold"] = BANNER_FREEZE          # only the banner play re-renders
     if settings.get("freeze", True) and not settings.get("freeze_ring", True):
@@ -139,9 +145,10 @@ def layout(seg: Path) -> dict:
 VERTICAL = (1080, 1920)
 
 
-def _vertical_rects(rects: np.ndarray, player: np.ndarray | None, W: int, H: int, info) -> np.ndarray:
+def _vertical_rects(rects: np.ndarray, player: np.ndarray | None, W: int, H: int, info, ox: float = 0) -> np.ndarray:
     """9:16 windows from the 16:9 camera windows: same height, following the player sideways
-    (smoothed; the window's own centre where he isn't known), kept inside the picture."""
+    (smoothed; the window's own centre where he isn't known), kept inside the picture.
+    rects are in content px (crop removed); ox: the crop's left edge, to put the player there too."""
     from scipy.ndimage import gaussian_filter1d
     out = rects.copy()
     h = np.minimum(rects[:, 3], H)
@@ -153,7 +160,7 @@ def _vertical_rects(rects: np.ndarray, player: np.ndarray | None, W: int, H: int
         ok = (p[:, 0] >= 0) & ~np.isnan(p[:, 0]) & (np.nan_to_num(p[:, 4]) >= 0.3)
         if ok.sum() > 5:
             idx = np.arange(n)
-            px = np.interp(idx, idx[ok], p[ok, 0] * info.width)
+            px = np.interp(idx, idx[ok], p[ok, 0] * info.width - ox)
             # where he's unknown, drift back toward the camera window's centre
             near = np.interp(idx, idx[ok], idx[ok].astype(float))
             far = np.clip(np.abs(idx - near) / FPS / 1.0, 0, 1)
@@ -186,7 +193,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
     rects[:, 3] = np.minimum(rects[:, 3], H)
     player = np.array(plan["player"]) if plan.get("player") else None
     if vertical:
-        rects = _vertical_rects(rects, player, W, H, info)
+        rects = _vertical_rects(rects, player, W, H, info, ox)
     style = settings.get("highlight", "ring")
     color = (pl or {}).get("accent") or settings.get("highlight_color", "#ffd23f")
 
