@@ -109,6 +109,8 @@ def segment_key(clip: dict, pl: dict | None, settings: dict, plan: dict, src: Pa
         payload["aspect"] = "9:16"
     if settings.get("_banner", True):
         payload["banner_hold"] = BANNER_FREEZE          # only the banner play re-renders
+    if settings.get("freeze", True) and not settings.get("freeze_ring", True):
+        payload["freeze_ring"] = False         # only keyed when off, so old renders stay valid
     if r.get("ring_off"):                      # only keyed when used, so old renders stay valid
         payload["ring_off"] = r["ring_off"]
     return hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:12]
@@ -238,7 +240,9 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
 
     ring_off = (clip.get("review") or {}).get("ring_off") or []
 
-    def highlight(img, t, rect, style_, alpha_mul=1.0, dim=0.5):
+    fring = settings.get("freeze_ring", True)    # ring under him during the freeze, or just the light
+
+    def highlight(img, t, rect, style_, alpha_mul=1.0, dim=0.5, ring=True):
         if player is None or alpha_mul <= 0:
             return
         p = lerp_row(player, t)
@@ -248,7 +252,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
         s = OW / w
         a = float(np.clip((p[4] - 0.2) / 0.3, 0, 1)) * alpha_mul
         draw_highlight(img, style_, (p[0] * info.width - ox - x) * s, (p[1] * info.height - oy - y) * s,
-                       p[2] * info.width * s, p[3] * info.height * s, a, color, t, dim=dim)
+                       p[2] * info.width * s, p[3] * info.height * s, a, color, t, dim=dim, ring=ring)
 
     # ---- audio: lead | silence (freeze) | play, time-stretched through the slow-mo ----
     dur = t1 - t0
@@ -347,7 +351,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
             img, rect = picture(split_t, 1 + (PUSH_IN - 1) * _smoothstep(u))
             if img is None:
                 break
-            highlight(img, split_t, rect, "shadow", _smoothstep(jz / 8), dim=FREEZE_DIM)
+            highlight(img, split_t, rect, "shadow", _smoothstep(jz / 8), dim=FREEZE_DIM, ring=fring)
             if banner is not None:
                 ba = _smoothstep((jz - 4) / 10)
                 graphics.composite(img, banner, ba, slide_px=int(60 * (1 - ba)))
@@ -360,7 +364,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
                 img, rect = picture(t, 1 + (PUSH_IN - 1) * (1 - v))
                 if img is None:
                     break
-                highlight(img, t, rect, "shadow", 1 - v, dim=FREEZE_DIM)
+                highlight(img, t, rect, "shadow", 1 - v, dim=FREEZE_DIM, ring=fring)
                 if style != "shadow":
                     highlight(img, t, rect, style, v * ring_visibility(ring_off, t))
                 if banner is not None:

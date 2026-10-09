@@ -576,7 +576,7 @@ class ReviewApp:
                 s["photo_s"] = int(float(patch["photo_s"]))
             if "slowmo_speed" in patch and float(patch["slowmo_speed"]) in (0.5, 0.4, 0.3):
                 s["slowmo_speed"] = float(patch["slowmo_speed"])
-            for k in ("beat_sync", "hit_fx", "slowmo", "scottforge_card"):
+            for k in ("beat_sync", "hit_fx", "slowmo", "scottforge_card", "freeze_ring"):
                 if k in patch:
                     s[k] = bool(patch[k])
             if "music_start" in patch:

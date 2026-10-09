@@ -221,9 +221,10 @@ def _hex_bgr(c: str) -> tuple:
 
 
 def draw_highlight(img: np.ndarray, style: str, cx: float, cy: float, bw: float, bh: float,
-                   alpha: float, color: str, t: float, dim: float = 0.5) -> None:
+                   alpha: float, color: str, t: float, dim: float = 0.5, ring: bool = True) -> None:
     """Draw the player highlight in place (output px). Mirrors the review page's styles.
-    dim: how dark the spot shadow makes everything around the player (the freeze uses more)."""
+    dim: how dark the spot shadow makes everything around the player (the freeze uses more).
+    ring: False leaves the ring off the spot shadow (just the pool of light)."""
     if style == "off" or alpha <= 0:
         return
     H, W = img.shape[:2]
@@ -239,7 +240,7 @@ def draw_highlight(img: np.ndarray, style: str, cx: float, cy: float, bw: float,
         # outside the pool goes darker; a strong dim also lifts the player a touch, like a spotlight
         gain = 1.0 - dim * alpha * (1.0 - lit) + max(0.0, dim - 0.5) * 0.5 * alpha * lit
         img[:] = np.clip(img.astype(np.float32) * gain[..., None], 0, 255).astype(np.uint8)
-    if style in ("ring", "shadow"):
+    if style == "ring" or (style == "shadow" and ring):
         # Sized from height (arms make width jumpy); feet sit in the back half of the ring.
         rx = max(bh * 0.38, 12 * k)
         ry = max(rx * 0.3, 4 * k)
