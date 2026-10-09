@@ -16,7 +16,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import camera, library, photo_slide, photos, profiles, project, proxy, reel, score, segment
+from . import camera, library, photo_slide, photos, profiles, project, proxy, reel, score, segment, youtube
 from .config import DetectConfig
 from .pipeline import CACHE_DIRNAME
 
@@ -316,7 +316,10 @@ class ReviewApp:
             for vert in (False, True):
                 f = self.root / reel.OUT_DIRNAME / reel.output_name(pl, vert, rec) if pl else None
                 if f and f.exists():
+                    built = datetime.fromtimestamp(f.stat().st_mtime)
                     out.append({"file": f.name, "path": str(f), "vertical": vert, "recruiting": rec,
+                                "youtube": youtube.published(f),
+                                "yt_title": youtube.default_title(profiles.get(library.home(), pl), vert, rec, built),
                                 "label": ("Recruiting cut" if rec else "Highlight reel") + (" · vertical 9:16" if vert else ""),
                                 "built": datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="minutes")})
         return sorted(out, key=lambda o: o["built"], reverse=True)
@@ -493,6 +496,17 @@ class ReviewApp:
         else:
             raise ValueError("unknown action")
         return {"ok": True, "path": str(f)}
+
+    def youtube_publish(self, body: dict) -> dict:
+        """Upload ticked finished videos of this project: [{file, title}] + the shared description + visibility."""
+        self._need()
+        items = []
+        for it in body.get("items") or []:
+            file = str(it.get("file") or "")
+            if not re.fullmatch(r"[A-Za-z0-9_.-]+\.mp4", file):
+                raise ValueError("bad file name")
+            items.append({"path": str(self.root / reel.OUT_DIRNAME / file), "title": it.get("title")})
+        return youtube.publish(items, str(body.get("description") or ""), body.get("privacy") or None)
 
     def intro_preview(self) -> str:
         """Render (or reuse) the animated intro with the song underneath; returns its file name."""
@@ -786,9 +800,10 @@ def make_handler(app: ReviewApp):
                 return self._file(STATIC / page, "text/html; charset=utf-8")
             if path == "/projects":
                 return self._file(STATIC / "start.html", "text/html; charset=utf-8")
-            m = re.fullmatch(r"/static/((?:fonts/)?[A-Za-z0-9_.-]+\.(css|woff2|svg))", path)
-            if m:   # shared theme (theme.css), bundled fonts and the app mark
-                ctype = {"css": "text/css; charset=utf-8", "woff2": "font/woff2", "svg": "image/svg+xml"}[m.group(2)]
+            m = re.fullmatch(r"/static/((?:fonts/)?[A-Za-z0-9_.-]+\.(css|js|woff2|svg))", path)
+            if m:   # shared theme (theme.css), app shell (shell.js), bundled fonts and the app mark
+                ctype = {"css": "text/css; charset=utf-8", "js": "text/javascript; charset=utf-8",
+                         "woff2": "font/woff2", "svg": "image/svg+xml"}[m.group(2)]
                 return self._file(STATIC / m.group(1), ctype)
             if path == "/review":
                 if app.root is None:
@@ -876,6 +891,10 @@ def make_handler(app: ReviewApp):
                 from . import hitmodel
                 m = hitmodel.load() or {}
                 return self._json({k: m.get(k) for k in ("fitted", "n", "tol", "all", "O", "D")})
+            if path == "/api/youtube":
+                return self._json(youtube.status())
+            if path == "/api/youtube/status":
+                return self._json(youtube.job)
             if path == "/api/reel/status":
                 return self._json(app.job)
             m = re.fullmatch(r"/media/compose/(demo-[a-z]+-\d+-v\d+\.wav)", path)
@@ -967,6 +986,26 @@ def make_handler(app: ReviewApp):
                                                       body.get("file") or None))
                 except ValueError as e:
                     return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
+            if self.path.startswith("/api/youtube/"):
+                try:
+                    if self.path == "/api/youtube/secret":
+                        if n <= 0 or n > 64 * 1024:
+                            raise ValueError("that file is too big to be the Google client file")
+                        youtube.store_secret(self.rfile.read(n))
+                        return self._json(youtube.status())
+                    body = json.loads(self.rfile.read(n) or b"{}") or {}
+                    if self.path == "/api/youtube/connect":
+                        return self._json(youtube.connect())
+                    if self.path == "/api/youtube/disconnect":
+                        youtube.disconnect()
+                        return self._json(youtube.status())
+                    if self.path == "/api/youtube/description":
+                        return self._json({"description": youtube.save_description(str(body.get("description") or ""))})
+                    if self.path == "/api/youtube/publish":
+                        return self._json(app.youtube_publish(body))
+                except ValueError as e:
+                    return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
+                return self.send_error(HTTPStatus.NOT_FOUND)
             if self.path == "/api/reel/build":
                 return self._json(app.start_build())
             if self.path == "/api/players":

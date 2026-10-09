@@ -20,7 +20,7 @@ BRANDING_DEFAULTS = {
     "logo": "", "bg": "#0a0a0c", "accent": "#E85D2F", "title": "Created by ScottForge",
     "url": "https://ScottForge.ai", "invite": "Want a highlight reel like this? Reach out at ScottForge.ai",
     "video": "assets/scottforge-forge.mp4",     # background of the animated ending (the website's forge clip)
-    "style": "forge",                           # which animated ending: forge, anvil, molten, minimal
+    "style": "forge",                           # which animated ending: forge, anvil, molten, minimal, hammer, quench
 }
 
 
@@ -138,7 +138,7 @@ def save_branding(patch: dict) -> dict:
             v = patch[k].strip()
             if k in ("bg", "accent") and not (len(v) == 7 and v.startswith("#")):
                 continue
-            if k == "style" and v not in ("forge", "anvil", "molten", "minimal"):
+            if k == "style" and v not in ("forge", "anvil", "molten", "minimal", "hammer", "quench"):
                 continue
             b[k] = v
     p = home() / BRANDING

@@ -62,7 +62,8 @@ def _bricks(img: np.ndarray, rng) -> list[np.ndarray]:
     bh = int(round(min(W, H) / 8.5))
     bw = 2 * bh
     cx, cy = W / 2, H * 0.47
-    maxd = np.hypot(W / 2, H / 2)
+    maxd = np.hypot(max(cx, W - cx), max(cy, H - cy))   # to the farthest corner: cy isn't the middle
+
     bricks = []
     for r, y in enumerate(range(0, H, bh)):
         off = -(bw // 2) if r % 2 else 0
@@ -85,7 +86,7 @@ def _bricks(img: np.ndarray, rng) -> list[np.ndarray]:
             bx, by = (x0 + x1) / 2, (y + y1) / 2
             dx, dy = bx - cx, by - cy
             d = float(np.hypot(dx, dy)) + 1e-3
-            near = 1 - d / maxd
+            near = max(0.0, 1 - d / maxd)               # never negative: a negative ** 1.5 is NaN
             spd = rng.uniform(500, 800) + 1900 * near ** 1.5
             bricks.append({"face": face, "alpha": alpha, "c": np.array([bx, by]), "d": d,
                            "v": np.array([dx / d, dy / d - 0.35]) * spd + rng.normal(0, 120, 2),

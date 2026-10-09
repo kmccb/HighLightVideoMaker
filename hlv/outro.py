@@ -8,7 +8,7 @@ site's hero, slowly pushing in, with embers rising. Timeline (7 s):
            like hot metal, with a spark burst as it lands
   1.9-2.9  "— CREATED BY" label, the website, then the invite line
   6.3-7.0  fade out with the music
-Silent: the song plays on underneath. Cached by everything that changes it.
+Silent: the song plays on underneath (the hammer and quench styles in outro3.py have sound). Cached by everything that changes it.
 """
 from __future__ import annotations
 
@@ -29,7 +29,7 @@ W, H = graphics.W, graphics.H
 FPS = 30
 OUTRO_S = 7.0
 OUTRO_VERSION = 2
-STYLES = ("forge", "anvil", "molten", "minimal")
+STYLES = ("forge", "anvil", "molten", "minimal", "hammer", "quench")
 FONT_DIR = Path(__file__).parent / "fonts"
 PAPER = (221, 235, 242)          # BGR of #F2EBDD (site --paper)
 PAPER_DIM = (185, 203, 212)      # #D4CBB9
@@ -314,23 +314,34 @@ def _render(out: Path, b: dict, video: Path | None, seconds: float, seed: int,
         fade = smooth(t / 0.6) * (1 - smooth((t - (seconds - 0.7)) / 0.7))
         return np.clip(frame * fade, 0, 255).astype(np.uint8)
 
+    audio = None
     if style != "forge":
-        from . import outro2
-        frame_at = outro2.make(style, {  # noqa: F811 - another style's frames
+        from . import outro2, outro3
+        maker = outro3.make if style in outro3.STYLES else outro2.make
+        frame_at = maker(style, {  # noqa: F811 - another style's frames
             "W": W, "H": H, "FPS": FPS, "rng": rng, "ember": ember, "seconds": seconds, "grain": grain,
             "L_scott": L_scott, "L_forge": L_forge, "L_forge_glow": L_forge_glow, "L_anvil": L_anvil,
             "L_dots": L_dots, "L_anvil_glow": L_anvil_glow, "L_dots_glow": L_dots_glow, "L_label": L_label,
             "L_url": L_url, "L_url_glow": L_url_glow, "L_inv": L_inv, "mark_c": mark_c, "scott_c": scott_c,
-            "forge_c": forge_c, "y_label": y_label, "y_url": y_url, "y_inv": y_inv})
+            "forge_c": forge_c, "y_label": y_label, "y_url": y_url, "y_inv": y_inv, "video": video})
+        if style in outro3.STYLES and only_frame is None:
+            audio = outro3.sound(style, seconds, seed)          # these endings bring their own sound
 
     if only_frame is not None:
         return frame_at(int(only_frame * FPS))
 
     out.parent.mkdir(parents=True, exist_ok=True)
     tmp = out.with_suffix(".tmp.mp4")
+    wav = out.with_suffix(".tmp.wav")
+    if audio is not None:
+        from scipy.io import wavfile
+        wavfile.write(wav, 48000, (np.clip(audio, -1, 1) * 32767).astype(np.int16))
+        a_in = ["-i", str(wav)]
+    else:
+        a_in = ["-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo"]
     enc = subprocess.Popen(
         ["ffmpeg", "-v", "error", "-y", "-f", "rawvideo", "-pix_fmt", "bgr24", "-s", f"{W}x{H}", "-r", str(FPS),
-         "-i", "pipe:0", "-f", "lavfi", "-i", "anullsrc=r=48000:cl=stereo", "-t", f"{n / FPS:.4f}",
+         "-i", "pipe:0", *a_in, "-t", f"{n / FPS:.4f}",
          "-c:v", "libx264", "-preset", "fast", "-crf", "17", "-pix_fmt", "yuv420p", "-r", str(FPS),
          "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(tmp)], stdin=subprocess.PIPE)
     try:
@@ -339,6 +350,7 @@ def _render(out: Path, b: dict, video: Path | None, seconds: float, seed: int,
     finally:
         enc.stdin.close()
         enc.wait()
+        wav.unlink(missing_ok=True)
     if enc.returncode != 0:
         tmp.unlink(missing_ok=True)
         raise RuntimeError("ScottForge ending render failed")
@@ -352,7 +364,8 @@ def video_path(lib_root: Path, b: dict) -> Path | None:
 
 
 def cache_key(b: dict, video: Path | None, seconds: float, size: tuple[int, int] | None = None) -> str:
-    payload = {"v": OUTRO_VERSION, "b": {k: b.get(k) for k in ("title", "url", "invite", "accent", "style")},
+    from . import outro3
+    payload = {"v": OUTRO_VERSION if b.get("style") not in outro3.STYLES else f"{OUTRO_VERSION}.{outro3.VERSION}", "b": {k: b.get(k) for k in ("title", "url", "invite", "accent", "style")},
                "video": [str(video), video.stat().st_mtime] if video else None, "s": seconds,
                **({"size": list(size)} if size and tuple(size) != (graphics.W, graphics.H) else {})}
     return hashlib.sha1(json.dumps(payload, sort_keys=True).encode()).hexdigest()[:12]
@@ -368,3 +381,9 @@ def build(cache: Path, lib_root: Path, b: dict, seconds: float = OUTRO_S, size: 
 def still(lib_root: Path, b: dict) -> np.ndarray:
     """The finished look (one frame near the end) for the branding editor's preview."""
     return render(Path("unused.mp4"), b, video_path(lib_root, b), only_frame=3.6)
+
+
+def has_sound(b: dict) -> bool:
+    """Does the chosen ending bring its own sound (to be heard over the music)?"""
+    from . import outro3
+    return b.get("style") in outro3.STYLES

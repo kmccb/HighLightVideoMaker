@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<title>Mark plays</title>
+<title>Fix-ups</title>
 <style>
 :root {
   --bg: #0f1113; --panel: #171a1d; --panel-2: #1e2226; --line: #2a2f35;
@@ -91,12 +91,10 @@ main { gap: 18px; padding: 18px 20px 60px; }
 </head>
 <body>
 <header>
-  <a class="hr-brand" href="/projects" aria-label="Projects"><svg width="28" height="24" viewBox="0 0 30 26" aria-hidden="true"><path d="M7 1h22l-7 24H0z" fill="var(--accent)"/><path d="M11.5 7.5l7.5 5.5-7.5 5.5z" fill="#0A0C0F"/></svg></a>
-  <a class="back" href="/review">← Review</a>
-  <h1>Mark plays</h1>
+  <h1>Fix-ups</h1>
+  <ol class="hr-steps" id="hrSteps" aria-label="Reel stages"></ol>
   <span class="tabs"><button data-tab="player">Player</button><button data-tab="hit">Hit</button></span>
   <label class="flt"><input type="checkbox" id="onlyNeed" checked> only plays that still need it</label>
-  <a class="back" href="/guide#mark">? Guide</a>
   <span class="count" id="count"></span>
   <span class="model" id="model"></span>
 </header>
@@ -122,7 +120,7 @@ const state = {};                        // per clip: {t}
 
 async function load() {
   data = await (await fetch('/api/clips')).json();
-  document.title = 'Mark plays';
+  document.title = 'Fix-ups';
   render();
 }
 
@@ -176,6 +174,7 @@ async function save(c, patch) {
   if (!res.ok) { alert('Could not save: ' + res.status); return; }
   c.review = (await res.json()).review;
   refreshCard(c);
+  if (window.hrShell) hrShell.refreshStages(data.clips);
 }
 
 // ---------------- Player tab ----------------
@@ -404,5 +403,6 @@ document.querySelectorAll('.tabs button').forEach(b => b.onclick = () => {
 $('onlyNeed').onchange = render;
 load();
 </script>
+<script src="/static/shell.js" data-page="fixups"></script>
 </body>
 </html>

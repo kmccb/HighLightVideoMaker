@@ -96,6 +96,60 @@ input[type=text]:focus { outline: none; border-color: var(--accent); }
 .ok { color: var(--ok); }
 .bar { height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; }
 .bar > div { height: 100%; width: 0; background: var(--accent); transition: width .3s; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+/* slim resume strip (replaces the big hero) */
+.resume { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; padding: 14px 16px; border-radius: var(--r-lg); border: 1px solid var(--line); background: var(--panel); }
+.resume[hidden] { display: none; }
+.resume .tile { flex: none; width: 92px; height: 56px; border-radius: var(--r); background: var(--pc, #1E3A8A); display: grid; place-items: center;
+  font: italic 800 34px/1 var(--display); color: rgba(0,0,0,.45); overflow: hidden; }
+.resume .tile img { max-width: 70%; max-height: 80%; }
+.resume .rs-txt { display: grid; gap: 4px; min-width: 200px; }
+.resume .rs-eye { font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--accent-hi); }
+.resume .rs-name { font: 700 20px/1 var(--display); text-transform: uppercase; letter-spacing: .02em; }
+.resume .rs-sub { font-size: 13px; color: var(--dim); }
+.resume .rs-prog { flex: 1 1 200px; display: grid; gap: 6px; min-width: 180px; }
+.resume .rs-bar { height: 6px; border-radius: 3px; background: var(--sel); overflow: hidden; } .resume .rs-bar > i { display: block; height: 100%; background: var(--ok); }
+.resume .rs-line { display: flex; justify-content: space-between; font-size: 12px; color: var(--dim); }
+.resume .acts { display: flex; gap: 8px; }
+/* toolbar */
+.ptools { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 14px; }
+.ptools .spacer { flex: 1; }
+.ptabs, .pview { display: flex; gap: 2px; padding: 3px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
+.ptabs button, .pview button { height: 30px; padding: 0 12px; border: 0; border-radius: 6px; background: transparent; color: var(--dim); font: 600 13px var(--sans); cursor: pointer; }
+.pview button { width: 34px; padding: 0; display: grid; place-items: center; }
+.ptabs button b { font: 500 11px var(--mono); color: var(--faint); }
+.ptabs button:hover, .pview button:hover { color: var(--text); }
+.ptabs button.on, .pview button.on { background: var(--sel); color: var(--text); }
+.psort { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--dim); }
+.psort select { height: 34px; border-radius: var(--r); border: 1px solid var(--line-2); background: var(--panel); color: var(--text); font: 500 13px var(--sans); padding: 0 8px; }
+/* list view */
+.grid.list { display: block; }
+.ptable-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--rail); }
+.ptable { width: 100%; min-width: 860px; border-collapse: collapse; }
+.ptable th { text-align: left; font-size: 11px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; color: var(--faint); padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.ptable td { padding: 12px 16px; border-bottom: 1px solid #1A1F26; vertical-align: middle; }
+.ptable tr:last-child td { border-bottom: 0; }
+.ptable tbody tr { cursor: pointer; }
+.ptable tbody tr:hover td { background: var(--panel); }
+.ptable .who { display: flex; align-items: center; gap: 12px; }
+.ptable .ntile { flex: none; width: 44px; height: 44px; border-radius: var(--r); background: var(--pc, #262C35); display: grid; place-items: center; font: italic 800 22px/1 var(--display); color: rgba(0,0,0,.5); }
+.ptable .ntile.none { background: var(--sel); color: var(--faint); }
+.ptable .pname { font: 700 17px/1 var(--display); text-transform: uppercase; letter-spacing: .03em; }
+.ptable .psub { font-size: 12px; color: var(--dim); margin-top: 3px; }
+.ptable .pflag { font-size: 12px; color: var(--warn); margin-top: 3px; }
+.ptable .pflag a { color: var(--warn); }
+.stage { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 4px 10px; white-space: nowrap; color: var(--sc); background: color-mix(in srgb, var(--sc) 13%, transparent); }
+.stage::before { content: ''; width: 6px; height: 6px; border-radius: 50%; background: var(--sc); }
+.revbar { display: flex; align-items: center; gap: 10px; min-width: 170px; }
+.revbar > span { flex: 1; height: 6px; border-radius: 3px; background: #1F242C; overflow: hidden; } .revbar > span > i { display: block; height: 100%; border-radius: 3px; background: var(--info); }
+.revbar > span > i.full { background: var(--ok); }
+.revbar b { font: 500 12px var(--mono); color: var(--soft); white-space: nowrap; }
+.ptable .acts { text-align: right; white-space: nowrap; }
+.ptable .acts .hr-ghost { height: 32px; font-size: 13px; }
+.newrow { margin-top: 14px; display: flex; align-items: center; gap: 14px; width: 100%; padding: 16px; border-radius: var(--r-lg); border: 1.5px dashed #2E3540; background: transparent; color: var(--dim); cursor: pointer; text-align: left; font: inherit; }
+.newrow:hover { border-color: var(--accent); color: var(--text); }
+.newrow .plus { width: 40px; height: 40px; border-radius: 10px; background: var(--accent-tint); color: var(--accent-hi); display: grid; place-items: center; flex: none; }
+.newrow b { color: var(--text); display: block; }
 @media (max-width: 760px) { .quick { grid-template-columns: 1fr 1fr; } .hero-body { padding: 24px; } .hero h1 { font-size: 44px; } .wrap { padding: 24px 16px 48px; } }
 </style>
 <link rel="stylesheet" href="/static/theme.css">
@@ -154,9 +208,20 @@ input[type=text]:focus { outline: none; border-color: var(--accent); }
     </div>
     <div class="bar" id="wBar" hidden><div></div></div>
   </section>
-  <section class="hero" id="hero" hidden></section>
+  <section class="resume" id="hero" hidden></section>
   <section>
-    <div class="sec-head"><h2 class="hr-h2" style="font-size:28px">All projects</h2></div>
+    <div class="ptools">
+      <h2 class="hr-h2" style="font-size:28px">Projects</h2>
+      <div class="ptabs" id="pTabs" role="tablist" aria-label="Show">
+        <button role="tab" data-f="all">All <b></b></button><button role="tab" data-f="progress">In progress <b></b></button><button role="tab" data-f="built">Reel built <b></b></button>
+      </div>
+      <span class="spacer"></span>
+      <label class="psort">Sort <select id="pSort"><option value="recent">Latest reel</option><option value="name">Player name</option><option value="clips">Most clips</option></select></label>
+      <div class="pview" role="group" aria-label="View">
+        <button type="button" data-v="list" aria-label="List view" title="List"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01"/></svg></button>
+        <button type="button" data-v="grid" aria-label="Grid view" title="Grid"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round" aria-hidden="true"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg></button>
+      </div>
+    </div>
     <div class="grid" id="grid"></div>
   </section>
 </div>
@@ -182,24 +247,69 @@ function subline(pl) {
   if (!pl) return '';
   return [pl.number ? '#' + pl.number : '', pl.position, pl.class_year ? 'Class of ' + pl.class_year : ''].filter(Boolean).map(esc).join(' · ');
 }
+// List view: one row per project, with where it's at.
+const pv = { view: 'list', f: 'all', sort: 'recent' };
+try { Object.assign(pv, JSON.parse(localStorage.getItem('hlvProjectsView') || '{}')); } catch (e) {}
+const savePv = () => { try { localStorage.setItem('hlvProjectsView', JSON.stringify(pv)); } catch (e) {} };
+function stageOf(p) {
+  if (!p.exists) return ['Folder missing', 'var(--bad)'];
+  if (!p.ready) return ['Not set up', 'var(--warn)'];
+  if (p.current) return ['Open now', 'var(--accent-hi)'];
+  if (p.last_reel) return ['Reel built', 'var(--ok)'];
+  if (p.clips && p.confirmed >= p.clips) return ['Ready to build', 'var(--info)'];
+  return ['Reviewing', 'var(--info)'];
+}
+function renderTable(order) {
+  // the same player in two projects: show the folder so they can be told apart
+  const byName = {};
+  info.projects.forEach(p => { const k = (p.player && p.player.name) || p.name; byName[k] = (byName[k] || 0) + 1; });
+  const rows = order.map(i => {
+    const p = info.projects[i], pl = p.player;
+    const [st, sc] = stageOf(p);
+    const n = Math.max(1, p.clips || 0), done = Math.min(p.confirmed || 0, n);
+    const name = (pl && pl.name) || p.name;
+    const flag = !pl ? 'No player linked' : !pl.number ? 'No jersey number' : '';
+    const sub = [subline(pl), byName[name] > 1 || !pl ? esc(p.name) : ''].filter(Boolean).join(' · ');
+    const act = !p.exists || !p.ready
+      ? `<button class="hr-ghost" data-remove="${i}">Remove from list</button>`
+      : `<button class="hr-ghost" data-open="${i}">${p.current ? 'Continue' : 'Open'}</button> <button class="hr-ghost" data-open="${i}" data-build="1">Build</button>`;
+    return `<tr${p.exists && p.ready ? ` data-open="${i}"` : ''} title="${esc(p.folder)}">
+      <td><div class="who"><span class="ntile${pl && pl.number ? '' : ' none'}" style="--pc:${esc(pl ? pl.color : '')}">${esc(pl && pl.number || '–')}</span>
+        <div><div class="pname">${esc(name)}</div>${sub ? `<div class="psub">${sub}</div>` : ''}
+        ${flag ? `<div class="pflag">${flag} · <a href="/players">fix profile</a></div>` : ''}</div></div></td>
+      <td><span class="stage" style="--sc:${sc}">${st}</span></td>
+      <td>${p.ready ? `<div class="revbar"><span><i class="${done >= n ? 'full' : ''}" style="width:${Math.round(100 * done / n)}%"></i></span><b>${done} / ${p.clips}</b></div>` : ''}</td>
+      <td style="color:var(--soft);white-space:nowrap">${p.last_reel ? esc(when(p.last_reel)) : '<span style="color:var(--faint)">not built</span>'}</td>
+      <td class="acts">${act}</td></tr>`;
+  }).join('');
+  return `<div class="ptable-wrap"><table class="ptable"><thead><tr><th scope="col">Player · project</th><th scope="col">Stage</th><th scope="col">Reviewed</th><th scope="col">Latest reel</th><th scope="col"><span class="vh">Actions</span></th></tr></thead>
+    <tbody>${rows || '<tr><td colspan="5" style="color:var(--dim)">No projects here.</td></tr>'}</tbody></table></div>
+    <button class="newrow" id="newCard"><span class="plus">${PLUS}</span><span><b>Start a new reel</b>Pick a player, point at a folder of clips, add a song.</span></button>`;
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('#pTabs button'); if (t) { pv.f = t.dataset.f; savePv(); load(); return; }
+  const v = e.target.closest('.pview button'); if (v) { pv.view = v.dataset.v; savePv(); load(); }
+});
+document.addEventListener('change', e => { if (e.target.id === 'pSort') { pv.sort = e.target.value; savePv(); load(); } });
+
 function renderHero(p, i) {
   const h = $('hero');
   if (!p) { h.hidden = true; return; }
   const pl = p.player, n = Math.max(1, p.clips || 0), done = Math.min(p.confirmed || 0, n);
   const ticks = Array.from({ length: Math.min(n, 60) }, (_, k) => `<span class="${k < Math.round(done / n * Math.min(n, 60)) ? 'on' : ''}"></span>`).join('');
+  void ticks;
   h.hidden = false;
   h.style.setProperty('--pc', pl ? pl.color : '');
-  h.style.setProperty('--ac', pl ? (pl.accent || '') : '');
-  h.innerHTML = `<div class="poster">${poster(p)}</div>
-    <div class="hero-body">
-      <div class="hero-eye"><i></i><span class="hr-eyebrow" style="color:var(--dim)">${p.current ? 'Pick up where you left off' : 'Most recent project'}</span></div>
-      <div><h1>${esc(pl ? pl.name : p.name)}</h1><div class="sub">${subline(pl) || esc(p.folder)}</div></div>
-      <div style="display:grid;gap:8px"><div class="ticks" aria-hidden="true">${ticks}</div>
-        <div class="line"><span><b>${done} of ${p.clips}</b> plays reviewed</span><span>${p.last_reel ? 'Last reel ' + esc(when(p.last_reel)) : 'No reel built yet'}</span></div></div>
-      <div class="acts">
-        <button class="hr-primary" data-open="${i}"><svg width="14" height="16" viewBox="0 0 14 16" aria-hidden="true"><path d="M1 1l12 7-12 7z" fill="currentColor"/></svg>${p.current ? 'Resume review' : 'Open project'}</button>
-        <button class="hr-ghost" data-open="${i}" data-build="1"><svg width="18" height="18" viewBox="0 0 18 18" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" aria-hidden="true"><rect x="1.5" y="3.5" width="15" height="11" rx="2"/><path d="M1.5 7h15M5 3.5v3.5M9 3.5v3.5M13 3.5v3.5"/></svg>Build reel</button>
-      </div>
+  const tile = pl && p.logo ? `<img src="/media/player/${esc(pl.id)}/logo" alt="">` : esc(pl && pl.number || '');
+  h.innerHTML = `<span class="tile">${tile}</span>
+    <div class="rs-txt"><span class="rs-eye">${p.current ? 'Continue' : 'Most recent'}</span>
+      <span class="rs-name">${esc(pl ? pl.name : p.name)} <span style="color:var(--dim);font-weight:600">· ${esc(p.name)}</span></span>
+      <span class="rs-sub">${done >= n ? 'All plays reviewed' : `${done} of ${p.clips} plays reviewed`} · ${p.last_reel ? 'last reel ' + esc(when(p.last_reel)) : 'no reel yet'}</span></div>
+    <div class="rs-prog"><div class="rs-bar"><i style="width:${Math.round(100 * done / n)}%"></i></div>
+      <div class="rs-line"><span>Reviewed</span><span>${done} of ${p.clips}</span></div></div>
+    <div class="acts">
+      <button class="hr-primary" data-open="${i}">${done >= n ? 'Open' : 'Resume review'}</button>
+      <button class="hr-ghost" data-open="${i}" data-build="1">Build reel</button>
     </div>`;
 }
 
@@ -209,7 +319,27 @@ async function load() {
   const ready = info.projects.map((p, i) => [p, i]).filter(([p]) => p.exists && p.ready);
   const hero = ready.find(([p]) => p.current) || ready[0];
   renderHero(hero && hero[0], hero && hero[1]);
-  const cards = info.projects.map((p, i) => {
+  const view = pv.view;
+  g.classList.toggle('list', view === 'list');
+  const counts = { all: 0, progress: 0, built: 0 };
+  info.projects.forEach(p => { counts.all++; if (p.ready && p.last_reel) counts.built++; else counts.progress++; });
+  document.querySelectorAll('#pTabs button').forEach(b => { b.classList.toggle('on', b.dataset.f === pv.f); b.querySelector('b').textContent = counts[b.dataset.f]; });
+  document.querySelectorAll('.pview button').forEach(b => b.classList.toggle('on', b.dataset.v === view));
+  $('pSort').value = pv.sort;
+  const order = info.projects.map((p, i) => i).filter(i => {
+    const p = info.projects[i];
+    return pv.f === 'all' || (pv.f === 'built' ? (p.ready && p.last_reel) : !(p.ready && p.last_reel));
+  });
+  const nm = p => ((p.player && p.player.name) || p.name).toLowerCase();
+  order.sort((a, b) => {
+    const A = info.projects[a], B = info.projects[b];
+    if (A.current !== B.current) return A.current ? -1 : 1;
+    if (pv.sort === 'name') return nm(A).localeCompare(nm(B)) || A.name.localeCompare(B.name);
+    if (pv.sort === 'clips') return (B.clips || 0) - (A.clips || 0);
+    return String(B.last_reel || '').localeCompare(String(A.last_reel || ''));
+  });
+  if (view === 'list') { g.innerHTML = renderTable(order); return; }
+  const cards = order.map(i => [info.projects[i], i]).map(([p, i]) => {
     const pl = p.player;
     const vars = `--pc:${esc(pl ? pl.color : '')};--ac:${esc(pl ? (pl.accent || '') : '')}`;
     if (!p.exists || !p.ready) {
@@ -233,7 +363,7 @@ async function load() {
     </button>`;
   });
   cards.push(`<button class="newcard" id="newCard"><span class="plus">${PLUS}</span><b>Start a new reel</b><small>Pick a player, point at a folder of clips, add a song.</small></button>`);
-  g.innerHTML = info.projects.length ? cards.join('') : `<div class="empty">No projects yet.</div>` + cards[cards.length - 1];
+  g.innerHTML = cards.length > 1 ? cards.join('') : `<div class="empty">No projects here.</div>` + cards[cards.length - 1];
 }
 document.addEventListener('click', e => { if (e.target.closest('#newCard')) { $('newProj').click(); window.scrollTo({ top: 0, behavior: 'smooth' }); } });
 $('hero').addEventListener('click', e => {
@@ -245,6 +375,7 @@ $('hero').addEventListener('click', e => {
 });
 
 $('grid').addEventListener('click', async e => {
+  if (e.target.closest('a')) return;                       // e.g. "fix profile" inside a row
   const o = e.target.closest('[data-open]'), r = e.target.closest('[data-remove]');
   if (r) {
     const p = info.projects[+r.dataset.remove];
@@ -254,7 +385,8 @@ $('grid').addEventListener('click', async e => {
     return load();
   }
   if (!o) return;
-  openProject(info.projects[+o.dataset.open], o);
+  if (o.dataset.build) sessionStorage.setItem('hlvOpenReel', '1');
+  openProject(info.projects[+o.dataset.open], o.closest('tr') || o);
 });
 async function openProject(p, o) {
   if (p.current) { location = '/review'; return; }
@@ -397,5 +529,6 @@ fetch('/api/projects/setup').then(r => r.json()).then(j => {
 });
 load();
 </script>
+<script src="/static/shell.js" data-page="projects"></script>
 </body>
 </html>

@@ -313,7 +313,11 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     out = out_dir / output_name(pl["id"], vertical, recruiting)
     # Intro impact sounds play at full level; game audio sits under the music.
     gains = [1.0] + [None] * (len(items) - 1)
-    _assemble(items, transition, music, music_start, settings, out, gains, burst=burst_mov)
+    duck = None
+    if credit is not None and outro.has_sound(brand):
+        gains[-1] = 1.0                             # the ending's own sound (hammer / quench) at full level
+        duck = CREDIT_S                             # ... with the music pulled down under it
+    _assemble(items, transition, music, music_start, settings, out, gains, duck_tail=duck, burst=burst_mov)
     done += 1
     say("assembled", done, total)
 
@@ -468,9 +472,11 @@ def plan_timing(metas: list[dict], grid: dict | None, music_start: float, t_firs
 
 
 def _assemble(items: list[list[tuple]], transition: str, music: Path | None, music_start: float,
-              settings: dict, out: Path, gains: list | None = None, burst: Path | None = None) -> None:
+              settings: dict, out: Path, gains: list | None = None, duck_tail: float | None = None,
+              burst: Path | None = None) -> None:
     """items: per timeline item, a list of (file, start, duration) pieces played in order.
     gains: per-item audio level (None = game-audio level under the music).
+    duck_tail: seconds at the end where the music drops to a third (an ending with its own sound).
     burst: an overlay (.mov with alpha) of the intro blowing apart: the intro hard-cuts to item 1
     and this plays on top of its first moments."""
     kind, d = TRANSITIONS[transition]
@@ -537,7 +543,9 @@ def _assemble(items: list[list[tuple]], transition: str, music: Path | None, mus
         mvol = float(settings.get("music_volume", 0.9))
         f.append("[ac]anull[g]")                      # per-item levels already applied
         f.append(f"[{len(files)}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:{total:.3f},"
-                 f"afade=t=in:d=0.5,afade=t=out:st={max(0.0, total - 3):.3f}:d=3,volume={mvol}[m]")
+                 f"afade=t=in:d=0.5,afade=t=out:st={max(0.0, total - 3):.3f}:d=3,volume={mvol}"
+                 + (f",volume=eval=frame:volume='1-0.67*clip((t-{total - duck_tail:.3f})/0.4,0,1)'" if duck_tail else "")
+                 + "[m]")
         f.append("[g][m]amix=inputs=2:normalize=0:duration=first[aout]")
     else:
         f.append(f"[ac]afade=t=out:st={max(0.0, total - 1.5):.3f}:d=1.5[aout]")

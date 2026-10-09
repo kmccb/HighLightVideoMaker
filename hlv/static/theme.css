@@ -79,3 +79,65 @@ input, select, textarea { accent-color: var(--accent); }
 .hr-primary:disabled { opacity: .5; cursor: not-allowed; }
 .hr-icon { width: 38px; height: 38px; padding: 0; justify-content: center; }
 kbd { font-family: var(--mono) !important; }
+
+/* ---------- app shell (shell.js): left rail, stage stepper, Ctrl K palette ---------- */
+html.has-rail body { padding-left: 64px; box-sizing: border-box; }
+html.has-rail .hr-nav { display: none; }
+.hr-rail { position: fixed; z-index: 20; left: 0; top: 0; bottom: 0; width: 64px; box-sizing: border-box; display: flex; flex-direction: column;
+  align-items: center; gap: 4px; padding: 10px 0; background: #0D1014; border-right: 1px solid var(--line); overflow-y: auto; scrollbar-width: none; }
+.hr-rail-logo { width: 38px; height: 38px; border-radius: var(--r); background: var(--accent); color: var(--accent); display: grid; place-items: center; margin: 2px 0 12px; flex: none; }
+.hr-rail-logo svg path:first-child { fill: #0A0C0F; } .hr-rail-logo svg path:last-child { fill: var(--accent); }
+.hr-rail-logo:hover { background: var(--accent-hi); }
+.hr-rail-btn { position: relative; flex: none; width: 44px; height: 44px; border-radius: var(--r); display: grid; place-items: center; color: var(--dim);
+  background: transparent; border: 0; padding: 0; cursor: pointer; text-decoration: none !important; transition: background .12s, color .12s; }
+.hr-rail-btn:hover { color: var(--text); background: var(--panel-2); }
+.hr-rail-btn.on { color: var(--text); background: var(--raised); box-shadow: inset 2px 0 0 var(--accent); }
+.hr-rail-btn.dim { opacity: .4; }
+.hr-rail-sep { flex: none; width: 28px; height: 1px; background: var(--line); margin: 8px 0; }
+.hr-rail-fill { flex: 1; }
+.hr-rail-badge { position: absolute; top: 4px; right: 2px; min-width: 16px; height: 16px; padding: 0 4px; box-sizing: border-box; border-radius: 8px;
+  background: var(--warn); color: #1A1003; font: 600 10px/16px var(--mono); text-align: center; }
+.hr-rail-badge[hidden], .hr-rail-dot[hidden] { display: none; }
+.hr-rail-dot { position: absolute; top: 10px; right: 10px; width: 8px; height: 8px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 2px #0D1014; }
+#hrJobs.busy svg { animation: hr-spin 1.1s linear infinite; color: var(--accent-hi); }
+@keyframes hr-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { #hrJobs.busy svg { animation: none; } }
+
+.hr-steps { display: flex; align-items: center; gap: 2px; list-style: none; margin: 0; padding: 3px; background: var(--panel); border: 1px solid var(--line); border-radius: 10px; }
+.hr-steps li { display: flex; }
+.hr-step { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 11px; border-radius: 7px; color: var(--soft); text-decoration: none !important;
+  font: 600 13px var(--sans); white-space: nowrap; }
+.hr-step:hover { color: var(--text); background: var(--panel-2); }
+.hr-step.on { background: var(--sel); color: var(--text); }
+.hr-step-dot { width: 18px; height: 18px; box-sizing: border-box; border-radius: 50%; border: 1.5px solid #4A525D; color: var(--dim);
+  display: grid; place-items: center; font: 600 10px/1 var(--mono); }
+.hr-step-dot svg { width: 11px; height: 11px; }
+.hr-step-dot.done { background: var(--ok); border-color: var(--ok); color: #08140E; }
+.hr-step-dot.cur { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.hr-step-dot.warn { border-color: var(--warn); color: var(--warn); }
+.hr-step-meta { font: 500 12px var(--mono); color: var(--dim); }
+.hr-step-badge { font: 600 11px/1 var(--mono); color: #1A1003; background: var(--warn); border-radius: 999px; padding: 3px 6px; }
+.hr-step-sep { color: #4A525D; padding: 0 1px; }
+@media (max-width: 1100px) { .hr-step-meta { display: none; } }
+
+.hr-pal { position: fixed; inset: 0; z-index: 50; background: rgba(4,6,8,.62); display: flex; justify-content: center; align-items: flex-start; padding: 12vh 16px 16px; }
+.hr-pal[hidden] { display: none; }
+.hr-pal-box { width: min(620px, 100%); background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r-lg); box-shadow: 0 24px 60px rgba(0,0,0,.55); overflow: hidden; }
+.hr-pal-in { display: flex; align-items: center; gap: 10px; padding: 0 14px; height: 52px; border-bottom: 1px solid var(--line); color: var(--faint); }
+.hr-pal-in input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: 500 16px var(--sans); outline: none; }
+.hr-pal-in kbd { font-size: 11px; color: var(--dim); border: 1px solid var(--line-2); border-radius: 4px; padding: 2px 6px; }
+.hr-pal-list { list-style: none; margin: 0; padding: 6px; max-height: 52vh; overflow-y: auto; }
+.hr-pal-group { padding: 10px 10px 4px; font-size: 11px; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+.hr-pal-item { display: flex; align-items: baseline; gap: 10px; padding: 9px 10px; border-radius: var(--r); cursor: pointer; }
+.hr-pal-item:hover { background: var(--panel-2); }
+.hr-pal-item.on { background: var(--accent-tint); box-shadow: inset 2px 0 0 var(--accent); }
+.hr-pal-sub { font-size: 12px; color: var(--dim); margin-left: auto; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.hr-pal-empty { padding: 18px 10px; color: var(--dim); text-align: center; }
+
+@media (max-width: 700px) {
+  html.has-rail body { padding-left: 0; padding-bottom: 60px; }
+  .hr-rail { top: auto; right: 0; width: auto; height: 58px; flex-direction: row; justify-content: space-around; padding: 0 6px; border-right: 0; border-top: 1px solid var(--line); }
+  .hr-rail-logo, .hr-rail-sep, .hr-rail-fill, #hrJobs, #hrFind { display: none; }
+  .hr-rail-btn.on { box-shadow: inset 0 2px 0 var(--accent); }
+  .hr-steps { order: 9; flex: 1 1 100%; overflow-x: auto; }
+}

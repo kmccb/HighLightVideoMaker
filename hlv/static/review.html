@@ -174,6 +174,12 @@ video { display: block; max-width: 100%; max-height: 58vh; }
 .build-bar { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .build-bar .progress { flex: 1; min-width: 200px; height: 8px; }
 #rStep { color: var(--dim); font-size: 12px; min-width: 200px; }
+#ytBox { margin-top: 18px; padding: 14px; border: 1px solid var(--line); border-radius: 8px; display: grid; gap: 10px; }
+#ytBox h3 { margin: 0; font-size: 15px; }
+#ytBox textarea { width: 100%; min-height: 90px; box-sizing: border-box; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 8px; font: inherit; }
+#ytBox .yt-row { display: grid; grid-template-columns: auto 1fr; gap: 4px 10px; align-items: center; }
+#ytBox .yt-row input[type=text] { width: 100%; box-sizing: border-box; background: var(--panel-2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 8px; font: inherit; }
+#ytBox ol { margin: 6px 0 0; padding-left: 20px; display: grid; gap: 4px; }
 #rResult { margin-top: 14px; display: grid; gap: 8px; }
 #rResult video { width: 100%; max-height: 60vh; background: #000; border-radius: 6px; }
 #rResult .reel-actions { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
@@ -220,7 +226,9 @@ aside { background: var(--rail); }
 .dupewarn b { color: var(--warn); }
 .dupewarn .grp { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 10px; }
 main { padding: 20px 24px 28px; gap: 14px; }
-.titlebar { align-items: center; }
+.titlebar { align-items: center; flex-wrap: nowrap; min-width: 0; }
+.titlebar h2 { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.titlebar .meta { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; flex: 0 1 auto; }
 .titlebar h2 { font: italic 800 30px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; }
 .titlebar .meta { display: inline-flex; align-items: center; height: 26px; padding: 0 10px; border-radius: 13px; background: var(--panel-2); border: 1px solid var(--line-2); color: var(--soft); font-size: 13px; }
 .titlebar .meta:empty, .note:empty { display: none; }
@@ -312,6 +320,174 @@ main { padding: 20px 24px 28px; gap: 14px; }
 .modal { background: rgba(4,5,7,.85); backdrop-filter: blur(4px); }
 .modal .box { border-radius: var(--r-xl); padding: 16px; }
 .hr-top .btn.reelbtn { margin: 0; width: auto; }
+/* app shell: the rail has the logo and page links; the stepper shows review progress */
+html.has-rail .hr-top > .hr-brand, html.has-rail .hr-prog { display: none; }
+html.has-rail .reel { left: calc(64px + 290px); }
+body.reel-open .hr-top #openReel { display: none; }
+
+/* ===== Review workspace: plays | video + timeline | inspector ===== */
+.app { grid-template-columns: 300px minmax(0, 1fr) 330px; }
+main { min-width: 0; }
+.rail-head { align-items: center; }
+.playsum { font-size: 12px; color: var(--dim); white-space: nowrap; }
+.pfilter { padding: 10px 12px; display: grid; gap: 8px; border-bottom: 1px solid var(--line); }
+.pf-search { display: flex; align-items: center; gap: 8px; height: 34px; padding: 0 10px; border-radius: var(--r); border: 1px solid var(--line-2); background: var(--panel); color: var(--faint); }
+.pf-search:focus-within { border-color: var(--accent); }
+.pf-search input { flex: 1; min-width: 0; border: 0; background: transparent; color: var(--text); font: 400 13px var(--sans); outline: none; }
+.pf-tabs { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 2px; padding: 3px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
+.pf-tabs button { height: 28px; padding: 0 2px; border: 0; border-radius: 6px; background: transparent; color: var(--dim); font: 600 11.5px var(--sans); cursor: pointer; white-space: nowrap; }
+.pf-tabs button b { font: 500 10.5px var(--mono); color: var(--faint); }
+.pf-tabs button:hover { color: var(--text); }
+.pf-tabs button.on { background: var(--sel); color: var(--text); }
+.pf-tabs button[data-f=need] b:not(:empty) { color: var(--warn); }
+.list-empty { padding: 24px 12px; color: var(--dim); font-size: 13px; text-align: center; }
+.item { padding: 6px 8px; gap: 10px; }
+.item .vthumb { position: relative; flex: none; width: 64px; height: 36px; border-radius: 4px; overflow: hidden; background: var(--panel-2); }
+.item .vthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.item .vthumb .dur { position: absolute; right: 2px; bottom: 2px; font: 600 9.5px/1 var(--mono); color: #fff; background: rgba(0,0,0,.7); padding: 2px 3px; border-radius: 2px; }
+.item .vthumb .dot { position: absolute; left: 3px; top: 3px; width: 9px; height: 9px; box-shadow: 0 0 0 1.5px rgba(0,0,0,.55); background: rgba(0,0,0,.35); }
+.item .vthumb .dot.done { background: var(--ok); }
+.item .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.item .txt .name { flex: none; }
+.item .sub { font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 6px; align-items: center; }
+.item .sub .s-spot { color: var(--spot); } .item .sub .s-hit { color: var(--hit); font-family: var(--mono); font-size: 10.5px; font-weight: 600; }
+.item .sub .s-need { color: var(--warn); }
+.item.skipped .name { text-decoration: none; color: var(--dim); }
+.item.skipped .vthumb { opacity: .45; }
+.item .pill-out { flex: none; font-size: 10.5px; font-weight: 600; color: var(--dim); border: 1px solid var(--line-2); border-radius: 999px; padding: 2px 7px; }
+/* the In reel switch in the title bar */
+.btn.inswitch { display: inline-flex; align-items: center; gap: 10px; min-height: 38px; padding: 0 10px 0 12px; font-weight: 600; }
+.btn.inswitch .sw { position: relative; width: 32px; height: 18px; border-radius: 999px; background: var(--line-2); transition: background .15s; }
+.btn.inswitch .sw::after { content: ''; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px; border-radius: 50%; background: var(--soft); transition: left .15s, background .15s; }
+.btn.inswitch.inreel { color: var(--text); border-color: var(--line-2); }
+.btn.inswitch.inreel .sw { background: var(--accent); }
+.btn.inswitch.inreel .sw::after { left: 16px; background: var(--accent-ink); }
+.btn.inswitch.leftout { color: var(--warn); }
+/* inspector */
+.app > aside.insp { border-right: 0; border-left: 1px solid var(--line); background: var(--rail); display: flex; flex-direction: column; min-height: 0; }
+.insp .controls { flex: 1; overflow-y: auto; display: flex; flex-direction: column; flex-wrap: nowrap; gap: 0; min-height: 0; }
+.insp .tgroup { flex: none; }
+.insp .tgroup { background: transparent; border: 0; border-bottom: 1px solid var(--line); border-radius: 0; padding: 14px 14px 16px; gap: 10px; }
+.insp .tgroup > .hr-eyebrow { margin: 0; }
+.insp .tg-btns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
+.insp .tg-btns .btn { justify-content: flex-start; text-align: left; min-height: 40px; font-size: 13px; }
+.insp #bSpot, .insp #bRing, .insp #bHit { grid-column: 1 / -1; }
+.insp #notes { height: 38px; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r); padding: 0 12px; color: var(--text); font: 400 13px var(--sans); }
+.insp #notes:focus { border-color: var(--accent); outline: none; }
+.insp-foot { padding: 12px 14px; border-top: 1px solid var(--line); background: #0D1014; display: flex; flex-direction: column; gap: 8px; }
+.insp-foot .warnline:empty, .insp-foot .status:empty { display: none; }
+.insp-foot .warnline, .insp-foot .status { font-size: 12px; }
+.insp-btns { display: flex; gap: 8px; }
+.insp-btns #bOk { flex: 1; min-height: 44px; justify-content: center; }
+.insp-btns #bReset { min-height: 44px; }
+.pf-tabs { display: flex; } .pf-tabs button { flex: 1 1 auto; padding: 0 6px; }
+.btn.inswitch, .insp .tg-btns .btn, .insp-btns .btn { white-space: nowrap; }
+.insp .tg-btns .btn { overflow: hidden; text-overflow: ellipsis; }
+@media (max-width: 1360px) {
+  .app { grid-template-columns: 260px minmax(0, 1fr) 280px; }
+  .pf-tabs button { font-size: 11px; padding: 0 3px; }
+  .pf-tabs button:not([data-f=need]) b { display: none; }
+  .item .pill-out { display: none; }
+  .insp .tg-btns { grid-template-columns: 1fr; }
+  .insp #bSpot, .insp #bRing, .insp #bHit { grid-column: auto; }
+  .titlebar .meta { display: none; }
+  .insp-btns .btn kbd { display: none; }
+  .insp-btns #bOk { padding: 0 10px; }
+}
+/* ===== Build reel: the reel on the left, settings on the right, build bar pinned ===== */
+.reel { padding: 0; overflow: hidden; }
+.rb { display: grid; grid-template-columns: minmax(0, 1fr) 380px; height: 100%; }
+.rb-main { overflow-y: auto; padding: 22px 26px 48px; min-width: 0; display: flex; flex-direction: column; gap: 16px; }
+.rb-main > header { margin: 0; }
+.rb-title { display: flex; flex-direction: column; gap: 6px; }
+.rb-sub { color: var(--dim); font-size: 13px; }
+.rb-h { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.rb-h h3 { margin: 0; font: 600 11px var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--faint); }
+.rb-h .hint { font-size: 12px; }
+.rb-story { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 14px; }
+.rb-strip { display: flex; gap: 3px; overflow-x: auto; padding-bottom: 4px; }
+.rb-tile { position: relative; flex: 1 0 20px; height: 58px; border-radius: 5px; overflow: hidden; border: 1px solid #2A3B30; background: #1B2A20 center / cover no-repeat;
+  cursor: pointer; padding: 0; color: #fff; font: 600 10px var(--mono); }
+.rb-tile:hover { border-color: var(--soft); }
+.rb-tile .n { position: absolute; left: 4px; top: 3px; text-shadow: 0 1px 2px #000; }
+.rb-tile.hit::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 4px; background: var(--hit); }
+.rb-tile.warn { border-color: var(--warn); box-shadow: inset 0 0 0 1px var(--warn); }
+.rb-tile.bk { flex: 0 0 74px; background: #171B21; border-color: var(--line-2); display: flex; flex-direction: column; justify-content: flex-end; align-items: flex-start; padding: 6px; gap: 0;
+  font: 700 12px/1.1 var(--display); text-transform: uppercase; letter-spacing: .03em; cursor: default; }
+.rb-tile.bk.intro { background: #2A1508; border-color: var(--accent); color: var(--accent-hi); }
+.rb-tile.photo { background-color: #22252B; }
+#rList li.flash { animation: rb-flash 1.2s ease-out; }
+@keyframes rb-flash { from { box-shadow: 0 0 0 2px var(--accent); } to { box-shadow: 0 0 0 2px transparent; } }
+.rb-out { border-top: 1px solid var(--line); padding-top: 16px; display: grid; gap: 20px; }
+/* Renders & publish: the panel's second view (#publish) */
+#reel.pub .rb { grid-template-columns: 1fr; }
+#reel.pub .rb-story, #reel.pub .order-head, #reel.pub #rList, #reel.pub #rDupes, #reel.pub .rb-side { display: none; }
+#reel.pub .rb-out { display: grid; border-top: 0; padding-top: 0; grid-template-columns: minmax(0, 1fr) minmax(320px, 420px); align-items: start; }
+#reel:not(.pub) .pub-job { display: none; }
+@media (max-width: 1100px) { #reel.pub .rb-out { grid-template-columns: 1fr; } }
+.pub-left { display: grid; gap: 14px; min-width: 0; align-content: start; }
+.pub-left > .rb-h { margin: 6px 0 0; }
+.pub-job { border: 1px solid #3A2614; border-radius: var(--r-lg); background: var(--panel); padding: 16px; display: grid; gap: 12px; }
+.pub-job[hidden] { display: none; }
+.pub-job .pj-top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+.pub-job .pj-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 0 4px var(--accent-tint); flex: none; }
+.pub-job.err { border-color: rgba(255,84,112,.45); } .pub-job.err .pj-dot { background: var(--bad); box-shadow: 0 0 0 4px rgba(255,84,112,.18); }
+.pub-job.ok { border-color: rgba(61,220,151,.35); } .pub-job.ok .pj-dot { background: var(--ok); box-shadow: 0 0 0 4px rgba(61,220,151,.15); }
+.pub-job .pj-t { font-weight: 700; font-size: 16px; } .pub-job .pj-s { font-size: 13px; color: var(--dim); }
+.pub-job .pj-pct { margin-left: auto; font: 600 22px var(--mono); }
+.pub-job .pj-bar { height: 8px; border-radius: 4px; background: var(--sel); overflow: hidden; } .pub-job .pj-bar > i { display: block; height: 100%; background: var(--accent); border-radius: 4px; transition: width .4s; }
+#rResult { display: grid; gap: 10px; }
+#rResult .reel-actions { background: var(--rail); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px 14px; gap: 8px 10px; }
+#rResult .reel-actions > b { flex: 1 1 100%; font-size: 15px; }
+#rResult .reel-actions + .hint { margin: -6px 0 0 14px; }
+#rResult .reel-actions + .hint code { font-size: 11px; color: var(--faint); background: none; border: 0; padding: 0; word-break: break-all; }
+#reel.pub #ytBox { margin: 0; background: var(--rail); border-radius: var(--r-lg); padding: 16px; position: sticky; top: 0; }
+#ytBox h3 { font: 700 20px/1 var(--display) !important; text-transform: uppercase; letter-spacing: .03em; }
+#ytBox .yt-vis { display: grid; gap: 6px; }
+#ytBox .yt-vis .segctl { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+#reel:not(.pub) .rb-out { display: none; }
+.rb-side { border-left: 1px solid var(--line); background: var(--rail); display: flex; flex-direction: column; min-height: 0; }
+.rb-sections { flex: 1; overflow-y: auto; }
+.rsec { border-bottom: 1px solid var(--line); }
+.rsec > summary { list-style: none; cursor: pointer; padding: 14px 40px 14px 16px; display: flex; flex-direction: column; gap: 3px; position: relative; }
+.rsec > summary::-webkit-details-marker { display: none; }
+.rsec > summary::after { content: ''; position: absolute; right: 18px; top: 50%; width: 8px; height: 8px; margin-top: -6px; border: solid var(--dim); border-width: 0 2px 2px 0; transform: rotate(45deg); transition: transform .15s; }
+.rsec[open] > summary::after { transform: rotate(-135deg); margin-top: -2px; }
+.rsec > summary:hover .rsec-t { color: var(--text); }
+.rsec-t { font: 600 11px var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--soft); }
+.rsec-sum { font-size: 12.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rsec-body { padding: 0 16px 16px; display: grid; gap: 12px; }
+.rsec-body .row { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
+.rsec-body .row > .hint { flex: 1 1 100%; font-size: 12px; }
+.rsec-body > .hint { font-size: 12px; }
+.rsec-body .lbl { color: var(--dim); font-size: 12.5px; flex: 0 0 100%; }
+.rsec-body .row:has(> input[type=checkbox]) > .lbl { flex: 1 1 auto; order: 1; color: var(--text); font-weight: 600; font-size: 13px; }
+.rsec-body .row:has(> input[type=checkbox]) > input[type=checkbox] { order: 0; }
+.rsec-body .row:has(> input[type=checkbox]) > .hint, .rsec-body .row:has(> input[type=checkbox]) > select { order: 2; }
+.rsec-body .row:has(> input[type=checkbox]) > .hint { padding-left: 28px; margin-top: -6px; }
+.rsec-body .segctl { flex: 1 1 100%; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; }
+.rsec-body #rIntro { grid-auto-flow: row; }
+.rsec-body select { flex: 1; background: #0F1216; color: var(--text); border: 1px solid var(--line-2); border-radius: 6px; height: 34px; padding: 0 8px; font: inherit; }
+.rsec-body input[type=checkbox] { width: 18px; height: 18px; margin: 0; accent-color: var(--accent); flex: none; }
+.rsec-body input[type=range] { flex: 1; accent-color: var(--accent); }
+.rsec-body .stylepick { flex: 1 1 100%; }
+.rb-side .build-bar { flex: none; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: #0D1014; padding: 14px 16px; display: grid; gap: 10px; }
+.bb-sum { display: flex; justify-content: space-between; gap: 10px; font-size: 12px; color: var(--dim); }
+.bb-sum #bbOut { color: var(--soft); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rb-side #rBuild { min-height: 48px; width: 100%; justify-content: center; font: 700 16px var(--sans); letter-spacing: 0; text-transform: none; }
+.rb-side .build-bar .progress { min-width: 0; height: 6px; }
+.rb-side .build-bar .progress:has(> #rProg[style*="width: 0"]), .rb-side .build-bar .progress:has(> #rProg:not([style])) { display: none; }
+#rStep:empty { display: none; }
+#rStep { font-size: 12px; color: var(--dim); }
+@media (max-width: 1200px) { .rb { grid-template-columns: minmax(0, 1fr) 320px; } }
+@media (max-width: 900px) { .reel { overflow-y: auto; } .rb { grid-template-columns: 1fr; height: auto; } .rb-main { overflow: visible; } .rb-side .build-bar { position: sticky; bottom: 0; } }
+@media (max-width: 1000px) {
+  .app { grid-template-columns: 1fr; height: auto; }
+  .app > aside:first-child { max-height: 320px; }
+  html.has-rail .reel { left: 64px; }
+}
+@media (max-width: 760px) { html.has-rail .reel { left: 64px; } }
+@media (max-width: 700px) { html.has-rail .reel { left: 0; bottom: 58px; } }
 @media (max-width: 760px) { .reel { left: 0; } .app { height: auto; } .hr-prog { min-width: 0; flex: 1 1 100%; order: 9; } }
 </style>
 </head>
@@ -326,16 +502,22 @@ main { padding: 20px 24px 28px; gap: 14px; }
     <b id="projName">Play Review</b>
   </nav>
   <span class="hr-spacer"></span>
+  <ol class="hr-steps" id="hrSteps" aria-label="Reel stages"></ol>
+  <span class="hr-spacer"></span>
   <div class="hr-prog"><div class="progress"><div id="prog"></div></div><div class="progress-label" id="progLabel"></div></div>
-  <a class="hr-ghost" href="/mark" title="Click your player and pick the hit on every play, one screen at a time">Mark plays</a>
-  <a class="hr-ghost" href="/players">Players</a>
-  <a class="hr-ghost hr-icon" href="/guide" title="How to use" aria-label="How to use">?</a>
-  <button class="hr-primary" id="openReel">Build reel
+  <button class="hr-primary" id="openReel">Continue to Build
     <svg width="14" height="14" viewBox="0 0 14 14" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7h8M7.5 3.5L11 7l-3.5 3.5"/></svg></button>
 </header>
 <div class="app">
   <aside>
-    <div class="rail-head"><h2 class="hr-h2">Plays</h2></div>
+    <div class="rail-head"><h2 class="hr-h2">Plays</h2><span class="spacer"></span><span class="playsum" id="playSum"></span></div>
+    <div class="pfilter">
+      <label class="pf-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <input type="search" id="pfQ" placeholder="Filter by game, file, note…" autocomplete="off" aria-label="Filter plays"></label>
+      <div class="pf-tabs" id="pfTabs" role="tablist" aria-label="Show">
+        <button role="tab" data-f="all">All <b></b></button><button role="tab" data-f="need">Needs you <b></b></button><button role="tab" data-f="in">In reel <b></b></button><button role="tab" data-f="out">Left out <b></b></button>
+      </div>
+    </div>
     <div class="list" id="list"></div>
   </aside>
 
@@ -345,9 +527,9 @@ main { padding: 20px 24px 28px; gap: 14px; }
       <span class="meta" id="meta"></span>
       <span class="note" id="note"></span>
       <span class="spacer"></span>
-      <button class="hr-ghost" id="bKeys" title="Show or hide all keyboard shortcuts (?)">
-        <svg width="20" height="14" viewBox="0 0 20 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x=".75" y=".75" width="18.5" height="12.5" rx="2"/><path d="M4 4.5h1M8 4.5h1M12 4.5h1M16 4.5h0M4 8h1M15 8h1M7 10h6" stroke-linecap="round"/></svg>
-        Shortcuts</button>
+      <button class="btn inswitch" id="bSkip" title="Include this play in the reel or leave it out (X)"><span id="skipLbl">In reel</span><i class="sw" aria-hidden="true"></i><kbd>X</kbd></button>
+      <button class="hr-ghost hr-icon" id="bKeys" title="Keyboard shortcuts (?)" aria-label="Keyboard shortcuts">
+        <svg width="20" height="14" viewBox="0 0 20 14" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><rect x=".75" y=".75" width="18.5" height="12.5" rx="2"/><path d="M4 4.5h1M8 4.5h1M12 4.5h1M16 4.5h0M4 8h1M15 8h1M7 10h6" stroke-linecap="round"/></svg></button>
     </div>
 
     <div class="stage">
@@ -379,34 +561,6 @@ main { padding: 20px 24px 28px; gap: 14px; }
       <div class="tl-ticks" id="tlTicks"></div>
     </div>
 
-    <div class="controls">
-      <div class="tgroup"><span class="hr-eyebrow">Trim the play</span><div class="tg-btns">
-          <button class="btn" id="bPlay"><kbd>Space</kbd> Play</button>
-          <button class="btn snap" id="bSnap"><kbd>S</kbd> Snap <span class="val" id="vSnap">–</span></button>
-          <button class="btn end" id="bEnd"><kbd>E</kbd> End <span class="val" id="vEnd">–</span></button>
-          <button class="btn" id="bWin"><kbd>P</kbd> Play clip window</button>
-      </div></div>
-      <div class="tgroup"><span class="hr-eyebrow">Your player</span><div class="tg-btns">
-          <button class="btn spot" id="bSpot"><kbd>F</kbd> Spotlight player <span class="zl" id="spotN"></span></button>
-          <button class="btn" id="bZoom"><kbd>Z</kbd> Zoom <span class="zl" id="zoomLbl">off</span></button>
-          <button class="btn" id="bView"><kbd>V</kbd> <span id="viewLbl">Show zoomed</span></button>
-          <button class="btn" id="bHl"><kbd>H</kbd> Highlight <span class="zl" id="hlLbl">ring</span></button>
-          <button class="btn" id="bRing" title="Hide the highlight from here (e.g. once he's in a pile); press again where it should come back"><kbd>O</kbd> <span id="ringLbl">Ring off here</span></button>
-      </div></div>
-      <div class="tgroup"><span class="hr-eyebrow">Big moment &amp; reel</span><div class="tg-btns">
-          <button class="btn hit" id="bHit" title="K marks the hit at the playhead"><kbd>K</kbd> Hit <span class="val" id="vHit">–</span><span class="x" id="bNoHit" title="No hit on this play: no punch, no slow-mo, timing left alone (N)">✕</span></button>
-          <button class="btn" id="bSkip" title="include this clip in the reel or leave it out"><kbd>X</kbd> <span id="skipLbl">In reel</span></button>
-          <button class="btn" id="bReset"><kbd>R</kbd> Reset to auto</button>
-      </div></div>
-    </div>
-
-    <div class="row2">
-      <input id="notes" placeholder="Notes (e.g. Caleb #22 tackle, multiple plays, bad angle)…" autocomplete="off">
-      <span class="warnline" id="warn"></span>
-      <span class="status" id="status"></span>
-      <button class="btn primary" id="bOk"><kbd>Enter</kbd> Confirm &amp; next</button>
-    </div>
-
     <div class="help" id="help" hidden>
       <div><kbd>Space</kbd> play / pause</div>
       <div><kbd>←</kbd><kbd>→</kbd> step 1 frame</div>
@@ -431,16 +585,117 @@ main { padding: 20px 24px 28px; gap: 14px; }
     </div>
   </main>
 
+  <aside class="insp" aria-label="Play settings">
+    <div class="controls">
+      <div class="tgroup"><span class="hr-eyebrow">Trim the play</span><div class="tg-btns">
+          <button class="btn" id="bPlay"><kbd>Space</kbd> Play</button>
+          <button class="btn snap" id="bSnap"><kbd>S</kbd> Snap <span class="val" id="vSnap">–</span></button>
+          <button class="btn end" id="bEnd"><kbd>E</kbd> End <span class="val" id="vEnd">–</span></button>
+          <button class="btn" id="bWin"><kbd>P</kbd> Play clip window</button>
+      </div></div>
+      <div class="tgroup"><span class="hr-eyebrow">Your player</span><div class="tg-btns">
+          <button class="btn spot" id="bSpot"><kbd>F</kbd> Spotlight player <span class="zl" id="spotN"></span></button>
+          <button class="btn" id="bZoom"><kbd>Z</kbd> Zoom <span class="zl" id="zoomLbl">off</span></button>
+          <button class="btn" id="bView"><kbd>V</kbd> <span id="viewLbl">Show zoomed</span></button>
+          <button class="btn" id="bHl"><kbd>H</kbd> Highlight <span class="zl" id="hlLbl">ring</span></button>
+          <button class="btn" id="bRing" title="Hide the highlight from here (e.g. once he's in a pile); press again where it should come back"><kbd>O</kbd> <span id="ringLbl">Ring off here</span></button>
+      </div></div>
+      <div class="tgroup"><span class="hr-eyebrow">Big moment</span><div class="tg-btns">
+          <button class="btn hit" id="bHit" title="K marks the hit at the playhead"><kbd>K</kbd> Hit <span class="val" id="vHit">–</span><span class="x" id="bNoHit" title="No hit on this play: no punch, no slow-mo, timing left alone (N)">✕</span></button>
+      </div></div>
+      <div class="tgroup"><label class="hr-eyebrow" for="notes">Notes</label>
+        <input id="notes" placeholder="e.g. Caleb #22 tackle, bad angle…" autocomplete="off">
+      </div>
+    </div>
+    <div class="insp-foot">
+      <span class="warnline" id="warn"></span>
+      <span class="status" id="status"></span>
+      <div class="insp-btns">
+        <button class="btn" id="bReset" title="Put snap, end and hit back to the auto-detected values"><kbd>R</kbd> Reset</button>
+        <button class="btn primary" id="bOk"><kbd>Enter</kbd> Confirm &amp; next</button>
+      </div>
+    </div>
+  </aside>
+
+
   <section class="reel" id="reel" hidden>
+   <div class="rb">
+    <div class="rb-main">
     <header>
-      <h2>Build reel</h2>
+      <div class="rb-title"><h2>Build reel</h2><span class="rb-sub" id="rbSub"></span></div>
       <span class="spacer"></span>
       <button class="btn" id="reelClose"><kbd>Esc</kbd> Back to review</button>
     </header>
-    <div class="reel-grid">
-      <div class="card">
+    <div id="rDupes" class="dupewarn" hidden></div>
+    <section class="rb-story" aria-label="Storyboard"><div class="rb-h"><h3>Storyboard</h3><span class="hint">each tile is a play, as wide as it lasts · <span style="color:var(--hit)">yellow</span> = hit set · <span style="color:var(--warn)">amber</span> = needs a fix · click a tile to find it below</span></div>
+      <div class="rb-strip" id="rStory"></div></section>
+    <div class="order-head"><span>Drag to reorder, untick to leave out, ★ opens the recruiting cut</span><span id="rCount"></span><span id="rLen"></span></div>
+    <ol id="rList"></ol>
+    <section class="rb-out" id="rbOut" aria-label="Renders and publish">
+      <div class="pub-left">
+        <div class="pub-job" id="pubJob" hidden></div>
+        <div class="rb-h"><h3>Videos</h3><span class="hint" id="pubNone"></span></div>
+        <div id="rResult"></div>
+      </div>
+      <div id="ytBox" hidden></div>
+    </section>
+    </div>
+    <aside class="rb-side" aria-label="Reel settings">
+     <div class="rb-sections">
+      <details class="rsec" data-sec="output" open>
+        <summary><span class="rsec-t">Output</span><span class="rsec-sum" id="sum_output"></span></summary>
+        <div class="rsec-body">
+        <label class="row"><span class="lbl">Make</span>
+          <span class="segctl" id="rCut">
+            <button data-v="reel" title="the full highlight reel: intro, every ticked play and photo">Highlight reel</button><button data-v="recruit" title="for college coaches: info card, your starred plays first, then the rest up to about 3 minutes; no photos">Recruiting cut</button><button data-v="both" title="both videos (takes longer)">Both</button>
+          </span></label>
+        <div class="hint" id="rCutHint" hidden></div>
+        <label class="row"><span class="lbl">Format</span>
+          <span class="segctl" id="rFormat">
+            <button data-v="wide" title="16:9, for TV, YouTube, Hudl">Wide</button><button data-v="vertical" title="9:16 for Instagram, TikTok, Snapchat: framed on the player">Vertical</button><button data-v="both" title="both files (takes about twice as long)">Both</button>
+          </span></label>
         <label class="row"><span class="lbl">Player</span><select id="rPlayer"></select></label>
         <div id="rAssets" class="hint"></div>
+        </div>
+      </details>
+      <details class="rsec" data-sec="story" open>
+        <summary><span class="rsec-t">Story</span><span class="rsec-sum" id="sum_story"></span></summary>
+        <div class="rsec-body">
+        <div class="row"><span class="lbl">Intro</span>
+          <button class="btn stylepick" id="rIntroPick" data-kind="intro" title="see every intro and pick one"><span class="thumb"></span><span class="spname"></span><span class="spchg">Change ▸</span></button></div>
+        <label class="row"><span class="lbl">Intro timing</span>
+          <span class="segctl" id="rIntroSync">
+            <button data-v="beat" title="number, name and logo land on the song's steady beat">Steady beat</button><button data-v="hits" title="number, name and logo slam in on the song's heaviest hits, and the intro ends on the biggest one">Big hits</button>
+          </span></label>
+        <label class="row"><span class="lbl">Into first play</span>
+          <span class="segctl" id="rIntroOut">
+            <button data-v="fade" title="the intro fades into the first play">Crossfade</button><button data-v="bricks" title="on the big hit the intro cracks into bricks that blast out at the camera, revealing the first play">Bricks</button><button data-v="smoke" title="on the big hit the intro bursts into smoke from the centre, revealing the first play">Smoke</button>
+          </span></label>
+        <div class="hint" id="rIntroOutHint" hidden>Hard cut on a big hit of the song. ▶ With my player (in the intro picker) shows the intro blowing into your first play.</div>
+        <label class="row"><span class="lbl">Impact sounds</span><input type="checkbox" id="rIntroSfx">
+          <span class="hint">whoosh + boom on each slam of the animated intro</span></label>
+        <label class="row"><span class="lbl">Transition</span>
+          <span class="segctl" id="rTrans">
+            <button data-v="crossfade">Crossfade</button><button data-v="cut">Cut</button><button data-v="dip">Dip to black</button>
+          </span></label>
+        <label class="row"><span class="lbl">Name banner</span>
+          <span class="segctl" id="rBanner">
+            <button data-v="first" title="first play that has a spotlight">First play</button><button data-v="every">Every play</button><button data-v="off">Off</button>
+          </span></label>
+        <label class="row"><span class="lbl">Freeze intro</span><input type="checkbox" id="rFreeze">
+          <span class="hint">freeze + spotlight + name at the snap (plays with a spotlight click)</span></label>
+        <label class="row"><span class="lbl">Ring with spotlight</span><input type="checkbox" id="rFreezeRing">
+          <span class="hint">the ring under his feet with the spotlight (freeze, and the spot-shadow highlight); untick for just the light</span></label>
+        <label class="row"><span class="lbl">Photo length</span>
+          <span class="segctl" id="rPhotoS">
+            <button data-v="3">3 s</button><button data-v="4">4 s</button><button data-v="5">5 s</button>
+          </span><span class="hint">fitted to the beat</span></label>
+        <div class="hint">Highlight style: <b id="rStyle"></b> (change with H while reviewing)</div>
+        </div>
+      </details>
+      <details class="rsec" data-sec="music">
+        <summary><span class="rsec-t">Music</span><span class="rsec-sum" id="sum_music"></span></summary>
+        <div class="rsec-body">
         <label class="row"><span class="lbl">Music</span>
           <span class="segctl" id="rMusicSrc">
             <button data-v="song" title="your song (file or YouTube); hits are synced to its beats">My song</button><button data-v="compose" title="a soundtrack written for this reel: every hit lands on a big impact">Made for this reel</button>
@@ -458,77 +713,44 @@ main { padding: 20px 24px 28px; gap: 14px; }
           <input type="text" id="rYt" placeholder="or paste a YouTube link" style="flex:1;min-width:160px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px">
           <button class="btn" id="rYtGo">Download</button></div>
         <div id="rSongMsg" class="hint"></div>
-        <label class="row"><span class="lbl">ScottForge card</span><input type="checkbox" id="rCredit">
-          <span class="hint" id="rCreditHint">7 s animated ending after the end card · <a href="/players#brand" style="color:var(--accent)">edit ▸</a></span></label>
-        <div class="row"><span class="lbl">Ending style</span>
-          <button class="btn stylepick" id="rOutroPick" data-kind="outro" title="see every ending and pick one"><span class="thumb"></span><span class="spname"></span><span class="spchg">Change ▸</span></button></div>
-        <div class="hint">Name, number, school, colours and logo: <a href="/players" style="color:var(--accent)">edit player profiles ▸</a><span hidden><code id="rProfile"></code><code id="rAssetsDir"></code></span></div>
-      </div>
-      <div class="card">
-        <label class="row"><span class="lbl">Make</span>
-          <span class="segctl" id="rCut">
-            <button data-v="reel" title="the full highlight reel: intro, every ticked play and photo">Highlight reel</button><button data-v="recruit" title="for college coaches: info card, your starred plays first, then the rest up to about 3 minutes; no photos">Recruiting cut</button><button data-v="both" title="both videos (takes longer)">Both</button>
-          </span></label>
-        <div class="hint" id="rCutHint" hidden></div>
-        <label class="row"><span class="lbl">Format</span>
-          <span class="segctl" id="rFormat">
-            <button data-v="wide" title="16:9, for TV, YouTube, Hudl">Wide</button><button data-v="vertical" title="9:16 for Instagram, TikTok, Snapchat: framed on the player">Vertical</button><button data-v="both" title="both files (takes about twice as long)">Both</button>
-          </span></label>
-        <label class="row"><span class="lbl">Transition</span>
-          <span class="segctl" id="rTrans">
-            <button data-v="crossfade">Crossfade</button><button data-v="cut">Cut</button><button data-v="dip">Dip to black</button>
-          </span></label>
-        <div class="row"><span class="lbl">Intro</span>
-          <button class="btn stylepick" id="rIntroPick" data-kind="intro" title="see every intro and pick one"><span class="thumb"></span><span class="spname"></span><span class="spchg">Change ▸</span></button></div>
-        <label class="row"><span class="lbl">Intro timing</span>
-          <span class="segctl" id="rIntroSync">
-            <button data-v="beat" title="number, name and logo land on the song's steady beat">Steady beat</button><button data-v="hits" title="number, name and logo slam in on the song's heaviest hits, and the intro ends on the biggest one">Big hits</button>
-          </span></label>
-        <label class="row"><span class="lbl">Into first play</span>
-          <span class="segctl" id="rIntroOut">
-            <button data-v="fade" title="the intro fades into the first play">Crossfade</button><button data-v="bricks" title="on the big hit the intro cracks into bricks that blast out at the camera, revealing the first play">Bricks 💥</button><button data-v="smoke" title="on the big hit the intro bursts into smoke from the centre, revealing the first play">Smoke 💨</button>
-          </span></label>
-        <div class="hint" id="rIntroOutHint" hidden>Hard cut on a big hit of the song. ▶ With my player (in the intro picker) shows the intro blowing into your first play.</div>
-        <label class="row"><span class="lbl">Impact sounds</span><input type="checkbox" id="rIntroSfx">
-          <span class="hint">whoosh + boom on each slam of the animated intro</span></label>
-        <label class="row"><span class="lbl">Name banner</span>
-          <span class="segctl" id="rBanner">
-            <button data-v="first" title="first play that has a spotlight">First play</button><button data-v="every">Every play</button><button data-v="off">Off</button>
-          </span></label>
-        <label class="row"><span class="lbl">Photo length</span>
-          <span class="segctl" id="rPhotoS">
-            <button data-v="3">3 s</button><button data-v="4">4 s</button><button data-v="5">5 s</button>
-          </span><span class="hint">fitted to the beat</span></label>
-        <label class="row"><span class="lbl">Freeze intro</span><input type="checkbox" id="rFreeze">
-          <span class="hint">freeze + spotlight + name at the snap (plays with a spotlight click)</span></label>
-        <label class="row"><span class="lbl">Ring with spotlight</span><input type="checkbox" id="rFreezeRing">
-          <span class="hint">the ring under his feet with the spotlight (freeze, and the spot-shadow highlight); untick for just the light</span></label>
+        <label class="row"><span class="lbl">Music starts at</span>
+          <input type="number" id="rMStart" min="0" step="0.5" style="width:90px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px">
+          <span class="hint">seconds into the song (skip a slow intro)</span></label>
         <label class="row"><span class="lbl">Game audio</span><input type="range" id="rGame" min="0" max="100" step="5"><span id="rGameV" class="hint"></span></label>
-        <div class="hint">Highlight style: <b id="rStyle"></b> (change with H while reviewing)</div>
-      </div>
-      <div class="card">
         <label class="row"><span class="lbl">Sync hits to beat</span><input type="checkbox" id="rSync">
           <span class="hint">each play's hit (K) lands on a strong beat of the song</span></label>
+        </div>
+      </details>
+      <details class="rsec" data-sec="motion">
+        <summary><span class="rsec-t">Motion</span><span class="rsec-sum" id="sum_motion"></span></summary>
+        <div class="rsec-body">
         <label class="row"><span class="lbl">Slow-mo into hit</span><input type="checkbox" id="rSlow">
           <select id="rSlowSpeed" style="flex:0;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 6px">
             <option value="0.5">0.5×</option><option value="0.4">0.4×</option><option value="0.3">0.3×</option></select>
           <span class="hint">eases into slow motion right before the hit, then back to full speed</span></label>
         <label class="row"><span class="lbl">Hit punch</span><input type="checkbox" id="rFx">
           <span class="hint">quick zoom bump + flash on the hit</span></label>
-        <label class="row"><span class="lbl">Music starts at</span>
-          <input type="number" id="rMStart" min="0" step="0.5" style="width:90px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px">
-          <span class="hint">seconds into the song (skip a slow intro)</span></label>
-      </div>
-    </div>
-    <div id="rDupes" class="dupewarn" hidden></div>
-    <div class="order-head"><span>Plays and photos in reel order: drag to reorder, untick to leave out</span><span id="rCount"></span><span id="rLen"></span></div>
-    <ol id="rList"></ol>
-    <div class="build-bar">
-      <button class="btn primary" id="rBuild">Build reel</button>
-      <div class="progress"><div id="rProg"></div></div>
-      <span id="rStep"></span>
-    </div>
-    <div id="rResult"></div>
+        </div>
+      </details>
+      <details class="rsec" data-sec="ending">
+        <summary><span class="rsec-t">Ending</span><span class="rsec-sum" id="sum_ending"></span></summary>
+        <div class="rsec-body">
+        <div class="row"><span class="lbl">Ending style</span>
+          <button class="btn stylepick" id="rOutroPick" data-kind="outro" title="see every ending and pick one"><span class="thumb"></span><span class="spname"></span><span class="spchg">Change ▸</span></button></div>
+        <label class="row"><span class="lbl">ScottForge card</span><input type="checkbox" id="rCredit">
+          <span class="hint" id="rCreditHint">7 s animated ending after the end card · <a href="/players#brand" style="color:var(--accent)">edit ▸</a></span></label>
+        <div class="hint">Name, number, school, colours and logo: <a href="/players" style="color:var(--accent)">edit player profiles ▸</a><span hidden><code id="rProfile"></code><code id="rAssetsDir"></code></span></div>
+        </div>
+      </details>
+     </div>
+     <div class="build-bar">
+       <div class="bb-sum"><span id="bbOut"></span><span id="bbLen"></span></div>
+       <button class="btn primary" id="rBuild">Build reel</button>
+       <div class="progress"><div id="rProg"></div></div>
+       <span id="rStep"></span>
+     </div>
+    </aside>
+   </div>
   </section>
 
   <div class="modal" id="sp" hidden><div class="box">
@@ -597,21 +819,45 @@ function stateOf(c) {
   };
 }
 
+// Play list filter: All / Needs you / In reel / Left out, plus a text filter.
+const pf = { f: 'all', q: '' };
+try { pf.f = sessionStorage.getItem('hlvPlayFilter') || 'all'; } catch (e) {}
+const REACH = 1.5;   // a spotlight click this close to the snap freezes there (segment.FREEZE_REACH), as on Fix-ups
+const spotAtSnap = s => s.spotlight.some(a => Math.abs(a.t - s.snap) <= REACH);
+function needsYou(c, s) {
+  if (s.keep === false) return false;
+  if (!s.labeled) return true;
+  return !spotAtSnap(s) || !(s.hit != null || s.no_hit);
+}
+function passes(c, s) {
+  if (pf.f === 'need' && !needsYou(c, s)) return false;
+  if (pf.f === 'in' && s.keep === false) return false;
+  if (pf.f === 'out' && s.keep !== false) return false;
+  if (!pf.q) return true;
+  const hay = (c.source + ' ' + (c.group || '') + ' ' + (s.notes || '')).toLowerCase();
+  return pf.q.toLowerCase().split(/\s+/).filter(Boolean).every(w => hay.includes(w));
+}
+
 function renderList() {
   const list = $('list');
   list.innerHTML = '';
-  let group = null, done = 0, inReel = 0;
+  let group = null, done = 0, inReel = 0, shown = 0, secs = 0;
+  const n = { all: 0, need: 0, in: 0, out: 0 };
+  const pads = (data.pad_before || 0) + (data.pad_after || 0);
   data.clips.forEach((c, i) => {
+    const s = i === idx && cur ? cur : stateOf(c);
+    if (s.labeled) done++;
+    const counts = s.keep !== false && (c.kind !== 'pre_edited' || s.labeled);   // same rule as the build
+    if (counts) { inReel++; secs += Math.max(0, s.end - s.snap) + pads; }
+    n.all++; if (needsYou(c, s)) n.need++; if (s.keep === false) n.out++; else n.in++;
+    if (!passes(c, s)) return;
+    shown++;
     if (c.group !== group) {
       group = c.group;
       const g = document.createElement('div');
       g.className = 'group'; g.textContent = group || 'Clips';
       list.appendChild(g);
     }
-    const s = i === idx && cur ? cur : stateOf(c);
-    if (s.labeled) done++;
-    const counts = s.keep !== false && (c.kind !== 'pre_edited' || s.labeled);   // same rule as the build
-    if (counts) inReel++;
     const b = document.createElement('div');
     b.setAttribute('role', 'button'); b.tabIndex = -1;
     b.className = 'item' + (i === idx ? ' active' : '') + (s.keep === false ? ' skipped' : '');
@@ -619,8 +865,18 @@ function renderList() {
     const kindTag = c.kind === 'pre_edited' ? '<span class="tag warn">TV</span>'
                   : c.kind === 'screen_recording' ? '<span class="tag">Hudl</span>' : '';
     const flag = !s.labeled && c.status === 'needs_review' && c.kind !== 'pre_edited' ? '<span class="tag warn">check</span>' : '';
-    b.innerHTML = `<span class="dot ${dot}"></span><span class="name"></span>${kindTag}${flag}` +
-      `<input type="checkbox" class="inc" ${s.keep !== false ? 'checked' : ''} title="${s.keep !== false ? 'In the reel: untick to leave it out' : 'Left out of the reel: tick to include'}">`;
+    const len = Math.max(0, s.end - s.snap) + pads;
+    const bits = [];
+    if (s.keep !== false && !s.labeled) bits.push('<span class="s-need">not confirmed</span>');
+    else if (needsYou(c, s)) bits.push('<span class="s-need">' + (spotAtSnap(s) ? 'needs a hit' : 'click him at the snap') + '</span>');
+    else {
+      if (s.spotlight.length) bits.push('<span class="s-spot">&#9679; spotlight</span>');
+      bits.push(s.no_hit ? '<span>no hit</span>' : (s.hit != null ? '<span class="s-hit">HIT</span>' : ''));
+    }
+    b.innerHTML = `<span class="vthumb"><img alt="" loading="lazy" src="/api/clips/${encodeURIComponent(c.id)}/frame.jpg?t=${(s.snap || 0).toFixed(2)}"><span class="dot ${dot}"></span><span class="dur">${len.toFixed(1)}</span></span>` +
+      `<span class="txt"><span class="name"></span><span class="sub">${bits.join('')}</span></span>${kindTag}${flag}` +
+      (s.keep === false ? '<span class="pill-out">Left out</span>' : '') +
+      `<input type="checkbox" class="inc" ${s.keep !== false ? 'checked' : ''} title="${s.keep !== false ? 'In the reel: untick to leave it out' : 'Left out of the reel: tick to include'}" aria-label="In reel">`;
     b.querySelector('.name').textContent = c.source.split('/').pop();
     b.onclick = () => select(i);
     const box = b.querySelector('.inc');
@@ -628,9 +884,16 @@ function renderList() {
     box.onchange = () => setKeep(i, box.checked);
     list.appendChild(b);
   });
-  renderPhotoList(list);
+  if (!shown) list.insertAdjacentHTML('beforeend', `<div class="list-empty">${pf.f === 'need' && !pf.q ? 'Nothing needs you: every play in the reel is confirmed, clicked at the snap and has a hit.' : 'No plays match.'}</div>`);
+  if (pf.f === 'all' && !pf.q) renderPhotoList(list);
+  document.querySelectorAll('#pfTabs button').forEach(b => {
+    b.classList.toggle('on', b.dataset.f === pf.f); b.setAttribute('aria-selected', b.dataset.f === pf.f);
+    b.querySelector('b').textContent = n[b.dataset.f] ? n[b.dataset.f] : (b.dataset.f === 'need' ? '' : '0');
+  });
+  $('playSum').textContent = `${inReel} in reel · ${Math.floor(secs / 60)}:${String(Math.round(secs % 60)).padStart(2, '0')}`;
   $('prog').style.width = (100 * done / data.clips.length) + '%';
   $('progLabel').textContent = `${done} of ${data.clips.length} confirmed · ${inReel} in reel`;
+  if (window.hrShell) hrShell.refreshStages(data.clips);
   list.querySelector('.item.active')?.scrollIntoView({ block: 'nearest' });
 }
 
@@ -718,7 +981,7 @@ function renderState() {
   $('mEnd').style.left = pct(cur.end); $('mEnd').querySelector('span').textContent = fmt(cur.end);
   $('vSnap').textContent = fmt(cur.snap);
   $('vEnd').textContent = fmt(cur.end);
-  $('skipLbl').textContent = cur.keep === false ? '✗ Left out of reel' : '✓ In reel';
+  $('skipLbl').textContent = cur.keep === false ? 'Left out' : 'In reel';
   $('bSkip').classList.toggle('inreel', cur.keep !== false);
   $('bSkip').classList.toggle('leftout', cur.keep === false);
   $('warn').textContent = cur.end <= cur.snap ? 'End is before snap' : '';
@@ -820,6 +1083,13 @@ $('bSnap').onclick = setSnap;
 $('bEnd').onclick = setEnd;
 $('bWin').onclick = playWindow;
 $('bSkip').onclick = toggleSkip;
+$('pfTabs').onclick = e => {
+  const b = e.target.closest('button[data-f]'); if (!b) return;
+  pf.f = b.dataset.f; try { sessionStorage.setItem('hlvPlayFilter', pf.f); } catch (err) {}
+  renderList();
+};
+$('pfQ').oninput = () => { pf.q = $('pfQ').value.trim(); renderList(); };
+$('pfQ').onkeydown = e => { if (e.key === 'Escape') { $('pfQ').value = ''; pf.q = ''; renderList(); $('pfQ').blur(); } e.stopPropagation(); };
 $('bReset').onclick = resetAuto;
 $('bOk').onclick = confirmNext;
 $('notes').addEventListener('input', e => queueSave({ notes: e.target.value }));
@@ -1158,12 +1428,31 @@ const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;',
 async function openReel() {
   video.pause(); flushSave();
   reelOpen = true; $('reel').hidden = false;
+  document.body.classList.add('reel-open');
+  if (!/^#(build|publish)$/.test(location.hash)) history.replaceState(null, '', '#build');
+  reelView(location.hash === '#publish' ? 'publish' : 'build');
   loadDupes();
   await loadReel();
   if (reelInfo.job && reelInfo.job.state === 'running') pollBuild();
   else showLastReel();
+  renderYt();
 }
-function closeReel() { reelOpen = false; $('reel').hidden = true; $('pv').hidden = true; $('pvVideo').pause(); closePicker(); }
+// The panel has two views: Build (settings + order) and Renders & publish.
+function reelView(v) {
+  const pub = v === 'publish';
+  $('reel').classList.toggle('pub', pub);
+  document.querySelector('.rb-title h2').textContent = pub ? 'Renders & publish' : 'Build reel';
+  if (window.hrShell) hrShell.setActive(pub ? 'publish' : 'build');
+  $('pubNone').textContent = $('rResult').innerHTML.trim() ? '' : 'Nothing built yet. Build the reel first.';
+  document.querySelector('.rb-main').scrollTop = 0;
+}
+function closeReel() {
+  $('reel').classList.remove('pub');
+  reelOpen = false; $('reel').hidden = true; $('pv').hidden = true; $('pvVideo').pause(); closePicker();
+  document.body.classList.remove('reel-open');
+  if (location.hash) history.replaceState(null, '', location.pathname);
+  if (window.hrShell) { hrShell.setActive('review'); hrShell.refreshStages(data && data.clips); }
+}
 
 async function loadReel() {
   reelInfo = await (await fetch('/api/reel')).json();
@@ -1253,6 +1542,63 @@ $('rDupes').addEventListener('click', async e => {
   await loadReel(); renderList();
 });
 
+// Storyboard: one tile per play/photo in the reel, as wide as it lasts. Click a tile to find it in the list.
+function renderStory(rows, numOf) {
+  const snapOf = id => { const c = data.clips.find(x => x.id === id); return c ? (c.review.snap ?? c.detection.snap ?? 0) : 0; };
+  const dupe = id => (dupePairs || []).some(p => (p.a === id && numOf[p.b]) || (p.b === id && numOf[p.a]));
+  const tiles = rows.filter(c => c.included).map(c => {
+    const photo = c.type === 'photo';
+    const img = photo ? c.thumb : `/api/clips/${encodeURIComponent(c.id)}/frame.jpg?t=${snapOf(c.id).toFixed(2)}`;
+    const warn = !photo && (c.freeze_ok === 'late' || c.freeze_ok === 'none' || !c.labeled) || dupe(c.id);
+    const hit = !photo && c.hit_set && !c.no_hit;
+    const tip = `#${numOf[c.id]} ${c.source.split('/').pop()} · ${c.seconds.toFixed(1)} s` + (warn ? ' · needs a fix' : '');
+    return `<button type="button" class="rb-tile${photo ? ' photo' : ''}${warn ? ' warn' : ''}${hit ? ' hit' : ''}" data-id="${esc(c.id)}"
+      style="flex-grow:${c.seconds.toFixed(1)};background-image:url('${img}')" title="${esc(tip)}" aria-label="${esc(tip)}"><span class="n">${numOf[c.id]}</span></button>`;
+  });
+  const intro = (reelInfo.settings.cut || 'reel') === 'recruit' ? 'Info card' : 'Intro';
+  $('rStory').innerHTML = `<span class="rb-tile bk intro">${intro}</span>` + tiles.join('') + '<span class="rb-tile bk">End card</span>';
+}
+$('rStory').addEventListener('click', e => {
+  const t = e.target.closest('.rb-tile[data-id]'); if (!t) return;
+  const li = document.querySelector(`#rList li[data-id="${CSS.escape(t.dataset.id)}"]`); if (!li) return;
+  li.scrollIntoView({ block: 'center', behavior: 'smooth' });
+  li.classList.remove('flash'); void li.offsetWidth; li.classList.add('flash');
+});
+
+// One-line summaries on each settings section, the build bar and the panel title.
+function rbSummaries() {
+  const seg = id => (document.querySelector(`#${id} button.on`)?.textContent || '').trim();
+  const on = id => !!$(id)?.checked;
+  const join = a => a.filter(Boolean).join(' · ');
+  const put = (id, v) => { const el = $(id); if (el && el.textContent !== v) el.textContent = v; };   // no-op writes keep the observer quiet
+  const make = seg('rCut'), fmt = seg('rFormat');
+  const pl = $('rPlayer').selectedOptions[0]?.textContent || '';
+  const fmtTxt = fmt === 'Both' ? 'Wide + Vertical' : fmt;
+  put('sum_output', join([make, fmtTxt, pl]));
+  const intro = ($('rIntroPick').querySelector('.spname')?.textContent || '').trim();
+  put('sum_story', join([intro && intro + ' intro', seg('rIntroOut') && 'into play: ' + seg('rIntroOut').toLowerCase(),
+    seg('rTrans').toLowerCase(), seg('rBanner') && 'banner: ' + seg('rBanner').toLowerCase()]));
+  const comp = seg('rMusicSrc') === 'Made for this reel';
+  const song = (reelInfo && reelInfo.assets && reelInfo.assets.music) ? reelInfo.assets.music.split(/[\\/]/).pop().replace(/\.[^.]+$/, '') : '';
+  const start = parseFloat($('rMStart').value) || 0;
+  put('sum_music', join([comp ? seg('rCompStyle') + ' soundtrack' : (song && song.toLowerCase() !== 'music' ? song : (song ? 'your song' : 'no song yet')), !comp && start ? `from ${start} s` : '',
+    'game audio ' + ($('rGame').value || 0) + '%', on('rSync') ? 'hits on beat' : '']));
+  put('sum_motion', join([on('rSlow') ? 'slow-mo ' + $('rSlowSpeed').value + '×' : 'no slow-mo', on('rFx') ? 'hit punch' : '']));
+  const outro = ($('rOutroPick').querySelector('.spname')?.textContent || '').trim();
+  put('sum_ending', join(['end card', outro && outro + ' ending', on('rCredit') ? 'ScottForge card' : '']));
+  put('bbOut', join([make, fmtTxt]));
+  put('bbLen', $('rLen').textContent.replace(/^about /, '~').replace(/ long$/, ''));
+  put('rbSub', join([$('rCount').textContent, $('rLen').textContent]));
+}
+{
+  let t = null;
+  const later = () => { clearTimeout(t); t = setTimeout(() => { if (reelInfo) rbSummaries(); }, 60); };
+  new MutationObserver(later).observe(document.querySelector('.rb-side'), { subtree: true, attributes: true, childList: true, characterData: true });
+  document.querySelector('.rb-side').addEventListener('input', later);
+  document.querySelector('.rb-side').addEventListener('change', later);
+  new MutationObserver(later).observe($('rLen'), { childList: true, characterData: true, subtree: true });
+}
+
 function renderReelList() {
   const rows = reelInfo.clips;
   const numOf = {};
@@ -1303,6 +1649,7 @@ function renderReelList() {
   const nPics = inc.filter(c => c.type === 'photo').length;
   $('rCount').textContent = `${inc.length - nPics} plays` + (nPics ? ` · ${nPics} photo${nPics > 1 ? 's' : ''}` : '');
   $('rLen').textContent = `about ${Math.floor(total / 60)}:${String(Math.round(total % 60)).padStart(2, '0')} long`;
+  renderStory(rows, numOf);
   // The recruiting cut: starred plays first, then the rest until ~3 min.
   const cut = reelInfo.settings.cut || 'reel', recs = rows.filter(c => c.recruit);
   $('rCutHint').hidden = cut === 'reel';
@@ -1390,7 +1737,21 @@ async function previewSegment(id, name, btn, photo = false) {
   btn.textContent = old; btn.disabled = false;
 }
 
+function showPubJob(j) {
+  const box = $('pubJob');
+  if (!j || j.state === 'idle') { box.hidden = true; return; }
+  const pct = Math.round(100 * (j.done || 0) / (j.total || 1));
+  box.hidden = false;
+  box.className = 'pub-job' + (j.state === 'error' ? ' err' : j.state === 'done' ? ' ok' : '');
+  const t = j.state === 'running' ? 'Building the reel' : j.state === 'error' ? 'The build stopped' : 'Reel built';
+  const sub = j.state === 'running' ? `${esc(j.step || '')} · ${j.done || 0} of ${j.total || '?'} steps · you can keep working, it runs in the background`
+    : j.state === 'error' ? esc(j.error || 'unknown error') : $('rStep').innerHTML;
+  box.innerHTML = `<div class="pj-top"><span class="pj-dot"></span><div><div class="pj-t">${t}</div><div class="pj-s">${sub}</div></div>` +
+    (j.state === 'running' ? `<span class="pj-pct">${pct}%</span>` : '') + '</div>' +
+    (j.state === 'running' ? `<div class="pj-bar"><i style="width:${pct}%"></i></div>` : '');
+}
 function showJob(j) {
+  setTimeout(() => showPubJob(j), 0);
   const busy = !!j && j.state === 'running';
   $('toProjects').classList.toggle('off', busy);
   $('toProjects').title = busy ? "A reel is building: switch projects when it's finished" : '';
@@ -1444,11 +1805,112 @@ $('rResult').addEventListener('click', async e => {
   if (!res.ok) alert((await res.json()).error || 'Could not open the video');
 });
 
+// ---- Publish to YouTube: one shared description, a title per finished video, private / unlisted / public ----
+let ytTimer = null;
+const YT_SETUP = `<details><summary><b>One-time setup</b> (about 10 minutes, in Google Cloud)</summary><ol>
+  <li>Open <a href="https://console.cloud.google.com/projectcreate" target="_blank">console.cloud.google.com</a> signed in as the Google account that owns your YouTube channel, and create a project called <i>Highlight Reels</i>.</li>
+  <li>Go to <a href="https://console.cloud.google.com/apis/library/youtube.googleapis.com" target="_blank">YouTube Data API v3</a> and press <b>Enable</b>.</li>
+  <li>Open <a href="https://console.cloud.google.com/auth/overview" target="_blank">Google Auth Platform</a> and press <b>Get started</b>: app name <i>Highlight Reels</i>, your email, audience <b>External</b>. Then on <b>Audience</b> press <b>Publish app</b> (otherwise you'd have to sign in again every 7 days).</li>
+  <li>On <a href="https://console.cloud.google.com/auth/clients" target="_blank">Clients</a>: <b>Create client</b>, type <b>Desktop app</b>, then download the JSON file.</li>
+  <li>Add that file with the button below, then press <b>Connect YouTube channel</b>. Google will warn that the app isn't verified: choose <i>Advanced → Go to Highlight Reels</i>. It's your own app.</li>
+  <li>To make uploads <b>Public</b>, fill in the <a href="https://support.google.com/youtube/contact/yt_api_form" target="_blank">YouTube API audit form</a> once. Until Google approves it, YouTube locks every upload as Private.</li>
+</ol></details>`;
+async function renderYt() {
+  const outs = (reelInfo && reelInfo.outputs) || [];
+  const box = $('ytBox');
+  if (!outs.length) { box.hidden = true; return; }
+  const yt = await (await fetch('/api/youtube')).json();
+  box.hidden = false;
+  const j = yt.job || {};
+  let h = '<h3>Publish to YouTube</h3>';
+  const vis = yt.privacy || 'unlisted';
+  const VIS_HINT = { private: 'Only you can see it.', unlisted: "Anyone with the link can watch; it won't show in search. Send it to coaches first, go Public later in YouTube Studio.", public: 'Anyone can find and watch it.' };
+  if (!yt.secret) {
+    h += YT_SETUP + `<div><label class="btn">Add Google client file…<input type="file" id="ytSecret" accept=".json,application/json" hidden></label></div>`;
+  } else if (!yt.connected) {
+    h += `<div><button class="btn primary" id="ytConnect"${j.state === 'running' ? ' disabled' : ''}>Connect YouTube channel</button>
+      <label class="btn">Replace Google client file…<input type="file" id="ytSecret" accept=".json,application/json" hidden></label></div>` + YT_SETUP;
+  } else {
+    h += `<div class="hint">Channel: <b>${esc(yt.channel || 'connected')}</b> · <a href="#" id="ytOff">Disconnect</a></div>
+      <label><span class="lbl">Description (the same for every video)</span>
+      <textarea id="ytDesc" maxlength="5000" placeholder="e.g. Caleb Scott #12 WR / DB, class of 2028, Poland Bulldogs. Contact: …">${esc(yt.description || '')}</textarea></label>`;
+    h += outs.map(o => {
+      const y = o.youtube;
+      const locked = y && y.privacy === 'private' && (y.asked || 'public') !== 'private';
+      const done = !y ? '' : !locked
+        ? ` <span class="ok">On YouTube · ${esc(y.privacy)}</span> <a href="${esc(y.url)}" target="_blank">${esc(y.url)}</a>`
+        : ` <span class="warn">Uploaded as private</span> <a href="${esc(y.studio)}" target="_blank">open in Studio</a> (YouTube keeps it Private until the API audit is approved)`;
+      return `<div class="yt-row" data-file="${esc(o.file)}"><input type="checkbox" class="ytPick"${y ? '' : ' checked'}>
+        <span><b>${esc(o.label)}</b>${done}</span><span></span>
+        <input type="text" class="ytTitle" maxlength="100" value="${esc(y ? y.title : o.yt_title)}"></div>`;
+    }).join('');
+    h += `<div class="yt-vis"><span class="lbl">Who can see it</span><span class="segctl" id="ytVis">${['private', 'unlisted', 'public'].map(v =>
+      `<button type="button" data-v="${v}" class="${v === vis ? 'on' : ''}">${v[0].toUpperCase() + v.slice(1)}</button>`).join('')}</span>
+      <span class="hint" id="ytVisHint">${VIS_HINT[vis]}</span></div>`;
+    h += `<div><button class="btn primary" id="ytGo"${j.state === 'running' ? ' disabled' : ''}>Publish to YouTube</button> <span class="hint">Category Sports.</span></div>`;
+  }
+  box.innerHTML = h + '<div id="ytMsg"></div>';
+  showYtJob(j);
+  if (j.state === 'running') pollYt();
+}
+function showYtJob(j) {
+  const m = $('ytMsg'); if (!m || !j) return;
+  if (j.state === 'running') m.textContent = j.kind === 'upload'
+    ? `${j.step}: ${Math.round(100 * (j.frac || 0))}% (video ${Math.min((j.done || 0) + 1, j.total)} of ${j.total})` : j.step;
+  else if (j.state === 'error') m.innerHTML = `<span class="bad">${esc(j.error)}</span>`;
+  else if (j.state === 'done' && j.kind === 'upload') m.innerHTML = (j.results || []).map(r =>
+    `<div>${r.privacy === (r.asked || r.privacy) ? `<span class="ok">Published (${esc(r.privacy)})</span>` : `<span class="warn">Uploaded as ${esc(r.privacy)}</span>`}: ${esc(r.title)} <a href="${esc(r.url)}" target="_blank">${esc(r.url)}</a></div>`).join('');
+  else m.textContent = '';
+}
+function pollYt() {
+  clearTimeout(ytTimer);
+  ytTimer = setTimeout(async () => {
+    const j = await (await fetch('/api/youtube/status')).json();
+    if (j.state === 'running') { showYtJob(j); pollYt(); return; }
+    reelInfo = await (await fetch('/api/reel')).json();
+    await renderYt();
+    showYtJob(j);
+  }, 1000);
+}
+$('ytBox').addEventListener('change', async e => {
+  if (e.target.id === 'ytSecret' && e.target.files[0]) {
+    const r = await fetch('/api/youtube/secret', { method: 'POST', body: await e.target.files[0].arrayBuffer() });
+    if (!r.ok) { $('ytMsg').innerHTML = `<span class="bad">${esc((await r.json()).error)}</span>`; return; }
+    renderYt();
+  } else if (e.target.id === 'ytDesc') {
+    postJ('/api/youtube/description', { description: e.target.value }).catch(() => {});
+  }
+});
+$('ytBox').addEventListener('click', async e => {
+  const id = e.target.id;
+  if (id === 'ytOff') { e.preventDefault(); await postJ('/api/youtube/disconnect'); renderYt(); return; }
+  const vb = e.target.closest('#ytVis button');
+  if (vb) {
+    document.querySelectorAll('#ytVis button').forEach(b => b.classList.toggle('on', b === vb));
+    $('ytVisHint').textContent = { private: 'Only you can see it.', unlisted: "Anyone with the link can watch; it won't show in search. Send it to coaches first, go Public later in YouTube Studio.", public: 'Anyone can find and watch it.' }[vb.dataset.v];
+    return;
+  }
+  if (id !== 'ytConnect' && id !== 'ytGo') return;
+  try {
+    if (id === 'ytConnect') { e.target.disabled = true; showYtJob(await postJ('/api/youtube/connect')); }
+    else {
+      const items = [...document.querySelectorAll('#ytBox .yt-row')].filter(r => r.querySelector('.ytPick').checked)
+        .map(r => ({ file: r.dataset.file, title: r.querySelector('.ytTitle').value }));
+      if (!items.length) { $('ytMsg').textContent = 'Tick at least one video.'; return; }
+      e.target.disabled = true;
+      const privacy = document.querySelector('#ytVis button.on')?.dataset.v || 'unlisted';
+      showYtJob(await postJ('/api/youtube/publish', { items, description: $('ytDesc').value, privacy }));
+    }
+    pollYt();
+  } catch (err) { $('ytMsg').innerHTML = `<span class="bad">${esc(err.message)}</span>`; e.target.disabled = false; }
+});
+
 async function pollBuild() {
   clearTimeout(pollTimer);
   const j = await (await fetch('/api/reel/status')).json();
   showJob(j);
   if (j.state === 'running') pollTimer = setTimeout(pollBuild, 1000);
+  else if (j.state === 'done') { reelInfo = await (await fetch('/api/reel')).json(); renderYt(); }
 }
 
 $('openReel').onclick = openReel;
@@ -1597,6 +2059,7 @@ $('rBuild').onclick = async () => {
   $('rResult').innerHTML = '';
   showJob(await (await fetch('/api/reel/build', { method: 'POST' })).json());
   pollBuild();
+  history.replaceState(null, '', '#publish'); reelView('publish');
 };
 
 document.addEventListener('keydown', e => {
@@ -1668,8 +2131,23 @@ load().then(() => {
   // "Build reel" on the Projects page lands here with the panel open.
   let go = false;
   try { go = sessionStorage.getItem('hlvOpenReel') === '1'; sessionStorage.removeItem('hlvOpenReel'); } catch (e) {}
-  if (go) openReel();
+  if (go) openReel(); else followHash();
 });
+// Links from the app rail, the stage stepper and Ctrl K: #build, #publish, #clip=<id>
+async function followHash() {
+  const h = location.hash;
+  if (h === '#build' || h === '#publish') {
+    if (!reelOpen) await openReel();
+    reelView(h === '#publish' ? 'publish' : 'build');
+  } else if (h.startsWith('#clip=')) {
+    const i = data.clips.findIndex(c => c.id === decodeURIComponent(h.slice(6)));
+    history.replaceState(null, '', location.pathname);
+    if (reelOpen) closeReel();
+    if (i >= 0) select(i);
+  } else if (!h && reelOpen) closeReel();
+}
+window.addEventListener('hashchange', followHash);
 </script>
+<script src="/static/shell.js" data-page="review"></script>
 </body>
 </html>

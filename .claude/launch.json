@@ -6,6 +6,12 @@
       "runtimeExecutable": ".venv/Scripts/python.exe",
       "runtimeArgs": ["-m", "hlv", "review", "--no-browser"],
       "port": 8765
+    },
+    {
+      "name": "review-test",
+      "runtimeExecutable": ".venv/Scripts/python.exe",
+      "runtimeArgs": ["-m", "hlv", "review", "TestClips\\Caleb_Footbal", "--no-browser", "--port", "8766"],
+      "port": 8766
     }
   ]
 }
