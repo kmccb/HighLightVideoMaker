@@ -283,8 +283,16 @@ main { padding: 20px 24px 28px; gap: 14px; }
   background: #07090b center / cover no-repeat; color: var(--faint); font: 500 10px var(--mono, monospace); }
 .styletiles .thumb video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .styletiles button.on .thumb { outline: 2px solid var(--accent); outline-offset: -2px; }
-.stylepv { margin-top: -4px; }
-.stylepv video { flex: 1; min-width: 0; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: var(--r); }
+.stylepick { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; padding: 4px 12px 4px 4px; text-align: left; }
+.stylepick .thumb { flex: none; width: 96px; aspect-ratio: 16 / 9; border-radius: 4px; background: #07090b center / cover no-repeat; }
+.stylepick .spname { flex: 1; min-width: 0; font-weight: 700; color: var(--text); }
+.stylepick .spchg { color: var(--accent); font-size: 12px; white-space: nowrap; }
+#sp .box { width: min(1240px, 96vw); max-height: 94vh; }
+.spbody { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(250px, 1fr); gap: 14px; align-items: start; min-height: 0; }
+#spVideo { width: 100%; aspect-ratio: 16 / 9; max-height: 80vh; border-radius: var(--r); }
+.sptiles { max-height: calc(94vh - 80px); overflow-y: auto; padding-right: 2px; }
+.sptiles .segctl.styletiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(112px, 1fr)); }
+@media (max-width: 860px) { .spbody { grid-template-columns: 1fr; } .sptiles { max-height: 40vh; } }
 .order-head { color: var(--dim); font-size: 13px; align-items: baseline; }
 .order-head::before { content: 'Reel order'; font: 700 22px var(--display); text-transform: uppercase; letter-spacing: .03em; color: var(--text); margin-right: 4px; }
 #rList li { border-radius: var(--r); padding: 8px 12px; background: var(--panel); }
@@ -448,12 +456,8 @@ main { padding: 20px 24px 28px; gap: 14px; }
         <div id="rSongMsg" class="hint"></div>
         <label class="row"><span class="lbl">ScottForge card</span><input type="checkbox" id="rCredit">
           <span class="hint" id="rCreditHint">7 s animated ending after the end card · <a href="/players#brand" style="color:var(--accent)">edit ▸</a></span></label>
-        <label class="row"><span class="lbl">Ending style</span>
-          <span class="segctl styletiles" id="rOutro">
-            <button data-v="forge" title="your website's forge clip, embers, the anvil mark strikes in">Forge</button><button data-v="anvil" title="darkness, a hammer strike throws a shower of sparks that reveals the logo">Anvil strike</button><button data-v="molten" title="glowing molten metal pours into the letters">Molten</button><button data-v="minimal" title="clean and quiet: a hairline, the logo fades up, the website types out">Minimal</button><button data-v="hammer" title="a hammer strikes glowing steel on the anvil three times, with real-sounding clangs; the logo forges on">Hammer 🔊</button><button data-v="quench" title="glowing steel plunged into water: a violent hiss, billowing steam, the logo appears as it clears">Quench 🔊</button>
-          </span></label>
-        <div class="row stylepv"><span class="lbl"></span><span class="hint" style="flex:1">Click a style to watch it. Hover for a quick look.</span></div>
-        <div class="row stylepv" id="rOutroSampleRow" hidden><span class="lbl"></span><video id="rOutroSample" controls playsinline></video></div>
+        <div class="row"><span class="lbl">Ending style</span>
+          <button class="btn stylepick" id="rOutroPick" data-kind="outro" title="see every ending and pick one"><span class="thumb"></span><span class="spname"></span><span class="spchg">Change ▸</span></button></div>
         <div class="hint">Name, number, school, colours and logo: <a href="/players" style="color:var(--accent)">edit player profiles ▸</a><span hidden><code id="rProfile"></code><code id="rAssetsDir"></code></span></div>
       </div>
       <div class="card">
@@ -470,14 +474,8 @@ main { padding: 20px 24px 28px; gap: 14px; }
           <span class="segctl" id="rTrans">
             <button data-v="crossfade">Crossfade</button><button data-v="cut">Cut</button><button data-v="dip">Dip to black</button>
           </span></label>
-        <label class="row"><span class="lbl">Intro</span>
-          <span class="segctl styletiles" id="rIntro">
-            <button data-v="animated" title="number, name and logo slam in on the beat, sparks and shockwave">Slam</button><button data-v="inferno" title="flames roar up, the number burns in, the name rises out of the fire">Inferno</button><button data-v="storm" title="storm clouds, lightning strikes on the beat, electric number">Thunder</button><button data-v="shatter" title="the number punches through glass, shards fly, the name slams in">Shatter</button><button data-v="stadium" title="stadium lights bang on, light beams, chrome number, broadcast bar">Stadium</button><button data-v="glitch" title="digital corruption, RGB split; the name decodes out of scrambled characters">Glitch</button><button data-v="smoke" title="team-colour smoke bombs; the number punches through the smoke">Smoke</button><button data-v="neon" title="neon tubes buzz and flicker on against a brick wall">Neon</button><button data-v="warp" title="hyperspace streaks; the number blasts out with a shockwave">Warp</button><button data-v="gold" title="gold metal lettering, light sweeps and sparkles, falling gold dust">Gold</button><button data-v="classic" title="the still title card">Classic</button>
-          </span>
-          </label>
-        <div class="row stylepv"><span class="lbl"></span><span class="hint" style="flex:1">Click a style to watch it. Samples use a made-up player; yours goes in when you build.</span>
-          <button class="btn" id="rIntroPv" style="flex:none;padding:5px 10px" title="render this intro with your player's name, colours, logo and song (~45 s the first time)">▶ With my player</button></div>
-        <div class="row stylepv" id="rIntroSampleRow" hidden><span class="lbl"></span><video id="rIntroSample" controls playsinline></video></div>
+        <div class="row"><span class="lbl">Intro</span>
+          <button class="btn stylepick" id="rIntroPick" data-kind="intro" title="see every intro and pick one"><span class="thumb"></span><span class="spname"></span><span class="spchg">Change ▸</span></button></div>
         <label class="row"><span class="lbl">Impact sounds</span><input type="checkbox" id="rIntroSfx">
           <span class="hint">whoosh + boom on each slam of the animated intro</span></label>
         <label class="row"><span class="lbl">Name banner</span>
@@ -516,6 +514,23 @@ main { padding: 20px 24px 28px; gap: 14px; }
     </div>
     <div id="rResult"></div>
   </section>
+
+  <div class="modal" id="sp" hidden><div class="box">
+    <div style="display:flex;align-items:center;gap:10px"><b id="spTitle"></b><span class="hint" id="spHint"></span><span class="spacer"></span>
+      <button class="btn" id="rIntroPv" style="flex:none;padding:5px 10px" title="render this intro with your player's name, colours, logo and song (~45 s the first time)">▶ With my player</button>
+      <button class="btn primary" id="spDone">Done</button></div>
+    <div class="spbody">
+      <video id="spVideo" controls playsinline></video>
+      <div class="sptiles">
+        <span class="segctl styletiles" id="rIntro">
+            <button data-v="animated" title="number, name and logo slam in on the beat, sparks and shockwave">Slam</button><button data-v="inferno" title="flames roar up, the number burns in, the name rises out of the fire">Inferno</button><button data-v="storm" title="storm clouds, lightning strikes on the beat, electric number">Thunder</button><button data-v="shatter" title="the number punches through glass, shards fly, the name slams in">Shatter</button><button data-v="stadium" title="stadium lights bang on, light beams, chrome number, broadcast bar">Stadium</button><button data-v="glitch" title="digital corruption, RGB split; the name decodes out of scrambled characters">Glitch</button><button data-v="smoke" title="team-colour smoke bombs; the number punches through the smoke">Smoke</button><button data-v="neon" title="neon tubes buzz and flicker on against a brick wall">Neon</button><button data-v="warp" title="hyperspace streaks; the number blasts out with a shockwave">Warp</button><button data-v="gold" title="gold metal lettering, light sweeps and sparkles, falling gold dust">Gold</button><button data-v="classic" title="the still title card">Classic</button>
+          </span>
+        <span class="segctl styletiles" id="rOutro">
+            <button data-v="forge" title="your website's forge clip, embers, the anvil mark strikes in">Forge</button><button data-v="anvil" title="darkness, a hammer strike throws a shower of sparks that reveals the logo">Anvil strike</button><button data-v="molten" title="glowing molten metal pours into the letters">Molten</button><button data-v="minimal" title="clean and quiet: a hairline, the logo fades up, the website types out">Minimal</button><button data-v="hammer" title="a hammer strikes glowing steel on the anvil three times, with real-sounding clangs; the logo forges on">Hammer 🔊</button><button data-v="quench" title="glowing steel plunged into water: a violent hiss, billowing steam, the logo appears as it clears">Quench 🔊</button>
+          </span>
+      </div>
+    </div>
+  </div></div>
 
   <div class="modal" id="pv" hidden><div class="box">
     <div style="display:flex;align-items:center;gap:10px"><b id="pvTitle"></b><span class="spacer"></span><button class="btn" id="pvClose">Close</button></div>
@@ -1131,7 +1146,7 @@ async function openReel() {
   if (reelInfo.job && reelInfo.job.state === 'running') pollBuild();
   else showLastReel();
 }
-function closeReel() { reelOpen = false; $('reel').hidden = true; $('pv').hidden = true; $('pvVideo').pause(); }
+function closeReel() { reelOpen = false; $('reel').hidden = true; $('pv').hidden = true; $('pvVideo').pause(); closePicker(); }
 
 async function loadReel() {
   reelInfo = await (await fetch('/api/reel')).json();
@@ -1421,16 +1436,39 @@ document.querySelectorAll('.styletiles button').forEach(b => {
     v.muted = true; v.loop = true; v.playsInline = true; v.src = sm.video; th.appendChild(v); v.play().catch(() => {});
   });
   b.addEventListener('mouseleave', () => b.querySelectorAll('.thumb video').forEach(v => v.remove()));
-  b.addEventListener('click', e => {
-    e.preventDefault();
-    const intro = b.parentElement.id === 'rIntro', sm = samples[b.dataset.v + '@' + b.parentElement.id];
-    if (!sm || !sm.video) return;
-    $(intro ? 'rOutroSample' : 'rIntroSample').pause();
-    const v = $(intro ? 'rIntroSample' : 'rOutroSample');
-    $(intro ? 'rIntroSampleRow' : 'rOutroSampleRow').hidden = false;
-    v.src = sm.video; v.currentTime = 0; v.play().catch(() => {});
-  });
+  b.addEventListener('click', e => { e.preventDefault(); playSample(b); });
 });
+// The pickers pop out: the panel only shows the chosen intro/ending; "Change" opens every style with a big player.
+let spKind = 'intro';
+function playSample(b) {
+  const sm = samples[b.dataset.v + '@' + b.parentElement.id], v = $('spVideo');
+  $('spTitle').textContent = (spKind === 'intro' ? 'Intro: ' : 'Ending: ') + b.lastElementChild.textContent;
+  if (!sm || !sm.video) { v.removeAttribute('src'); v.load(); return; }
+  if (!v.src.endsWith(sm.video)) v.src = sm.video;
+  v.currentTime = 0; v.play().catch(() => {});
+}
+function openPicker(kind) {
+  spKind = kind;
+  for (const [id, show] of [['rIntro', kind === 'intro'], ['rOutro', kind === 'outro'], ['rIntroPv', kind === 'intro']]) $(id).style.display = show ? '' : 'none';
+  $('spHint').textContent = kind === 'intro' ? 'Click a style to pick it and watch it. Samples use a made-up player; yours goes in when you build.'
+                                             : 'Click a style to pick it and watch it. Hover a tile for a quick look.';
+  $('sp').hidden = false;
+  const on = document.querySelector(`#${kind === 'intro' ? 'rIntro' : 'rOutro'} button.on`);
+  if (on) playSample(on);
+}
+function closePicker() { $('sp').hidden = true; $('spVideo').pause(); }
+$('rIntroPick').onclick = () => openPicker('intro');
+$('rOutroPick').onclick = () => openPicker('outro');
+$('spDone').onclick = closePicker;
+$('sp').addEventListener('click', e => { if (e.target === $('sp')) closePicker(); });
+function syncPicks() {
+  for (const [id, pick] of [['rIntro', 'rIntroPick'], ['rOutro', 'rOutroPick']]) {
+    const on = document.querySelector(`#${id} button.on`), sm = on && samples[on.dataset.v + '@' + id];
+    $(pick).querySelector('.spname').textContent = on ? on.lastElementChild.textContent : '';
+    $(pick).querySelector('.thumb').style.backgroundImage = sm && sm.poster ? `url("${sm.poster}")` : '';
+  }
+}
+new MutationObserver(syncPicks).observe($('sp'), { subtree: true, attributes: true, attributeFilter: ['class'] });
 async function loadSamples() {
   clearTimeout(samplesTimer);
   let j;
@@ -1441,9 +1479,10 @@ async function loadSamples() {
     const th = document.querySelector(`#${id} button[data-v="${sm.style}"] .thumb`);
     if (!th) continue;
     th.style.backgroundImage = sm.poster ? `url("${sm.poster}")` : '';
-    th.firstChild && th.firstChild.nodeType === 3 && th.firstChild.remove();
+    [...th.childNodes].filter(n => n.nodeType === 3).forEach(n => n.remove());
     if (!sm.poster) th.insertAdjacentText('afterbegin', sm.rendering ? 'rendering…' : j.running ? 'queued' : '');
   }
+  syncPicks();
   if (j.running && reelOpen) samplesTimer = setTimeout(loadSamples, 5000);
 }
 document.querySelectorAll('#rIntro button').forEach(b => b.onclick = () => saveReelSetting({ intro: b.dataset.v }));
@@ -1472,7 +1511,7 @@ $('rIntroSfx').onchange = e => saveReelSetting({ intro_sfx: e.target.checked });
 $('rIntroPv').onclick = async e => {
   e.preventDefault();
   const btn = $('rIntroPv'), old = btn.textContent;
-  btn.textContent = 'Rendering… (~45 s first time)'; btn.disabled = true;
+  btn.textContent = 'Rendering… (~45 s first time)'; btn.disabled = true; $('spVideo').pause();
   try {
     const res = await fetch('/api/intro/preview', { method: 'POST' });
     const j = await res.json();
@@ -1490,7 +1529,7 @@ $('rBuild').onclick = async () => {
 
 document.addEventListener('keydown', e => {
   if (reelOpen) {
-    if (e.key === 'Escape') { if (!$('pv').hidden) { $('pv').hidden = true; $('pvVideo').pause(); } else closeReel(); }
+    if (e.key === 'Escape') { if (!$('pv').hidden) { $('pv').hidden = true; $('pvVideo').pause(); } else if (!$('sp').hidden) closePicker(); else closeReel(); }
     return;
   }
   if (e.target === $('notes')) { if (e.key === 'Escape' || e.key === 'Enter') $('notes').blur(); return; }
