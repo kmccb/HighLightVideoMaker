@@ -861,6 +861,17 @@ def make_handler(app: ReviewApp):
             m = re.fullmatch(r"/media/compose/(demo-[a-z]+-\d+-v\d+\.wav)", path)
             if m:
                 return self._file(library.home() / "cache" / "compose" / m.group(1), "audio/wav")
+            if path == "/api/samples":
+                from . import samples
+                samples.warm(app.building)                # renders whatever's missing, in the background
+                return self._json(samples.status())
+            m = re.fullmatch(r"/media/samples/(intro|outro)/([a-z0-9.-]+\.(?:mp4|jpg))", path)
+            if m:
+                from . import samples
+                f = samples.media_path(m.group(1), m.group(2))
+                if f is None:
+                    return self.send_error(HTTPStatus.NOT_FOUND)
+                return self._file(f, "video/mp4" if f.suffix == ".mp4" else "image/jpeg")
             m = re.fullmatch(r"/media/outro/(outro-[a-z0-9]+\.mp4)", path)
             if m:
                 return self._file(library.home() / "cache" / "outro" / m.group(1), "video/mp4")
@@ -1093,6 +1104,8 @@ def serve(root: Path | None, port: int = 8765, open_browser: bool = True, jobs: 
         except ValueError as e:
             raise SystemExit(f"{e} - run `detect` on it first.")
     httpd = ThreadingHTTPServer(("127.0.0.1", port), make_handler(app))
+    from . import samples
+    samples.warm(app.building)                           # intro/ending style samples for the Build panel
     url = f"http://127.0.0.1:{port}/"
     print(f"review page: {url}   (Ctrl+C to stop)")
     if open_browser:

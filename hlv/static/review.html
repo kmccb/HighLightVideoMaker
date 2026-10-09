@@ -277,6 +277,14 @@ main { padding: 20px 24px 28px; gap: 14px; }
 .segctl button.on { background: var(--sel); color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
 #rIntro { display: grid; grid-template-columns: repeat(auto-fill, minmax(84px, 1fr)); }
 #rIntro button { border-bottom: 0; }
+.segctl.styletiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(88px, 1fr)); align-self: stretch; }
+.styletiles button { display: flex; flex-direction: column; gap: 4px; padding: 4px 4px 6px; border-bottom: 0; }
+.styletiles .thumb { position: relative; display: grid; place-items: center; aspect-ratio: 16 / 9; width: 100%; border-radius: 4px; overflow: hidden;
+  background: #07090b center / cover no-repeat; color: var(--faint); font: 500 10px var(--mono, monospace); }
+.styletiles .thumb video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.styletiles button.on .thumb { outline: 2px solid var(--accent); outline-offset: -2px; }
+.stylepv { margin-top: -4px; }
+.stylepv video { flex: 1; min-width: 0; width: 100%; aspect-ratio: 16 / 9; background: #000; border-radius: var(--r); }
 .order-head { color: var(--dim); font-size: 13px; align-items: baseline; }
 .order-head::before { content: 'Reel order'; font: 700 22px var(--display); text-transform: uppercase; letter-spacing: .03em; color: var(--text); margin-right: 4px; }
 #rList li { border-radius: var(--r); padding: 8px 12px; background: var(--panel); }
@@ -441,9 +449,11 @@ main { padding: 20px 24px 28px; gap: 14px; }
         <label class="row"><span class="lbl">ScottForge card</span><input type="checkbox" id="rCredit">
           <span class="hint" id="rCreditHint">7 s animated ending after the end card · <a href="/players#brand" style="color:var(--accent)">edit ▸</a></span></label>
         <label class="row"><span class="lbl">Ending style</span>
-          <span class="segctl" id="rOutro">
-            <button data-v="forge" title="your website's forge clip, embers, the anvil mark strikes in">Forge</button><button data-v="anvil" title="darkness, a hammer strike throws a shower of sparks that reveals the logo">Anvil strike</button><button data-v="molten" title="glowing molten metal pours into the letters">Molten</button><button data-v="minimal" title="clean and quiet: a hairline, the logo fades up, the website types out">Minimal</button>
+          <span class="segctl styletiles" id="rOutro">
+            <button data-v="forge" title="your website's forge clip, embers, the anvil mark strikes in">Forge</button><button data-v="anvil" title="darkness, a hammer strike throws a shower of sparks that reveals the logo">Anvil strike</button><button data-v="molten" title="glowing molten metal pours into the letters">Molten</button><button data-v="minimal" title="clean and quiet: a hairline, the logo fades up, the website types out">Minimal</button><button data-v="hammer" title="a hammer strikes glowing steel on the anvil three times, with real-sounding clangs; the logo forges on">Hammer 🔊</button><button data-v="quench" title="glowing steel plunged into water: a violent hiss, billowing steam, the logo appears as it clears">Quench 🔊</button>
           </span></label>
+        <div class="row stylepv"><span class="lbl"></span><span class="hint" style="flex:1">Click a style to watch it. Hover for a quick look.</span></div>
+        <div class="row stylepv" id="rOutroSampleRow" hidden><span class="lbl"></span><video id="rOutroSample" controls playsinline></video></div>
         <div class="hint">Name, number, school, colours and logo: <a href="/players" style="color:var(--accent)">edit player profiles ▸</a><span hidden><code id="rProfile"></code><code id="rAssetsDir"></code></span></div>
       </div>
       <div class="card">
@@ -461,10 +471,13 @@ main { padding: 20px 24px 28px; gap: 14px; }
             <button data-v="crossfade">Crossfade</button><button data-v="cut">Cut</button><button data-v="dip">Dip to black</button>
           </span></label>
         <label class="row"><span class="lbl">Intro</span>
-          <span class="segctl" id="rIntro">
+          <span class="segctl styletiles" id="rIntro">
             <button data-v="animated" title="number, name and logo slam in on the beat, sparks and shockwave">Slam</button><button data-v="inferno" title="flames roar up, the number burns in, the name rises out of the fire">Inferno</button><button data-v="storm" title="storm clouds, lightning strikes on the beat, electric number">Thunder</button><button data-v="shatter" title="the number punches through glass, shards fly, the name slams in">Shatter</button><button data-v="stadium" title="stadium lights bang on, light beams, chrome number, broadcast bar">Stadium</button><button data-v="glitch" title="digital corruption, RGB split; the name decodes out of scrambled characters">Glitch</button><button data-v="smoke" title="team-colour smoke bombs; the number punches through the smoke">Smoke</button><button data-v="neon" title="neon tubes buzz and flicker on against a brick wall">Neon</button><button data-v="warp" title="hyperspace streaks; the number blasts out with a shockwave">Warp</button><button data-v="gold" title="gold metal lettering, light sweeps and sparkles, falling gold dust">Gold</button><button data-v="classic" title="the still title card">Classic</button>
           </span>
-          <button class="btn" id="rIntroPv" style="flex:none;padding:5px 10px">▶ Preview intro</button></label>
+          </label>
+        <div class="row stylepv"><span class="lbl"></span><span class="hint" style="flex:1">Click a style to watch it. Samples use a made-up player; yours goes in when you build.</span>
+          <button class="btn" id="rIntroPv" style="flex:none;padding:5px 10px" title="render this intro with your player's name, colours, logo and song (~45 s the first time)">▶ With my player</button></div>
+        <div class="row stylepv" id="rIntroSampleRow" hidden><span class="lbl"></span><video id="rIntroSample" controls playsinline></video></div>
         <label class="row"><span class="lbl">Impact sounds</span><input type="checkbox" id="rIntroSfx">
           <span class="hint">whoosh + boom on each slam of the animated intro</span></label>
         <label class="row"><span class="lbl">Name banner</span>
@@ -1137,6 +1150,7 @@ async function loadReel() {
   $('rCredit').disabled = !reelInfo.credit_ready;
   document.querySelectorAll('#rBanner button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.name_banner || 'first')));
   document.querySelectorAll('#rIntro button').forEach(b => b.classList.toggle('on', b.dataset.v === (s.intro || 'animated')));
+  loadSamples();
   fetch('/api/branding').then(r => r.json()).then(br => document.querySelectorAll('#rOutro button').forEach(b => b.classList.toggle('on', b.dataset.v === ((br.branding || {}).style || 'forge')))).catch(() => {});
   const comp = s.music_source === 'compose';
   document.querySelectorAll('#rMusicSrc button').forEach(b => b.classList.toggle('on', b.dataset.v === (comp ? 'compose' : 'song')));
@@ -1396,6 +1410,42 @@ $('rGame').oninput = e => { $('rGameV').textContent = e.target.value + '% under 
 $('rGame').onchange = e => saveReelSetting({ game_audio: e.target.value / 100 });
 document.querySelectorAll('#rTrans button').forEach(b => b.onclick = () => saveReelSetting({ transition: b.dataset.v }));
 document.querySelectorAll('#rBanner button').forEach(b => b.onclick = () => saveReelSetting({ name_banner: b.dataset.v }));
+// Style tiles: every intro and ending is pre-rendered once (sample player for intros), so a click plays it at once.
+let samples = {}, samplesTimer = null;
+document.querySelectorAll('.styletiles button').forEach(b => {
+  b.innerHTML = `<span class="thumb">…</span><span>${b.textContent}</span>`;
+  b.addEventListener('mouseenter', () => {
+    const sm = samples[b.dataset.v + '@' + b.parentElement.id], th = b.querySelector('.thumb');
+    if (!sm || !sm.video || th.querySelector('video')) return;
+    const v = document.createElement('video');
+    v.muted = true; v.loop = true; v.playsInline = true; v.src = sm.video; th.appendChild(v); v.play().catch(() => {});
+  });
+  b.addEventListener('mouseleave', () => b.querySelectorAll('.thumb video').forEach(v => v.remove()));
+  b.addEventListener('click', e => {
+    e.preventDefault();
+    const intro = b.parentElement.id === 'rIntro', sm = samples[b.dataset.v + '@' + b.parentElement.id];
+    if (!sm || !sm.video) return;
+    $(intro ? 'rOutroSample' : 'rIntroSample').pause();
+    const v = $(intro ? 'rIntroSample' : 'rOutroSample');
+    $(intro ? 'rIntroSampleRow' : 'rOutroSampleRow').hidden = false;
+    v.src = sm.video; v.currentTime = 0; v.play().catch(() => {});
+  });
+});
+async function loadSamples() {
+  clearTimeout(samplesTimer);
+  let j;
+  try { j = await (await fetch('/api/samples')).json(); } catch (e) { return; }
+  samples = {};
+  for (const [list, id] of [[j.intros, 'rIntro'], [j.outros, 'rOutro']]) for (const sm of list) {
+    samples[sm.style + '@' + id] = sm;
+    const th = document.querySelector(`#${id} button[data-v="${sm.style}"] .thumb`);
+    if (!th) continue;
+    th.style.backgroundImage = sm.poster ? `url("${sm.poster}")` : '';
+    th.firstChild && th.firstChild.nodeType === 3 && th.firstChild.remove();
+    if (!sm.poster) th.insertAdjacentText('afterbegin', sm.rendering ? 'rendering…' : j.running ? 'queued' : '');
+  }
+  if (j.running && reelOpen) samplesTimer = setTimeout(loadSamples, 5000);
+}
 document.querySelectorAll('#rIntro button').forEach(b => b.onclick = () => saveReelSetting({ intro: b.dataset.v }));
 document.querySelectorAll('#rOutro button').forEach(b => b.onclick = async () => {
   const cur = await (await fetch('/api/branding')).json();
