@@ -590,7 +590,7 @@ STYLES = ("animated", "inferno", "storm", "shatter", "stadium",
 def cache_key(pl: dict, logo: Path | None, grid: dict | None, music_start: float, bg_id: str, sfx: bool,
               style: str = "animated", size: tuple[int, int] | None = None) -> str:
     payload = {"v": INTRO_VERSION, **({"style": style} if style != "animated" else {}),
-               **({"size": list(size)} if size and tuple(size) != (graphics.W, graphics.H) else {}), "pl": {k: pl.get(k) for k in ("name", "number", "position", "class_year",
+               **({"size": list(size)} if size and tuple(size) != (graphics.W, graphics.H) else {}), "pl": {k: pl.get(k) for k in ("name", "number", "position", "class_year", "tagline",
                                                                   "height_weight", "school", "color", "accent")},
                "logo": [str(logo), logo.stat().st_mtime] if logo else None,
                "beats": beat_times(grid, music_start), "bg": bg_id, "sfx": sfx}

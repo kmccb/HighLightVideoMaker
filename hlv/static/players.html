@@ -194,6 +194,7 @@ function render() {
             ${field('position', 'Position', 'LB / RB')}
             ${field('class_year', 'Class of (year)', '2029')}
             ${field('height_weight', 'Height / weight', '6\'0" 180')}
+            ${field('tagline', 'Line under the name (optional, replaces position · class of · size)', '2026 Highlights', true)}
             ${field('school', 'School', 'Example High School', true)}
             ${field('contact', 'Contact line (end card)', 'email, phone or Hudl link', true)}
             ${field('gpa', 'GPA (recruiting cut)', '3.8')}
@@ -328,7 +329,7 @@ $('list').addEventListener('click', e => {
 $('add').onclick = () => {
   const team = players[0] || {};
   players.push({ id: '', name: '', number: '', position: '', class_year: '', school: team.school || '',
-                 height_weight: '', contact: '', gpa: '', hudl: '', logo: team.logo || '',
+                 height_weight: '', tagline: '', contact: '', gpa: '', hudl: '', logo: team.logo || '',
                  color: team.color || '#1f4fd1', accent: team.accent || '#ffd23f' });
   sel = players.length - 1; render();
   document.querySelector('[data-k="name"]').focus();

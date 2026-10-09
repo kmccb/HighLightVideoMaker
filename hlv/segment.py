@@ -104,7 +104,7 @@ def segment_key(clip: dict, pl: dict | None, settings: dict, plan: dict, src: Pa
         # Profile text only matters to plays that show the name banner; the accent colour
         # (highlight ring) matters to all of them.
         "banner": bool(settings.get("_banner", True)),
-        "pl": {k: (pl or {}).get(k) for k in (("name", "number", "position", "class_year",
+        "pl": {k: (pl or {}).get(k) for k in (("name", "number", "position", "class_year", "tagline",
                                                 "height_weight", "color", "accent")
                                                if settings.get("_banner", True) else ("accent",))},
         "plan": hashlib.sha1(json.dumps([plan.get("rects"), plan.get("player")]).encode()).hexdigest(),

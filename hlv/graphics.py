@@ -84,7 +84,11 @@ def _paste_logo(img: Image.Image, lg: Image.Image, cx: int, cy: int) -> None:
     img.paste(lg, (x, y), lg)
 
 
-def _detail_line(pl: dict) -> str:
+def _detail_line(pl: dict, custom: bool = True) -> str:
+    """The small line under the name. A profile's own "tagline" (e.g. "2026 HIGHLIGHTS") replaces
+    the automatic position · class of · size line; custom=False always gives the automatic one."""
+    if custom and (pl.get("tagline") or "").strip():
+        return pl["tagline"].strip().upper()
     bits = [pl.get("position", ""), f"CLASS OF {pl['class_year']}" if pl.get("class_year") else "",
             pl.get("height_weight", "")]
     return "  ·  ".join(b for b in bits if b).upper()
@@ -131,7 +135,7 @@ def recruit_card(root: Path, pl: dict, size: tuple[int, int] = (W, H)) -> np.nda
     if pl.get("number"):
         spec.append((f"#{pl['number']}", 120, "Bold Condensed", accent, 10))
     spec.append((name, 150 if len(name) <= 14 else 115, "Bold Condensed", (255, 255, 255), 40))
-    det = _detail_line(pl)
+    det = _detail_line(pl, custom=False)
     if det:
         spec.append((det, 54, "SemiBold Condensed", (225, 230, 238), 18))
     if pl.get("school"):
