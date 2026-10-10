@@ -424,9 +424,20 @@ main { min-width: 0; }
 .mtl-fit { font-size: 11.5px; }
 .mtl-fit .warn { color: var(--warn); }
 .mtl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+/* on the storyboard: wide waveform, all controls on one row */
+.rb-story { min-width: 0; }
+.rb-story .mtl { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); min-width: 0; grid-template-columns: minmax(0, 1fr); }
+.rb-story .mtl > * { min-width: 0; }
+.rb-story .mtl-h3 { margin-bottom: 0; }
+.rb-story .mtl-wave { height: 84px; }
+.rb-story .mtl-grid { grid-template-columns: auto auto repeat(3, minmax(90px, 1fr)); align-items: end; gap: 8px 16px; }
+.rb-story .mtl-grid label.wide { grid-column: auto; grid-template-columns: 1fr; }
+.rb-story .mtl-name { max-width: 300px; }
+@media (max-width: 1100px) { .rb-story .mtl-grid { grid-template-columns: 1fr 1fr; } .rb-story .mtl-grid label.wide { grid-column: 1 / -1; } }
 .mtl-grid label { display: grid; gap: 4px; }
 .mtl-grid label:not(.wide) { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
 .mtl-grid label:not(.wide) .lbl { flex: 0 0 100%; }
+.mtl-grid label:not(.wide) { min-width: 104px; }
 .mtl-grid label.wide { grid-column: 1 / -1; grid-template-columns: 110px 1fr; align-items: center; }
 .mtl-grid .lbl { flex: none; font-size: 12px; }
 .mtl-grid .lbl b { font: 500 11px var(--mono); color: var(--soft); margin-left: 4px; }
@@ -669,7 +680,33 @@ main { min-width: 0; }
     </header>
     <div id="rDupes" class="dupewarn" hidden></div>
     <section class="rb-story" aria-label="Storyboard"><div class="rb-h"><h3>Storyboard</h3><span class="hint">each tile is a play, as wide as it lasts · <span style="color:var(--hit)">yellow</span> = hit set · <span style="color:var(--warn)">amber</span> = needs a fix · click a tile to find it below</span></div>
-      <div class="rb-strip" id="rStory"></div></section>
+      <div class="rb-strip" id="rStory"></div>
+          <div class="mtl" id="mTl" hidden>
+            <div class="rb-h mtl-h3"><h3>Music</h3><span class="hint">drag the orange handles to trim · click the waveform to listen from there</span></div>
+            <div class="mtl-top">
+              <button type="button" class="btn mtl-play" id="mPlay" aria-label="Play the trimmed song">&#9654;</button>
+              <span class="mtl-time" id="mTime"></span><span class="spacer"></span>
+              <span class="mtl-name" id="mName"></span>
+            </div>
+            <div class="mtl-wave" id="mWave" title="Click to listen from here; drag the orange handles to trim">
+              <canvas id="mCanvas"></canvas>
+              <svg class="mtl-fade" id="mFade" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+              <div class="mtl-reelend" id="mReelEnd"><span>reel ends</span></div>
+              <div class="mtl-h" id="mHS" role="slider" tabindex="0" aria-label="Song starts at (seconds)"></div>
+              <div class="mtl-h" id="mHE" role="slider" tabindex="0" aria-label="Song stops at (seconds)"></div>
+              <div class="mtl-head" id="mHead" hidden></div>
+            </div>
+            <div class="mtl-plays" id="mPlays" aria-hidden="true"></div>
+            <div class="mtl-fit hint" id="mFit"></div>
+            <div class="mtl-grid">
+              <label><span class="lbl">Starts at</span><input type="number" id="rMStart" min="0" step="0.5"> <span class="unit">s</span></label>
+              <label><span class="lbl">Stops at</span><input type="number" id="mEnd" min="0" step="0.5" placeholder="end"> <span class="unit">s</span></label>
+              <label class="wide"><span class="lbl">Fade in <b id="mFinV"></b></span><input type="range" id="mFin" min="0" max="8" step="0.5"></label>
+              <label class="wide"><span class="lbl">Fade out <b id="mFoutV"></b></span><input type="range" id="mFout" min="0" max="12" step="0.5"></label>
+              <label class="wide"><span class="lbl">Music volume <b id="mVolV"></b></span><input type="range" id="mVol" min="0" max="150" step="5"></label>
+            </div>
+          </div>
+    </section>
     <div class="order-head"><span>Drag to reorder, untick to leave out, ★ opens the recruiting cut</span><span id="rCount"></span><span id="rLen"></span></div>
     <ol id="rList"></ol>
     <section class="rb-out" id="rbOut" aria-label="Renders and publish">
@@ -754,30 +791,7 @@ main { min-width: 0; }
           <input type="text" id="rYt" placeholder="or paste a YouTube link" style="flex:1;min-width:160px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px">
           <button class="btn" id="rYtGo">Download</button></div>
         <div id="rSongMsg" class="hint"></div>
-        <div class="mtl" id="mTl" hidden>
-          <div class="mtl-top">
-            <button type="button" class="btn mtl-play" id="mPlay" aria-label="Play the trimmed song">&#9654;</button>
-            <span class="mtl-time" id="mTime"></span><span class="spacer"></span>
-            <span class="mtl-name" id="mName"></span>
-          </div>
-          <div class="mtl-wave" id="mWave" title="Click to listen from here; drag the orange handles to trim">
-            <canvas id="mCanvas"></canvas>
-            <svg class="mtl-fade" id="mFade" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"></svg>
-            <div class="mtl-reelend" id="mReelEnd"><span>reel ends</span></div>
-            <div class="mtl-h" id="mHS" role="slider" tabindex="0" aria-label="Song starts at (seconds)"></div>
-            <div class="mtl-h" id="mHE" role="slider" tabindex="0" aria-label="Song stops at (seconds)"></div>
-            <div class="mtl-head" id="mHead" hidden></div>
-          </div>
-          <div class="mtl-plays" id="mPlays" aria-hidden="true"></div>
-          <div class="mtl-fit hint" id="mFit"></div>
-          <div class="mtl-grid">
-            <label><span class="lbl">Starts at</span><input type="number" id="rMStart" min="0" step="0.5"> <span class="unit">s</span></label>
-            <label><span class="lbl">Stops at</span><input type="number" id="mEnd" min="0" step="0.5" placeholder="end"> <span class="unit">s</span></label>
-            <label class="wide"><span class="lbl">Fade in <b id="mFinV"></b></span><input type="range" id="mFin" min="0" max="8" step="0.5"></label>
-            <label class="wide"><span class="lbl">Fade out <b id="mFoutV"></b></span><input type="range" id="mFout" min="0" max="12" step="0.5"></label>
-            <label class="wide"><span class="lbl">Music volume <b id="mVolV"></b></span><input type="range" id="mVol" min="0" max="150" step="5"></label>
-          </div>
-        </div>
+        <div class="hint">Trim the song, fades and volume: on the music lane under the storyboard.</div>
         <label class="row"><span class="lbl">Game audio</span><input type="range" id="rGame" min="0" max="100" step="5"><span id="rGameV" class="hint"></span></label>
         <label class="row"><span class="lbl">Sync hits to beat</span><input type="checkbox" id="rSync">
           <span class="hint">each play's hit (K) lands on a strong beat of the song</span></label>
