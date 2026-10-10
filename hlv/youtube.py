@@ -99,13 +99,25 @@ def store_secret(data: bytes) -> None:
     (folder() / "token.json").unlink(missing_ok=True)       # a new client needs a new sign-in
 
 
+def _save_token(creds) -> None:
+    """Write the sign-in atomically: a half-written token.json (app closed mid-write) used to crash
+    every YouTube request and hide the Publish box."""
+    tok = folder() / "token.json"
+    tmp = tok.with_suffix(".json.tmp")
+    tmp.write_text(creds.to_json(), encoding="utf-8")
+    tmp.replace(tok)
+
+
 def _creds():
     from google.auth.transport.requests import Request
     from google.oauth2.credentials import Credentials
     tok = folder() / "token.json"
     if not tok.exists():
         return None
-    creds = Credentials.from_authorized_user_file(str(tok), SCOPES)
+    try:
+        creds = Credentials.from_authorized_user_file(str(tok), SCOPES)
+    except (ValueError, OSError):        # empty or damaged sign-in: treat as signed out, so Connect shows
+        return None
     if creds.valid:
         return creds
     if creds.expired and creds.refresh_token:
@@ -113,7 +125,7 @@ def _creds():
             creds.refresh(Request())
         except Exception:  # noqa: BLE001 - revoked or expired (Testing-mode tokens die after 7 days)
             return None
-        tok.write_text(creds.to_json(), encoding="utf-8")
+        _save_token(creds)
         return creds
     return None
 
@@ -160,7 +172,7 @@ def connect() -> dict:
             creds = flow.run_local_server(port=0, open_browser=True, timeout_seconds=300,
                                           authorization_prompt_message="",
                                           success_message="Signed in. You can close this tab and go back to Highlight Reels.")
-            (folder() / "token.json").write_text(creds.to_json(), encoding="utf-8")
+            _save_token(creds)
             _forget_channel()
             job.update(state="done", step="Connected")
         except Exception as e:  # noqa: BLE001 - shown on the page

@@ -31,3 +31,10 @@ def test_visibility_defaults_to_unlisted_and_is_checked(tmp_path, monkeypatch):
     assert youtube._load()["privacy"] == "unlisted"
     with pytest.raises(ValueError, match="visibility"):
         youtube.publish([], "", "everyone")
+
+
+def test_damaged_sign_in_counts_as_signed_out(tmp_path, monkeypatch):
+    # An empty token.json (app closed while saving it) crashed /api/youtube and hid the Publish box.
+    monkeypatch.setattr(youtube.library, "home", lambda: tmp_path)
+    (youtube.folder() / "token.json").write_text("", encoding="utf-8")
+    assert youtube._creds() is None
