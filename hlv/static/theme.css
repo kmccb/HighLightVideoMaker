@@ -141,3 +141,9 @@ html.has-rail .hr-nav { display: none; }
   .hr-rail-btn.on { box-shadow: inset 0 2px 0 var(--accent); }
   .hr-steps { order: 9; flex: 1 1 100%; overflow-x: auto; }
 }
+
+/* ---------- resolution badge (window.hrRes in shell.js) ---------- */
+.hr-res { display: inline-flex; align-items: center; height: 16px; padding: 0 4px; border-radius: 3px; flex: none;
+  font: 700 9.5px/1 var(--mono); letter-spacing: .02em; border: 1px solid currentColor; color: var(--dim); background: rgba(0,0,0,.35); }
+.hr-res.uhd { color: #7FB8FF; } .hr-res.qhd { color: #9ECBFF; } .hr-res.fhd { color: var(--soft); }
+.hr-res.hd { color: var(--dim); } .hr-res.sd { color: var(--warn); }

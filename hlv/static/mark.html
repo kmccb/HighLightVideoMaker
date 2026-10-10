@@ -154,7 +154,7 @@ function render() {
 
 function chips(c) {
   const busy = tracking === c.id || queue.includes(c.id);
-  return (busy ? '<span class="chip busy">tracking…</span>' : '') +
+  return (window.hrRes ? hrRes(c.width, c.height, c.fps) : '') + (busy ? '<span class="chip busy">tracking…</span>' : '') +
     (playerOk(c) ? '<span class="chip ok">player ✓</span>' : '<span class="chip need">needs player</span>') +
     (hitOk(c) ? `<span class="chip ok">${c.review.no_hit ? 'no hit' : 'hit ✓'}</span>` : '<span class="chip need">needs hit</span>');
 }

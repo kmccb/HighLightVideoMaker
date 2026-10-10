@@ -345,6 +345,11 @@ main { min-width: 0; }
 .item .vthumb { position: relative; flex: none; width: 64px; height: 36px; border-radius: 4px; overflow: hidden; background: var(--panel-2); }
 .item .vthumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .item .vthumb .dur { position: absolute; right: 2px; bottom: 2px; font: 600 9.5px/1 var(--mono); color: #fff; background: rgba(0,0,0,.7); padding: 2px 3px; border-radius: 2px; }
+.item .vthumb .res { position: absolute; right: 2px; top: 2px; display: flex; }
+.item .vthumb .res .hr-res { height: 13px; font-size: 8.5px; padding: 0 3px; background: rgba(0,0,0,.72); }
+.titlebar .resb:empty { display: none; }
+.titlebar .resb .hr-res { height: 20px; font-size: 11px; padding: 0 6px; }
+#rList .hr-res { margin-right: 2px; }
 .item .vthumb .dot { position: absolute; left: 3px; top: 3px; width: 9px; height: 9px; box-shadow: 0 0 0 1.5px rgba(0,0,0,.55); background: rgba(0,0,0,.35); }
 .item .vthumb .dot.done { background: var(--ok); }
 .item .txt { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
@@ -394,6 +399,40 @@ main { min-width: 0; }
   .insp-btns .btn kbd { display: none; }
   .insp-btns #bOk { padding: 0 10px; }
 }
+/* ===== Music timeline (Build > Music): trim, fades, where the plays fall on the song ===== */
+.mtl { display: grid; gap: 8px; }
+.mtl[hidden] { display: none; }
+.mtl-top { display: flex; align-items: center; gap: 8px; }
+.mtl-play { width: 34px; min-height: 30px !important; height: 30px; padding: 0 !important; justify-content: center; font-size: 12px; }
+.mtl-time { font: 500 12px var(--mono); color: var(--soft); }
+.mtl-name { font-size: 11px; color: var(--faint); max-width: 150px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.mtl-wave { position: relative; height: 64px; border-radius: 6px; background: #0F1216; border: 1px solid var(--line-2); cursor: pointer; touch-action: none; overflow: hidden; }
+.mtl-wave canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.mtl-fade { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.mtl-h { position: absolute; top: 0; bottom: 0; width: 14px; margin-left: -7px; cursor: ew-resize; z-index: 2; }
+.mtl-h::before { content: ''; position: absolute; left: 6px; top: 0; bottom: 0; width: 2px; background: var(--accent); }
+.mtl-h::after { content: ''; position: absolute; left: 2px; top: 50%; width: 10px; height: 22px; margin-top: -11px; border-radius: 3px; background: var(--accent); box-shadow: 0 0 0 2px #0F1216; }
+.mtl-h:focus-visible::after { outline: 2px solid #fff; }
+.mtl-reelend { position: absolute; top: 0; bottom: 0; border-left: 1.5px dashed var(--info); pointer-events: none; }
+.mtl-reelend span { position: absolute; left: 3px; top: 2px; font: 600 9px var(--mono); color: var(--info); white-space: nowrap; text-transform: uppercase; }
+.mtl-head { position: absolute; top: 0; bottom: 0; width: 2px; background: #fff; pointer-events: none; z-index: 3; }
+.mtl-head[hidden] { display: none; }
+.mtl-plays { position: relative; height: 16px; }
+.mtl-plays span { position: absolute; top: 0; height: 14px; border-radius: 2px; background: #2A3B30; border: 1px solid #3A5A44; box-sizing: border-box;
+  font: 600 8.5px/12px var(--mono); color: var(--soft); text-align: center; overflow: hidden; }
+.mtl-plays span.mintro { background: #2A1508; border-color: var(--accent); color: var(--accent-hi); }
+.mtl-fit { font-size: 11.5px; }
+.mtl-fit .warn { color: var(--warn); }
+.mtl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
+.mtl-grid label { display: grid; gap: 4px; }
+.mtl-grid label:not(.wide) { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 6px; }
+.mtl-grid label:not(.wide) .lbl { flex: 0 0 100%; }
+.mtl-grid label.wide { grid-column: 1 / -1; grid-template-columns: 110px 1fr; align-items: center; }
+.mtl-grid .lbl { flex: none; font-size: 12px; }
+.mtl-grid .lbl b { font: 500 11px var(--mono); color: var(--soft); margin-left: 4px; }
+.mtl-grid input[type=number] { width: 72px; height: 30px; background: #0F1216; color: var(--text); border: 1px solid var(--line-2); border-radius: 6px; padding: 0 8px; font: 500 13px var(--mono); }
+.mtl-grid input[type=range] { accent-color: var(--accent); width: 100%; }
+.mtl-grid .unit { font-size: 12px; color: var(--faint); }
 /* ===== Build reel: the reel on the left, settings on the right, build bar pinned ===== */
 .reel { padding: 0; overflow: hidden; }
 .rb { display: grid; grid-template-columns: minmax(0, 1fr) 380px; height: 100%; }
@@ -457,6 +496,7 @@ main { min-width: 0; }
 .rsec-t { font: 600 11px var(--sans); letter-spacing: .14em; text-transform: uppercase; color: var(--soft); }
 .rsec-sum { font-size: 12.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .rsec-body { padding: 0 16px 16px; display: grid; gap: 12px; }
+.rsec-body .row[hidden], .rsec-body .hint[hidden] { display: none; }
 .rsec-body .row { display: flex; align-items: center; gap: 8px 10px; flex-wrap: wrap; }
 .rsec-body .row > .hint { flex: 1 1 100%; font-size: 12px; }
 .rsec-body > .hint { font-size: 12px; }
@@ -524,6 +564,7 @@ main { min-width: 0; }
   <main>
     <div class="titlebar">
       <h2 id="title">Loading…</h2>
+      <span id="resB" class="resb"></span>
       <span class="meta" id="meta"></span>
       <span class="note" id="note"></span>
       <span class="spacer"></span>
@@ -713,9 +754,30 @@ main { min-width: 0; }
           <input type="text" id="rYt" placeholder="or paste a YouTube link" style="flex:1;min-width:160px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px">
           <button class="btn" id="rYtGo">Download</button></div>
         <div id="rSongMsg" class="hint"></div>
-        <label class="row"><span class="lbl">Music starts at</span>
-          <input type="number" id="rMStart" min="0" step="0.5" style="width:90px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:5px 8px">
-          <span class="hint">seconds into the song (skip a slow intro)</span></label>
+        <div class="mtl" id="mTl" hidden>
+          <div class="mtl-top">
+            <button type="button" class="btn mtl-play" id="mPlay" aria-label="Play the trimmed song">&#9654;</button>
+            <span class="mtl-time" id="mTime"></span><span class="spacer"></span>
+            <span class="mtl-name" id="mName"></span>
+          </div>
+          <div class="mtl-wave" id="mWave" title="Click to listen from here; drag the orange handles to trim">
+            <canvas id="mCanvas"></canvas>
+            <svg class="mtl-fade" id="mFade" viewBox="0 0 1000 100" preserveAspectRatio="none" aria-hidden="true"></svg>
+            <div class="mtl-reelend" id="mReelEnd"><span>reel ends</span></div>
+            <div class="mtl-h" id="mHS" role="slider" tabindex="0" aria-label="Song starts at (seconds)"></div>
+            <div class="mtl-h" id="mHE" role="slider" tabindex="0" aria-label="Song stops at (seconds)"></div>
+            <div class="mtl-head" id="mHead" hidden></div>
+          </div>
+          <div class="mtl-plays" id="mPlays" aria-hidden="true"></div>
+          <div class="mtl-fit hint" id="mFit"></div>
+          <div class="mtl-grid">
+            <label><span class="lbl">Starts at</span><input type="number" id="rMStart" min="0" step="0.5"> <span class="unit">s</span></label>
+            <label><span class="lbl">Stops at</span><input type="number" id="mEnd" min="0" step="0.5" placeholder="end"> <span class="unit">s</span></label>
+            <label class="wide"><span class="lbl">Fade in <b id="mFinV"></b></span><input type="range" id="mFin" min="0" max="8" step="0.5"></label>
+            <label class="wide"><span class="lbl">Fade out <b id="mFoutV"></b></span><input type="range" id="mFout" min="0" max="12" step="0.5"></label>
+            <label class="wide"><span class="lbl">Music volume <b id="mVolV"></b></span><input type="range" id="mVol" min="0" max="150" step="5"></label>
+          </div>
+        </div>
         <label class="row"><span class="lbl">Game audio</span><input type="range" id="rGame" min="0" max="100" step="5"><span id="rGameV" class="hint"></span></label>
         <label class="row"><span class="lbl">Sync hits to beat</span><input type="checkbox" id="rSync">
           <span class="hint">each play's hit (K) lands on a strong beat of the song</span></label>
@@ -873,7 +935,7 @@ function renderList() {
       if (s.spotlight.length) bits.push('<span class="s-spot">&#9679; spotlight</span>');
       bits.push(s.no_hit ? '<span>no hit</span>' : (s.hit != null ? '<span class="s-hit">HIT</span>' : ''));
     }
-    b.innerHTML = `<span class="vthumb"><img alt="" loading="lazy" src="/api/clips/${encodeURIComponent(c.id)}/frame.jpg?t=${(s.snap || 0).toFixed(2)}"><span class="dot ${dot}"></span><span class="dur">${len.toFixed(1)}</span></span>` +
+    b.innerHTML = `<span class="vthumb"><img alt="" loading="lazy" src="/api/clips/${encodeURIComponent(c.id)}/frame.jpg?t=${(s.snap || 0).toFixed(2)}"><span class="dot ${dot}"></span><span class="res">${(window.hrRes ? hrRes(c.width, c.height, c.fps) : '')}</span><span class="dur">${len.toFixed(1)}</span></span>` +
       `<span class="txt"><span class="name"></span><span class="sub">${bits.join('')}</span></span>${kindTag}${flag}` +
       (s.keep === false ? '<span class="pill-out">Left out</span>' : '') +
       `<input type="checkbox" class="inc" ${s.keep !== false ? 'checked' : ''} title="${s.keep !== false ? 'In the reel: untick to leave it out' : 'Left out of the reel: tick to include'}" aria-label="In reel">`;
@@ -933,6 +995,7 @@ function select(i) {
   windowStop = null;
   $('title').textContent = c.source.split('/').pop();
   const d = c.detection;
+  $('resB').innerHTML = (window.hrRes ? hrRes(c.width, c.height, c.fps) : '');
   $('meta').textContent = `${c.group} · ${c.duration.toFixed(1)} s · ${c.kind.replace('_', ' ')} · auto confidence ${Math.round(d.confidence * 100)}%`;
   $('note').textContent = c.note || '';
   $('notes').value = cur.notes;
@@ -1448,6 +1511,7 @@ function reelView(v) {
 }
 function closeReel() {
   $('reel').classList.remove('pub');
+  if (typeof mtStop === 'function') mtStop();
   reelOpen = false; $('reel').hidden = true; $('pv').hidden = true; $('pvVideo').pause(); closePicker();
   document.body.classList.remove('reel-open');
   if (location.hash) history.replaceState(null, '', location.pathname);
@@ -1496,6 +1560,7 @@ async function loadReel() {
   $('rSlowSpeed').value = String(s.slowmo_speed ?? 0.4);
   $('rSlowSpeed').disabled = !s.slowmo;
   $('rMStart').value = s.music_start || 0;
+  loadMusicTl();
   renderReelList();
   showJob(reelInfo.job);
 }
@@ -1638,7 +1703,7 @@ function renderReelList() {
       <span class="grip">⋮⋮</span><span class="num">${num}</span>
       <input type="checkbox" data-act="inc" ${c.included ? 'checked' : ''} ${c.kind === 'pre_edited' && !c.labeled ? 'disabled title="trim it in review first"' : ''}>
       <button class="mini star${c.star ? ' on' : ''}" data-act="star" title="${c.star ? 'Top play: opens the recruiting cut. Click to unstar' : 'Star a top play: starred plays open the recruiting cut'}">${c.star ? '★' : '☆'}</button>
-      <span class="name">${esc(c.source.split('/').pop())}</span><span class="game">${esc(c.group)}</span>${rec}${badges}
+      <span class="name">${esc(c.source.split('/').pop())}</span>${(window.hrRes ? hrRes(c.width, c.height, c.fps) : '')}<span class="game">${esc(c.group)}</span>${rec}${badges}
       <span class="len">${c.seconds.toFixed(1)}s</span>
       <button class="mini" data-act="up">↑</button><button class="mini" data-act="down">↓</button>
       <button class="mini" data-act="preview">Preview</button><button class="mini" data-act="edit">Edit</button></li>`;
@@ -1650,6 +1715,7 @@ function renderReelList() {
   $('rCount').textContent = `${inc.length - nPics} plays` + (nPics ? ` · ${nPics} photo${nPics > 1 ? 's' : ''}` : '');
   $('rLen').textContent = `about ${Math.floor(total / 60)}:${String(Math.round(total % 60)).padStart(2, '0')} long`;
   renderStory(rows, numOf);
+  if (mt.dur && !$('mTl').hidden) drawMusicTl();
   // The recruiting cut: starred plays first, then the rest until ~3 min.
   const cut = reelInfo.settings.cut || 'reel', recs = rows.filter(c => c.recruit);
   $('rCutHint').hidden = cut === 'reel';
@@ -1953,6 +2019,138 @@ $('rFx').onchange = e => saveReelSetting({ hit_fx: e.target.checked });
 $('rSlow').onchange = e => saveReelSetting({ slowmo: e.target.checked });
 $('rSlowSpeed').onchange = e => saveReelSetting({ slowmo_speed: +e.target.value });
 $('rMStart').onchange = e => saveReelSetting({ music_start: +e.target.value || 0 });
+// ---------- Music timeline: the song's waveform, the part the reel uses, fades and where each play lands ----------
+const mt = { dur: 0, peaks: [], audio: null, raf: 0, drag: null };
+const mmss = t => `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+function mtSettings() {
+  const s = (reelInfo && reelInfo.settings) || {};
+  const ms = Math.min(+s.music_start || 0, Math.max(0, mt.dur - 1));
+  const me = s.music_end == null ? mt.dur : Math.min(+s.music_end, mt.dur);
+  return { ms, me, fin: s.music_fade_in ?? 0.5, fout: s.music_fade_out ?? 3, vol: s.music_volume ?? 0.9 };
+}
+function mtReelLen() {
+  const inc = reelInfo.clips.filter(c => c.included);
+  const tr = { crossfade: 1 / 3, dip: 0.6, cut: 0 }[reelInfo.settings.transition] || 0;
+  return inc.reduce((a, c) => a + c.seconds, 0) + reelInfo.card_s - tr * (inc.length + 1);
+}
+async function loadMusicTl() {
+  const comp = reelInfo.settings.music_source === 'compose';
+  if (comp || !reelInfo.assets || !reelInfo.assets.music) { $('mTl').hidden = true; mtStop(); return; }
+  if (!mt.dur) { $('mTl').hidden = false; $('mFit').textContent = 'Reading the song…'; $('mTime').textContent = ''; }
+  try {
+    const j = await (await fetch('/api/music/peaks')).json();
+    if (j.name !== mt.name) { mtStop(); mt.audio = null; mt.name = j.name; }
+    mt.dur = j.duration; mt.peaks = j.peaks || [];
+    $('mName').textContent = j.name || ''; $('mName').title = j.name || '';
+  } catch (e) { mt.dur = 0; }
+  $('mTl').hidden = !mt.dur;
+  if (mt.dur) drawMusicTl();
+}
+function drawMusicTl(live) {
+  if (!mt.dur || $('mTl').hidden) return;
+  const st = live || mtSettings();
+  const wave = $('mWave'), cv = $('mCanvas'), W = wave.clientWidth, H = wave.clientHeight;
+  if (!W) return;
+  const dpr = window.devicePixelRatio || 1;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext('2d'); g.scale(dpr, dpr);
+  const x = t => (t / mt.dur) * W;
+  const reelLen = mtReelLen(), stop = Math.min(st.me, st.ms + reelLen);
+  const n = mt.peaks.length, bw = W / n;
+  for (let i = 0; i < n; i++) {
+    const t = (i + 0.5) / n * mt.dur, h = Math.max(1, mt.peaks[i] * (H - 8));
+    g.fillStyle = t >= st.ms && t <= stop ? '#FF8A47' : (t >= st.ms && t <= st.me ? '#6B4A36' : '#2E3540');
+    g.fillRect(i * bw, (H - h) / 2, Math.max(1, bw - 0.4), h);
+  }
+  // fades: a ramp over the used part (0-1000 x 0-100 view box)
+  const X = t => (t / mt.dur) * 1000, fi = Math.min(st.fin, (stop - st.ms) / 2), fo = Math.min(st.fout, stop - st.ms - fi);
+  $('mFade').innerHTML = stop > st.ms ? `<polygon points="${X(st.ms)},100 ${X(st.ms + fi)},4 ${X(stop - fo)},4 ${X(stop)},100" fill="rgba(255,138,71,.10)" stroke="#FFB07A" stroke-width="1.2" vector-effect="non-scaling-stroke"/>` : '';
+  $('mHS').style.left = x(st.ms) + 'px'; $('mHE').style.left = x(st.me) + 'px';
+  $('mHS').setAttribute('aria-valuenow', st.ms.toFixed(1)); $('mHE').setAttribute('aria-valuenow', st.me.toFixed(1));
+  const re = st.ms + reelLen;
+  $('mReelEnd').hidden = re > mt.dur; $('mReelEnd').style.left = x(Math.min(re, mt.dur)) + 'px';
+  // where each play lands on the song (approximate until built: the intro length follows the song)
+  const inc = reelInfo.clips.filter(c => c.included);
+  const tr = { crossfade: 1 / 3, dip: 0.6, cut: 0 }[reelInfo.settings.transition] || 0;
+  let t = st.ms + (reelInfo.title_s || 4) - tr, k = 0;
+  const blocks = [`<span class="mintro" style="left:${x(st.ms)}px;width:${Math.max(2, x(st.ms + (reelInfo.title_s || 4)) - x(st.ms))}px" title="intro">IN</span>`];
+  for (const c of inc) {
+    k++;
+    if (t > mt.dur) break;
+    blocks.push(`<span style="left:${x(t)}px;width:${Math.max(2, x(Math.min(mt.dur, t + c.seconds)) - x(t) - 1)}px" title="#${k} ${esc(c.source.split('/').pop())}">${k}</span>`);
+    t += c.seconds - tr;
+  }
+  $('mPlays').innerHTML = blocks.join('');
+  $('mTime').textContent = `${mmss(st.ms)} → ${mmss(stop)} of ${mmss(mt.dur)}`;
+  const used = st.me - st.ms;
+  $('mFit').innerHTML = used + 0.5 < reelLen
+    ? (st.me < mt.dur - 0.5 ? `<span class="warn">The song stops ${mmss(reelLen - used)} before the reel ends</span> (the rest has game audio only).`
+                             : `<span class="warn">The song is ${mmss(reelLen - used)} shorter than the reel</span>, so it starts over from the beginning.`)
+    : `The reel (about ${mmss(reelLen)}) uses the bright part; plays are numbered under it.`;
+  if (!live) {
+    $('rMStart').value = st.ms; $('mEnd').value = reelInfo.settings.music_end == null ? '' : st.me;
+    $('mFin').value = st.fin; $('mFout').value = st.fout; $('mVol').value = Math.round(st.vol * 100);
+  }
+  $('mFinV').textContent = (+$('mFin').value).toFixed(1) + ' s'; $('mFoutV').textContent = (+$('mFout').value).toFixed(1) + ' s';
+  $('mVolV').textContent = $('mVol').value + '%';
+}
+function mtTimeAt(e) { const r = $('mWave').getBoundingClientRect(); return Math.min(mt.dur, Math.max(0, (e.clientX - r.left) / r.width * mt.dur)); }
+$('mWave').addEventListener('pointerdown', e => {
+  if (!mt.dur) return;
+  const h = e.target.closest('.mtl-h');
+  if (h) { mt.drag = { which: h.id === 'mHS' ? 'ms' : 'me', st: mtSettings() }; $('mWave').setPointerCapture(e.pointerId); e.preventDefault(); return; }
+  mtPlay(mtTimeAt(e));                                // click: listen from here
+});
+$('mWave').addEventListener('pointermove', e => {
+  if (!mt.drag) return;
+  const t = Math.round(mtTimeAt(e) * 2) / 2, st = mt.drag.st;
+  if (mt.drag.which === 'ms') st.ms = Math.min(t, st.me - 1); else st.me = Math.max(t, st.ms + 1);
+  drawMusicTl(st);
+});
+$('mWave').addEventListener('pointerup', () => {
+  if (!mt.drag) return;
+  const { which, st } = mt.drag; mt.drag = null;
+  saveReelSetting(which === 'ms' ? { music_start: st.ms } : { music_end: st.me >= mt.dur - 0.25 ? null : st.me });
+});
+for (const id of ['mHS', 'mHE']) $(id).addEventListener('keydown', e => {
+  if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+  e.preventDefault(); e.stopPropagation();
+  const st = mtSettings(), d = (e.key === 'ArrowLeft' ? -1 : 1) * (e.shiftKey ? 5 : 0.5);
+  if (id === 'mHS') saveReelSetting({ music_start: Math.max(0, Math.min(st.ms + d, st.me - 1)) });
+  else { const v = Math.max(st.ms + 1, Math.min(mt.dur, st.me + d)); saveReelSetting({ music_end: v >= mt.dur - 0.25 ? null : v }); }
+});
+// Listen: plays the song from t with the fades applied, stopping where the reel's music would.
+function mtStop() {
+  cancelAnimationFrame(mt.raf);
+  if (mt.audio) mt.audio.pause();
+  $('mHead').hidden = true; $('mPlay').innerHTML = '&#9654;'; $('mPlay').setAttribute('aria-label', 'Play the trimmed song');
+}
+function mtPlay(from) {
+  const st = mtSettings(), stop = Math.min(st.me, st.ms + mtReelLen());
+  if (!mt.audio) mt.audio = new Audio('/media/music?v=' + encodeURIComponent(mt.name || ''));
+  const a = mt.audio;
+  a.currentTime = from ?? st.ms; a.volume = 0; a.play().catch(() => {});
+  $('mPlay').innerHTML = '&#10073;&#10073;'; $('mPlay').setAttribute('aria-label', 'Pause');
+  const tick = () => {
+    const t = a.currentTime;
+    if (a.paused || t >= stop) { mtStop(); return; }
+    let v = 1;
+    if (st.fin > 0 && t < st.ms + st.fin) v = Math.max(0, (t - st.ms) / st.fin);
+    if (st.fout > 0 && t > stop - st.fout) v = Math.min(v, Math.max(0, (stop - t) / st.fout));
+    a.volume = Math.min(1, Math.max(0, v * Math.min(1, st.vol)));
+    $('mHead').hidden = false; $('mHead').style.left = (t / mt.dur * $('mWave').clientWidth) + 'px';
+    mt.raf = requestAnimationFrame(tick);
+  };
+  mt.raf = requestAnimationFrame(tick);
+}
+$('mPlay').onclick = () => { if (mt.audio && !mt.audio.paused) mtStop(); else mtPlay(); };
+$('mEnd').onchange = e => { const v = e.target.value.trim(); saveReelSetting({ music_end: v === '' ? null : +v }); };
+for (const [id, key, k] of [['mFin', 'music_fade_in', 1], ['mFout', 'music_fade_out', 1], ['mVol', 'music_volume', 100]]) {
+  $(id).oninput = () => drawMusicTl({ ...mtSettings(), fin: +$('mFin').value, fout: +$('mFout').value, vol: +$('mVol').value / 100 });
+  $(id).onchange = e => saveReelSetting({ [key]: +e.target.value / k });
+}
+new ResizeObserver(() => drawMusicTl()).observe($('mWave'));
+
 $('rGame').oninput = e => { $('rGameV').textContent = e.target.value + '% under music'; };
 $('rGame').onchange = e => saveReelSetting({ game_audio: e.target.value / 100 });
 document.querySelectorAll('#rTrans button').forEach(b => b.onclick = () => saveReelSetting({ transition: b.dataset.v }));

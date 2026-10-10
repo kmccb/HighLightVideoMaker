@@ -325,7 +325,8 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     fcp = out.with_suffix(".fcpxml")
     write_fcpxml(fcp, items, music, music_start, f"{pl.get('name') or pl['id']} {'recruiting' if recruiting else 'highlights'}"
                  f"{' (vertical)' if vertical else ''}",
-                 size=segment.VERTICAL if vertical else (1920, 1080))
+                 size=segment.VERTICAL if vertical else (1920, 1080),
+                 music_end=None if composing or settings.get("music_end") is None else float(settings["music_end"]))
     done += 1
     say("done", done, total)
     play_timing = [t for t in timing if not t.get("photo")]
@@ -471,6 +472,21 @@ def plan_timing(metas: list[dict], grid: dict | None, music_start: float, t_firs
     return out
 
 
+def music_window(total: float, settings: dict, music_start: float | None = None) -> tuple[float, float, float]:
+    """When the song stops in the reel and its fades: (stop, fade_in, fade_out), all in reel seconds.
+    music_end (seconds into the song) trims it; a soundtrack written for the reel is never trimmed."""
+    stop = total
+    end = settings.get("music_end")
+    if end is not None and settings.get("music_source") != "compose":
+        ms = float(settings.get("music_start") or 0) if music_start is None else music_start
+        stop = max(0.0, min(total, float(end) - ms))
+    fade_in = max(0.0, float(settings.get("music_fade_in", 0.5) or 0))
+    fade_out = max(0.0, float(settings.get("music_fade_out", 3.0) or 0))
+    fade_in = min(fade_in, stop / 2)
+    fade_out = min(fade_out, max(0.0, stop - fade_in))
+    return stop, fade_in, fade_out
+
+
 def _assemble(items: list[list[tuple]], transition: str, music: Path | None, music_start: float,
               settings: dict, out: Path, gains: list | None = None, duck_tail: float | None = None,
               burst: Path | None = None) -> None:
@@ -541,9 +557,12 @@ def _assemble(items: list[list[tuple]], transition: str, music: Path | None, mus
     f.append(f"[vc]fade=t=out:st={max(0.0, total - 0.8):.3f}:d=0.8[vout]")
     if music:
         mvol = float(settings.get("music_volume", 0.9))
+        stop, fin, fout = music_window(total, settings, music_start)
         f.append("[ac]anull[g]")                      # per-item levels already applied
-        f.append(f"[{len(files)}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:{total:.3f},"
-                 f"afade=t=in:d=0.5,afade=t=out:st={max(0.0, total - 3):.3f}:d=3,volume={mvol}"
+        f.append(f"[{len(files)}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:{max(stop, 0.05):.3f},"
+                 + (f"afade=t=in:d={fin:.3f}," if fin > 0 else "")
+                 + (f"afade=t=out:st={max(0.0, stop - fout):.3f}:d={fout:.3f}," if fout > 0 else "")
+                 + f"volume={mvol}"
                  + (f",volume=eval=frame:volume='1-0.67*clip((t-{total - duck_tail:.3f})/0.4,0,1)'" if duck_tail else "")
                  + "[m]")
         f.append("[g][m]amix=inputs=2:normalize=0:duration=first[aout]")
@@ -562,7 +581,7 @@ def _assemble(items: list[list[tuple]], transition: str, music: Path | None, mus
 
 
 def write_fcpxml(path: Path, items: list[list[tuple]], music: Path | None, music_start: float,
-                 name: str, size: tuple[int, int] = (1920, 1080)) -> None:
+                 name: str, size: tuple[int, int] = (1920, 1080), music_end: float | None = None) -> None:
     """FCPXML 1.9 timeline: each play's pieces (lead / freeze / play) as cuts on the spine,
     music on a lane underneath. Add transitions in Resolve: select the clips, Ctrl+T."""
     fps = segment.FPS
@@ -590,7 +609,8 @@ def write_fcpxml(path: Path, items: list[list[tuple]], music: Path | None, music
         for p, st, du in it:
             inner = ""
             if first and mid:
-                md = min(_duration(music) - music_start, total)
+                md = min(_duration(music) - music_start, total,
+                         (music_end - music_start) if music_end is not None else total)
                 inner = (f'<asset-clip ref="{mid}" lane="-1" offset="{fr(st)}" name="{escape(music.stem)}" '
                          f'duration="{fr(md)}" start="{fr(music_start)}"/>')
             first = False

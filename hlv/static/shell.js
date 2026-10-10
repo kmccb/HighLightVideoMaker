@@ -7,7 +7,16 @@
   const me = document.currentScript;
   const page = (me && me.dataset.page) || '';
   const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
-  const REACH = 1.5;   // a spotlight click this close to the snap freezes there (segment.FREEZE_REACH), as on /mark
+  const REACH = 1.5;
+
+  // Resolution badge for a video: SD / HD / FHD / QHD / 4K by its short side, exact size in the tooltip.
+  window.hrRes = (w, h, fps) => {
+    const short = Math.min(w || 0, h || 0);
+    if (!short) return '';
+    const [lbl, cls] = short >= 2160 ? ['4K', 'uhd'] : short >= 1440 ? ['QHD', 'qhd'] : short >= 1080 ? ['FHD', 'fhd'] : short >= 720 ? ['HD', 'hd'] : ['SD', 'sd'];
+    const tip = `${w}×${h}${fps ? ' · ' + Math.round(fps) + ' fps' : ''}${h > w ? ' · vertical' : ''}`;
+    return `<span class="hr-res ${cls}" title="${tip}" aria-label="${lbl}, ${tip}">${lbl}</span>`;
+  };   // a spotlight click this close to the snap freezes there (segment.FREEZE_REACH), as on /mark
 
   const ICONS = {
     projects: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',

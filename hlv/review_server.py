@@ -5,6 +5,7 @@ Binds to 127.0.0.1 only.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 import re
@@ -235,6 +236,7 @@ class ReviewApp:
                 "detection": c["detection"], "proposed": c["proposed"], "review": r,
                 "proxy": f"/proxy/{c['id']}.mp4",
                 "proxy_ready": proxy.proxy_path(self.cache, c["id"]).exists(),
+                **_res(c),
             })
         pics = [{"id": ph["id"], "source": ph["source"], "group": ph.get("group", ""), "taken": ph.get("taken"),
                  "keep": ph.get("keep") is not False, "thumb": f"/api/photos/{ph['id']}/thumb"}
@@ -292,6 +294,7 @@ class ReviewApp:
                 # False: he isn't found at the snap, so this play won't freeze (None: unknown / not wanted)
                 "freeze_ok": camera.freeze_found(self.cache, c) if spot and s.get("freeze", True) else None,
                 "seconds": round(max(0.0, t1 - max(0.0, t0)) + (segment.FREEZE_S if spot and s.get("freeze") else 0), 2),
+                **_res(c),
             })
         return {
             "settings": s, "players": players, "player": pl,
@@ -301,6 +304,8 @@ class ReviewApp:
             "profile_path": str(profiles.path(lib)), "assets_dir": str(lib / profiles.ASSETS),
             "transitions": list(reel.TRANSITIONS),
             "card_s": reel.TITLE_S + reel.END_S + (reel.CREDIT_S if self._credit_on(s) else 0),
+            # roughly how long the opening runs before the first play (the animated intro follows the song)
+            "title_s": reel.TITLE_S if s.get("intro") == "classic" or s.get("cut") == "recruit" else 8.0,
             "credit_ready": library.branding_ready(library.branding()),
             "clips": rows, "job": self.job, "photo_count": sum(1 for r in rows if r.get("type") == "photo"),
             "last_reel": self._reel_entry(s), "last_vertical": self._reel_entry(s, True),
@@ -609,6 +614,12 @@ class ReviewApp:
                     s[k] = bool(patch[k])
             if "music_start" in patch:
                 s["music_start"] = max(0.0, float(patch["music_start"] or 0))
+            if "music_end" in patch:   # seconds into the song where it stops; None = play to the end of the reel
+                e = patch["music_end"]
+                s["music_end"] = None if e in (None, "") else max(float(s.get("music_start") or 0) + 1.0, float(e))
+            for k, hi in (("music_fade_in", 10.0), ("music_fade_out", 15.0), ("music_volume", 1.5)):
+                if k in patch:
+                    s[k] = round(min(max(float(patch[k] or 0), 0.0), hi), 2)
             if "game_audio" in patch:
                 s["game_audio"] = float(min(max(float(patch["game_audio"]), 0.0), 1.0))
             if "player" in patch and any(p["id"] == patch["player"] for p in profiles.load(library.home())):
@@ -620,6 +631,37 @@ class ReviewApp:
             proj["settings"] = s
             project.save(self.root, proj)
             return s
+
+    def music_peaks(self, n: int = 1200) -> dict:
+        """The song's loudness in n buckets (0.08-1), for drawing its waveform; cached per file."""
+        self._need()
+        with self.lock:
+            s = project.settings(project.load(self.root))
+        f = project.music_path(self.root, s)
+        if f is None or s.get("music_source") == "compose":
+            return {"duration": 0, "peaks": [], "url": None}
+        st = f.stat()
+        key = hashlib.sha1(f"rms2|{f}|{st.st_size}|{st.st_mtime_ns}|{n}".encode()).hexdigest()[:16]
+        cp = self.cache / "music" / f"peaks-{key}.json"
+        if cp.exists():
+            return json.loads(cp.read_text(encoding="utf-8"))
+        import numpy as np
+        raw = subprocess.run(["ffmpeg", "-v", "error", "-i", str(f), "-ac", "1", "-ar", "4000", "-f", "s16le", "-"],
+                             capture_output=True).stdout
+        a = np.frombuffer(raw, dtype=np.int16).astype(np.float32)
+        dur = len(a) / 4000.0
+        if not len(a):
+            return {"duration": 0, "peaks": [], "url": None}
+        b = np.array_split(a, n)
+        # loudness (RMS), stretched so quiet intros and breakdowns stand out from a loud master
+        pk = np.array([float(np.sqrt(np.mean(x * x))) if len(x) else 0.0 for x in b])
+        lo, hi = np.percentile(pk, 2), max(float(pk.max()), 1.0)
+        pk = np.clip((pk - lo) / max(hi - lo, 1.0), 0, 1) ** 1.6 * 0.92 + 0.08
+        out = {"duration": round(dur, 3), "peaks": [round(float(x), 3) for x in pk], "url": "/media/music",
+               "name": f.name}
+        cp.parent.mkdir(parents=True, exist_ok=True)
+        cp.write_text(json.dumps(out), encoding="utf-8")
+        return out
 
     def hit_suggestion(self, clip_id: str) -> dict:
         self._need()
@@ -736,6 +778,13 @@ def _clean_anchors(v) -> list[dict]:
         if 0 <= a["x"] <= 1 and 0 <= a["y"] <= 1 and 0 < a["w"] <= 1 and 0 < a["h"] <= 1 and a["t"] >= 0:
             out.append({k: round(val, 4) for k, val in a.items()})
     return sorted(out, key=lambda a: a["t"])
+
+
+def _res(c: dict) -> dict:
+    """The source video's size and frame rate (from the probe stored when the project was made), for the
+    SD / HD / FHD / 4K badge on each play."""
+    pr = c.get("probe") or {}
+    return {"width": int(pr.get("width") or 0), "height": int(pr.get("height") or 0), "fps": round(float(pr.get("fps") or 0), 2)}
 
 
 def _clean_ring_off(v, duration: float) -> list[list]:
@@ -932,6 +981,17 @@ def make_handler(app: ReviewApp):
             if m:
                 app._need()
                 return self._file(app.cache / "segments" / m.group(1), "video/mp4")
+            if path == "/api/music/peaks":
+                return self._json(app.music_peaks())
+            if path == "/media/music":       # the project's song, for the music timeline's play button
+                app._need()
+                with app.lock:
+                    s = project.settings(project.load(app.root))
+                f = project.music_path(app.root, s)
+                if f is None:
+                    return self.send_error(HTTPStatus.NOT_FOUND)
+                return self._file(f, {".mp3": "audio/mpeg", ".m4a": "audio/mp4", ".aac": "audio/aac", ".wav": "audio/wav",
+                                      ".flac": "audio/flac", ".ogg": "audio/ogg"}.get(f.suffix.lower(), "application/octet-stream"))
             m = re.fullmatch(r"/media/reel/([A-Za-z0-9_.-]+\.mp4)", path)
             if m:
                 app._need()
