@@ -504,13 +504,19 @@ $('wYtGo').onclick = async () => {
   } catch (err) { $('wSongInfo').innerHTML = `<span style="color:var(--bad)">${esc(err.message)}</span> You can choose a song file instead.`; }
   $('wYtGo').disabled = false; $('wYtBar').hidden = true;
 };
-$('wCreate').onclick = async () => {
+// Follow a running setup to the end: the bar, the step, and the newest line of the app's log.
+async function watchSetup(j) {
   $('wCreate').disabled = true; $('wCancel').disabled = true; $('wBar').hidden = false;
   try {
-    let j = await post('/api/projects/create', { folder: W.folder, player: W.player, music: W.music });
     while (j.state === 'running') {
       $('wBar').firstElementChild.style.width = Math.round(100 * (j.done || 0) / (j.total || 1)) + '%';
-      $('wStatus').textContent = `${j.step}… (${j.done}/${j.total}). This takes a few minutes for a folder of 4K clips.`;
+      let last = '';
+      try {
+        const lg = await (await fetch('/api/log?after=0')).json();
+        if (lg.lines.length) last = `<br><span style="font-family:var(--mono);font-size:12px">${esc(lg.lines[lg.lines.length - 1].text.trim())}</span> <span style="color:var(--faint)">(${Math.round(lg.quiet)} s ago)</span>`;
+      } catch (e) {}
+      $('wStatus').innerHTML = `${esc(j.step)}… (${j.done}/${j.total}). This takes a few minutes for a folder of 4K clips.${last}
+        <br><button type="button" class="btn" onclick="hrShell.openActivity()">See what it's doing</button>`;
       await new Promise(r => setTimeout(r, 1000));
       j = await (await fetch('/api/projects/setup')).json();
     }
@@ -519,13 +525,24 @@ $('wCreate').onclick = async () => {
     $('wStatus').innerHTML = `<span class="ok">Ready: ${j.result.clips} clips${esc(sk)}.</span> Opening…`;
     setTimeout(() => location = '/review', sk ? 3000 : 600);
   } catch (err) {
-    $('wStatus').innerHTML = `<span style="color:var(--bad)">${esc(err.message)}</span>`;
+    $('wStatus').innerHTML = `<span style="color:var(--bad)">${esc(err.message)}</span> <button type="button" class="btn" onclick="hrShell.openActivity()">See the log</button>`;
     $('wCreate').disabled = false; $('wCancel').disabled = false;
   }
+}
+$('wCreate').onclick = async () => {
+  $('wCreate').disabled = true;
+  let j;
+  try { j = await post('/api/projects/create', { folder: W.folder, player: W.player, music: W.music }); }
+  catch (err) {
+    // "already being set up": show that one instead of an error
+    j = await (await fetch('/api/projects/setup')).json();
+    if (j.state !== 'running') { $('wStatus').innerHTML = `<span style="color:var(--bad)">${esc(err.message)}</span>`; $('wCreate').disabled = false; return; }
+  }
+  watchSetup(j);
 };
 // A setup started earlier (page reloaded mid-way): show it.
 fetch('/api/projects/setup').then(r => r.json()).then(j => {
-  if (j.state === 'running') { $('wiz').hidden = false; $('newProj').disabled = true; $('wStatus').textContent = 'Setting up ' + j.folder + '…'; }
+  if (j.state === 'running') { $('wiz').hidden = false; $('newProj').disabled = true; watchSetup(j); }
 });
 load();
 </script>

@@ -298,6 +298,7 @@ function hitCard(c) {
     <div class="strip"><img alt=""><div class="sug" hidden></div><div class="sel" hidden></div><div class="hov" hidden></div></div>
     <div class="ctl"><button data-n="-0.1">− 0.1s</button><span class="t"></span><button data-n="0.1">+ 0.1s</button>
       <span class="side" title="Which side of the ball he is on in this play: the hit means contact/tackle on defense, the catch or big move on offense. Suggestions learn each side separately."><button data-side="O">Offense</button><button data-side="D">Defense</button></span>
+      <span class="side" title="Big play: on the hit the picture freezes. Trail = copies of him along the path he ran. 3D = the camera swings round him. Click the lit one again to turn it off."><button data-big="trail">&#9889; Trail</button><button data-big="3d">&#9889; 3D</button></span>
       <span class="grow"></span><button data-act="sug" hidden title="the app’s guess (dashed outline), learned from the hits you've marked">Use suggestion</button><button data-act="nohit" title="no hit on this play: no punch, no slow-mo, timing left alone">✕ No hit</button></div>`;
   const strip = el.querySelector('.strip'), simg = strip.querySelector('img'), sel = strip.querySelector('.sel'), hov = strip.querySelector('.hov');
   const big = el.querySelector('.big img');
@@ -331,7 +332,13 @@ function hitCard(c) {
     await save(c, { side: c.review.side === b.dataset.side ? null : b.dataset.side }); sides();
   });
   sides();
-  let cur = null, sugT = null;                                  // keyboard cursor on the strip
+  const bigOf = () => c.review.big === '3d' ? '3d' : c.review.big ? 'trail' : '';
+  const bigs = () => el.querySelectorAll('[data-big]').forEach(b => b.classList.toggle('on', bigOf() === b.dataset.big));
+  el.querySelectorAll('[data-big]').forEach(b => b.onclick = async () => {
+    await save(c, { big: bigOf() === b.dataset.big ? false : b.dataset.big }); bigs();
+  });
+  bigs();
+  let cur = null, sugT = null;                                 // keyboard cursor on the strip
   const showCursor = () => {
     if (cur == null) return;
     hov.hidden = false; hov.style.left = (100 * cur / N) + '%'; hov.style.width = (100 / N) + '%';

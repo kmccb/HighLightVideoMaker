@@ -238,6 +238,8 @@ main { padding: 20px 24px 28px; gap: 14px; }
 .trackbadge { font-family: var(--sans); color: var(--spot); border-color: var(--spot); }
 #rList .mini.star { font-size: 15px; line-height: 1; padding: 2px 6px; color: var(--muted, #8a8f98); }
 #rList .mini.star.on { color: #ffcc33; border-color: #ffcc33; }
+#rList .mini.big { font-size: 13px; line-height: 1; padding: 2px 7px; color: var(--muted, #8a8f98); }
+#rList .mini.big.on { color: #170901; background: var(--accent); border-color: var(--accent); font: 700 11px var(--mono); padding: 4px 7px; }
 #rList .tag.rec { color: #ffcc33; border-color: rgba(255, 204, 51, .5); }
 /* Ring already showing, rest of the play still tracking: a small chip, not a wait sign. */
 .trackbadge.quiet { left: auto; right: 10px; bottom: 10px; transform: none; font-size: 11px; padding: 3px 9px;
@@ -274,7 +276,7 @@ main { padding: 20px 24px 28px; gap: 14px; }
 .help[hidden] { display: none; }
 .help kbd { background: #0F1216; border-color: #2E3540; }
 /* build reel panel */
-.reel { top: 56px; left: 290px; padding: 22px 28px 48px; }
+.reel { top: 56px; left: 0; padding: 22px 28px 48px; }
 .reel header h2 { font: italic 800 34px/1 var(--display); text-transform: uppercase; letter-spacing: .01em; }
 .reel-grid { gap: 14px; }
 .card { border-radius: var(--r-lg); padding: 16px; gap: 12px; align-content: start; }
@@ -322,12 +324,27 @@ main { padding: 20px 24px 28px; gap: 14px; }
 .hr-top .btn.reelbtn { margin: 0; width: auto; }
 /* app shell: the rail has the logo and page links; the stepper shows review progress */
 html.has-rail .hr-top > .hr-brand, html.has-rail .hr-prog { display: none; }
-html.has-rail .reel { left: calc(64px + 290px); }
+html.has-rail .reel { left: 64px; }   /* Build and Publish cover the plays list: the reel has its own */
 body.reel-open .hr-top #openReel { display: none; }
 
 /* ===== Review workspace: plays | video + timeline | inspector ===== */
-.app { grid-template-columns: 300px minmax(0, 1fr) 330px; }
+.app { grid-template-columns: 270px minmax(0, 1fr) 330px; }
 main { min-width: 0; }
+/* the plays list folded to a strip of thumbnails (#bFold, remembered) */
+#bFold { flex: none; width: 30px; height: 30px; }
+body.plays-narrow #bFold svg { transform: scaleX(-1); }
+@media (min-width: 1001px) {
+  body.plays-narrow .app { grid-template-columns: 82px minmax(0, 1fr) 330px; }
+  body.plays-narrow .rail-head { padding: 10px 0; justify-content: center; }
+  body.plays-narrow .rail-head h2, body.plays-narrow .rail-head .spacer, body.plays-narrow .playsum, body.plays-narrow .pfilter,
+  body.plays-narrow .item .txt, body.plays-narrow .item > .name, body.plays-narrow .item .tag, body.plays-narrow .item .pill-out, body.plays-narrow .item .inc { display: none; }
+  body.plays-narrow .list { padding: 4px 5px 16px; }
+  body.plays-narrow .group { padding: 10px 0 4px; font-size: 9px; letter-spacing: .04em; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  body.plays-narrow .item { padding: 4px; justify-content: center; }
+  body.plays-narrow .item.need .vthumb { box-shadow: 0 0 0 2px var(--warn); }
+  body.plays-narrow .list-empty { padding: 16px 2px; font-size: 11px; }
+}
+@media (min-width: 1001px) and (max-width: 1360px) { body.plays-narrow .app { grid-template-columns: 82px minmax(0, 1fr) 280px; } }
 .rail-head { align-items: center; }
 .playsum { font-size: 12px; color: var(--dim); white-space: nowrap; }
 .pfilter { padding: 10px 12px; display: grid; gap: 8px; border-bottom: 1px solid var(--line); }
@@ -377,6 +394,15 @@ main { min-width: 0; }
 .insp .tg-btns { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px; }
 .insp .tg-btns .btn { justify-content: flex-start; text-align: left; min-height: 40px; font-size: 13px; }
 .insp #bSpot, .insp #bRing, .insp #bHit { grid-column: 1 / -1; }
+.insp .bigpick, .insp #bigHint { grid-column: 1 / -1; }
+.insp .bigpick { display: flex; align-items: center; gap: 10px; }
+.insp .bigpick .bp-l { flex: none; font-size: 13px; font-weight: 600; white-space: nowrap; }
+.insp .bigpick .segctl { flex: 1; }
+.insp .bigpick .segctl button { padding: 6px 4px; }
+.insp .bigpick .segctl button.on:not([data-v=""]) { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
+.insp #bigHint { font-size: 12px; }
+.insp #bigHint:empty { display: none; }
+.insp #bigHint.need { color: var(--warn); }
 .insp #notes { height: 38px; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r); padding: 0 12px; color: var(--text); font: 400 13px var(--sans); }
 .insp #notes:focus { border-color: var(--accent); outline: none; }
 .insp-foot { padding: 12px 14px; border-top: 1px solid var(--line); background: #0D1014; display: flex; flex-direction: column; gap: 8px; }
@@ -394,7 +420,8 @@ main { min-width: 0; }
   .pf-tabs button:not([data-f=need]) b { display: none; }
   .item .pill-out { display: none; }
   .insp .tg-btns { grid-template-columns: 1fr; }
-  .insp #bSpot, .insp #bRing, .insp #bHit { grid-column: auto; }
+  .insp #bSpot, .insp #bRing, .insp #bHit, .insp .bigpick, .insp #bigHint { grid-column: auto; }
+  .insp .bigpick { flex-direction: column; align-items: stretch; gap: 6px; }
   .titlebar .meta { display: none; }
   .insp-btns .btn kbd { display: none; }
   .insp-btns #bOk { padding: 0 10px; }
@@ -426,6 +453,45 @@ main { min-width: 0; }
 .mtl-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 12px; }
 /* on the storyboard: wide waveform, all controls on one row */
 .rb-story { min-width: 0; }
+/* Preview with the song: the plays and the music together, on the build's own timing */
+.sy { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); display: grid; gap: 10px; grid-template-columns: minmax(0, 1fr); }
+.sy[hidden] { display: none; }
+.sy-body { display: grid; grid-template-columns: minmax(280px, 520px) minmax(220px, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 1100px) { .sy-body { grid-template-columns: minmax(0, 1fr); } }
+.sy-stage { position: relative; aspect-ratio: 16 / 9; background: #000; border: 1px solid var(--line-2); border-radius: 8px; overflow: hidden; }
+.sy-stage video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; background: #000; }
+.sy-stage.hit { box-shadow: 0 0 0 3px var(--hit), 0 0 34px rgba(255,200,61,.55); }
+.sy-card { position: absolute; inset: 0; display: grid; place-content: center; justify-items: center; gap: 6px; text-align: center; background: radial-gradient(circle at 50% 40%, #1B2028, #0A0C0F);
+  color: var(--soft); font: 600 13px var(--sans); letter-spacing: .14em; text-transform: uppercase; }
+.sy-card[hidden] { display: none; }
+.sy-card b { font: 700 34px "Barlow Condensed", var(--sans); letter-spacing: .06em; color: var(--text); }
+.sy-card img { max-width: 100%; max-height: 100%; object-fit: contain; position: absolute; inset: 0; margin: auto; }
+.sy-card.slam b { color: var(--accent-hi); transform: scale(1.12); }
+.sy-tag { position: absolute; left: 10px; top: 10px; padding: 3px 9px; border-radius: 4px; font: 700 12px var(--mono); letter-spacing: .08em; background: rgba(10,12,15,.78); color: var(--text); border: 1px solid var(--line-2); }
+.sy-tag[hidden] { display: none; }
+.sy-tag.hit { background: var(--hit); color: #1A1003; border-color: var(--hit); }
+.sy-tag.fz { color: var(--info); border-color: var(--info); }
+.sy-beat { position: absolute; right: 12px; top: 12px; width: 12px; height: 12px; border-radius: 50%; background: #39424E; transition: transform .12s, background .12s; }
+.sy-beat.on { background: var(--accent); transform: scale(1.5); transition: none; }
+.sy-beat.on.strong { background: #fff; transform: scale(2); }
+.sy-side { display: grid; gap: 8px; min-width: 0; align-content: start; }
+.sy-ctl { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.sy-now { font-size: 13px; color: var(--text); min-height: 34px; }
+.sy-now small { display: block; color: var(--dim); font-size: 12px; }
+.sy-hits { list-style: none; margin: 0; padding: 0; max-height: 168px; overflow-y: auto; border: 1px solid var(--line); border-radius: 6px; }
+.sy-hits li { display: grid; grid-template-columns: 26px minmax(0, 1fr) auto auto; gap: 8px; align-items: center; padding: 5px 8px; font-size: 12px; cursor: pointer; border-bottom: 1px solid var(--line); }
+.sy-hits li:last-child { border-bottom: 0; }
+.sy-hits li:hover, .sy-hits li.on { background: var(--panel-2); }
+.sy-hits li.on { box-shadow: inset 2px 0 0 var(--accent); }
+.sy-hits .n { font: 600 11px var(--mono); color: var(--dim); }
+.sy-hits .nm { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--soft); }
+.sy-hits .at { font: 500 11px var(--mono); color: var(--faint); }
+.sy-hits .st { font-size: 11px; font-weight: 600; }
+.sy-hits .ok { color: var(--ok); } .sy-hits .off { color: var(--warn); } .sy-hits .no { color: var(--faint); font-weight: 400; }
+.sy-lane { position: relative; height: 92px; border-radius: 6px; background: #0F1216; border: 1px solid var(--line-2); cursor: pointer; touch-action: none; overflow: hidden; }
+.sy-lane canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.sy-key { display: flex; flex-wrap: wrap; gap: 4px 14px; font-size: 11px; color: var(--dim); }
+.sy-key i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 5px; vertical-align: -1px; }
 .rb-story .mtl { margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line); min-width: 0; grid-template-columns: minmax(0, 1fr); }
 .rb-story .mtl > * { min-width: 0; }
 .rb-story .mtl-h3 { margin-bottom: 0; }
@@ -561,7 +627,9 @@ main { min-width: 0; }
 </header>
 <div class="app">
   <aside>
-    <div class="rail-head"><h2 class="hr-h2">Plays</h2><span class="spacer"></span><span class="playsum" id="playSum"></span></div>
+    <div class="rail-head"><h2 class="hr-h2">Plays</h2><span class="spacer"></span><span class="playsum" id="playSum"></span>
+      <button class="hr-ghost hr-icon" id="bFold" aria-pressed="false">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.5 3.5L5 8l4.5 4.5M13 3.5L8.5 8l4.5 4.5"/></svg></button></div>
     <div class="pfilter">
       <label class="pf-search"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
         <input type="search" id="pfQ" placeholder="Filter by game, file, note…" autocomplete="off" aria-label="Filter plays"></label>
@@ -654,6 +722,9 @@ main { min-width: 0; }
       </div></div>
       <div class="tgroup"><span class="hr-eyebrow">Big moment</span><div class="tg-btns">
           <button class="btn hit" id="bHit" title="K marks the hit at the playhead"><kbd>K</kbd> Hit <span class="val" id="vHit">–</span><span class="x" id="bNoHit" title="No hit on this play: no punch, no slow-mo, timing left alone (N)">✕</span></button>
+          <div class="bigpick"><span class="bp-l">&#9889; Big play</span>
+            <span class="segctl" id="bigPick" role="group" aria-label="Big play"><button data-v="" title="A normal play">Off</button><button data-v="trail" title="On the hit the picture freezes and copies of your player appear along the path he ran">Trail</button><button data-v="3d" title="On the hit the picture freezes and the camera swings round him, with his name">3D</button></span></div>
+          <span class="hint" id="bigHint"></span>
       </div></div>
       <div class="tgroup"><label class="hr-eyebrow" for="notes">Notes</label>
         <input id="notes" placeholder="e.g. Caleb #22 tackle, bad angle…" autocomplete="off">
@@ -681,6 +752,29 @@ main { min-width: 0; }
     <div id="rDupes" class="dupewarn" hidden></div>
     <section class="rb-story" aria-label="Storyboard"><div class="rb-h"><h3>Storyboard</h3><span class="hint">each tile is a play, as wide as it lasts · <span style="color:var(--hit)">yellow</span> = hit set · <span style="color:var(--warn)">amber</span> = needs a fix · click a tile to find it below</span></div>
       <div class="rb-strip" id="rStory"></div>
+          <div class="sy" id="syBox" hidden>
+            <div class="rb-h mtl-h3"><h3>Preview with the song</h3><span class="hint">the plays and the music together, timed exactly as the build will time them · change the song or a setting and it updates</span></div>
+            <div class="sy-body">
+              <div class="sy-stage" id="syStage">
+                <video id="syVid" muted playsinline preload="auto"></video>
+                <div class="sy-card" id="syCard" hidden></div>
+                <span class="sy-tag" id="syTag" hidden></span>
+                <span class="sy-beat" id="syBeat" title="Flashes on every beat of the song"></span>
+              </div>
+              <div class="sy-side">
+                <div class="sy-ctl">
+                  <button type="button" class="btn primary" id="syPlay">&#9654; Play preview</button>
+                  <button type="button" class="btn" id="syZoom" aria-pressed="false" title="Show 20 seconds around the playhead, with every beat">Zoom in</button>
+                  <span class="mtl-time" id="syTime"></span>
+                </div>
+                <div class="sy-now" id="syNow"></div>
+                <div class="hint" id="sySum"></div>
+                <ul class="sy-hits" id="syHits" aria-label="Where each hit lands"></ul>
+              </div>
+            </div>
+            <div class="sy-lane" id="syLane" title="Click or drag to move through the reel"><canvas id="syCanvas"></canvas></div>
+            <div class="sy-key"><span><i style="background:#2A3B30;border:1px solid #3A5A44"></i>play</span><span><i style="background:#1D3550;border:1px solid #7FB8FF"></i>freeze on your player</span><span><i style="background:#FFC83D"></i>hit on the beat</span><span><i style="background:#FF5470"></i>hit off the beat</span><span><i style="background:#4A2A12;border:1px solid #FF6B1A"></i>ghost trail</span><span><i style="background:#3A2E4E;border:1px solid #A88BFF"></i>photo</span><span><i style="background:#FF8A47"></i>song (with fades)</span><span>ticks along the top = beats</span></div>
+          </div>
           <div class="mtl" id="mTl" hidden>
             <div class="rb-h mtl-h3"><h3>Music</h3><span class="hint">drag the orange handles to trim · click the waveform to listen from there</span></div>
             <div class="mtl-top">
@@ -728,6 +822,12 @@ main { min-width: 0; }
             <button data-v="reel" title="the full highlight reel: intro, every ticked play and photo">Highlight reel</button><button data-v="recruit" title="for college coaches: info card, your starred plays first, then the rest up to about 3 minutes; no photos">Recruiting cut</button><button data-v="both" title="both videos (takes longer)">Both</button>
           </span></label>
         <div class="hint" id="rCutHint" hidden></div>
+        <div id="rCoachBox" hidden>
+          <label class="row" style="align-items:flex-start"><span class="lbl">A copy per coach</span>
+            <textarea id="rCoaches" rows="4" spellcheck="false" placeholder="Youngstown State, Coach Smith&#10;Akron&#10;Mount Union, Coach Jones"
+              style="flex:1;min-width:0;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:6px 8px;font:13px var(--sans);resize:vertical"></textarea></label>
+          <div class="hint" id="rCoachHint">One school per line; add a comma and the coach's name if you know it. Each gets its own copy of the recruiting cut that opens on a card addressed to them.</div>
+        </div>
         <label class="row"><span class="lbl">Format</span>
           <span class="segctl" id="rFormat">
             <button data-v="wide" title="16:9, for TV, YouTube, Hudl">Wide</button><button data-v="vertical" title="9:16 for Instagram, TikTok, Snapchat: framed on the player">Vertical</button><button data-v="both" title="both files (takes about twice as long)">Both</button>
@@ -741,6 +841,11 @@ main { min-width: 0; }
         <div class="rsec-body">
         <div class="row"><span class="lbl">Intro</span>
           <button class="btn stylepick" id="rIntroPick" data-kind="intro" title="see every intro and pick one"><span class="thumb"></span><span class="spname"></span><span class="spchg">Change ▸</span></button></div>
+        <label class="row"><span class="lbl">The Journey</span><input type="checkbox" id="rJourney">
+          <span class="hint">opens the reel with him as a little kid, then cuts through the years to now. Takes the place of the intro.</span></label>
+        <div class="row" id="rJourneyRow"><span class="lbl">Born</span>
+          <input type="number" id="rBorn" min="1980" max="2030" step="1" placeholder="year" style="flex:0 0 86px;background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:6px;padding:4px 8px">
+          <span class="hint" id="rJourneyInfo">for the age shown with each year</span></div>
         <label class="row"><span class="lbl">Intro timing</span>
           <span class="segctl" id="rIntroSync">
             <button data-v="beat" title="number, name and logo land on the song's steady beat">Steady beat</button><button data-v="hits" title="number, name and logo slam in on the song's heaviest hits, and the intro ends on the biggest one">Big hits</button>
@@ -756,6 +861,8 @@ main { min-width: 0; }
           <span class="segctl" id="rTrans">
             <button data-v="crossfade">Crossfade</button><button data-v="cut">Cut</button><button data-v="dip">Dip to black</button>
           </span></label>
+        <label class="row"><span class="lbl">Match cuts</span><input type="checkbox" id="rMatch">
+          <span class="hint">a play ends with your player on a spot of the screen and the next one opens with him on the same spot at the same size, so the cut feels like one shot. Only where he's marked at the end of one play and the start of the next.</span></label>
         <label class="row"><span class="lbl">Name banner</span>
           <span class="segctl" id="rBanner">
             <button data-v="first" title="first play that has a spotlight">First play</button><button data-v="every">Every play</button><button data-v="off">Off</button>
@@ -806,6 +913,16 @@ main { min-width: 0; }
           <span class="hint">eases into slow motion right before the hit, then back to full speed</span></label>
         <label class="row"><span class="lbl">Hit punch</span><input type="checkbox" id="rFx">
           <span class="hint">quick zoom bump + flash on the hit</span></label>
+        <div class="row" style="align-items:flex-start"><span class="lbl">Big plays</span>
+          <span class="hint" id="rBigHint">Make a play a big play where you mark its hit. Big plays get:</span></div>
+        <label class="row"><span class="lbl">Freeze on the hit</span><input type="checkbox" id="rGhost">
+          <span class="hint">about 4 s, the kind you picked with &#9889;: <b>Trail</b> = copies of your player along the path he ran; <b>3D</b> = the camera swings round him with his name. A trail that can't be made (he hardly moved) becomes 3D.</span></label>
+        <label class="row"><span class="lbl">Only him in colour</span><input type="checkbox" id="rColour">
+          <span class="hint">the second and a half before the hit drains to black and white, except your player; colour comes back on the hit</span></label>
+        <label class="row"><span class="lbl">Silence, then the drop</span><input type="checkbox" id="rDrop">
+          <span class="hint">all sound cuts out for a moment before the hit, then a boom lands on it</span></label>
+        <label class="row"><span class="lbl">Song jumps to a big moment</span><input type="checkbox" id="rRecut">
+          <span class="hint">on each drop the song comes back on one of its biggest moments (a chorus or a heavy hit) instead of just carrying on. Needs the drop and beat sync.</span></label>
         </div>
       </details>
       <details class="rsec" data-sec="ending">
@@ -890,6 +1007,7 @@ function stateOf(c) {
     zoom: r.zoom || 0,
     hit: r.hit ?? null,
     no_hit: !!r.no_hit,
+    big: r.big === '3d' ? '3d' : r.big ? 'trail' : '',
     ring_off: Array.isArray(r.ring_off) ? r.ring_off : [],
     edited: r.snap != null || r.end != null,
   };
@@ -936,7 +1054,8 @@ function renderList() {
     }
     const b = document.createElement('div');
     b.setAttribute('role', 'button'); b.tabIndex = -1;
-    b.className = 'item' + (i === idx ? ' active' : '') + (s.keep === false ? ' skipped' : '');
+    b.className = 'item' + (i === idx ? ' active' : '') + (s.keep === false ? ' skipped' : '') + (needsYou(c, s) ? ' need' : '');
+    b.title = c.source.split('/').pop();
     const dot = s.labeled ? 'done' : (s.edited ? 'edited' : '');
     const kindTag = c.kind === 'pre_edited' ? '<span class="tag warn">TV</span>'
                   : c.kind === 'screen_recording' ? '<span class="tag">Hudl</span>' : '';
@@ -1377,7 +1496,27 @@ function renderHit() {
   m.title = cur.hit == null ? `suggested hit (${hitSuggest ? hitSuggest.method : ''}); press K to set it` : 'your hit mark';
   $('vHit').textContent = cur.no_hit ? 'none' : (t == null ? '–' : t.toFixed(2) + (cur.hit == null ? ' auto' : ''));
   $('vHit').style.color = cur.no_hit ? 'var(--dim)' : '';
+  renderBig();
 }
+// Big play (the freeze on the hit): chosen here, next to the hit it happens on.
+function renderBig() {
+  document.querySelectorAll('#bigPick button').forEach(b => { b.classList.toggle('on', b.dataset.v === cur.big); b.setAttribute('aria-pressed', b.dataset.v === cur.big); });
+  const h = $('bigHint'), need = !cur.big ? '' : cur.no_hit || hitTime() == null ? 'A big play needs a hit: press K on the moment.'
+    : !cur.spotlight.length ? 'A big play needs your player: press F and click him.' : '';
+  h.className = 'hint' + (need ? ' need' : '');
+  h.textContent = need || (cur.big === '3d' ? 'On the hit: freeze, and the camera swings round him.' : cur.big ? 'On the hit: freeze, and copies of him along the path he ran.' : '');
+}
+async function setBig(v) {
+  const c = data.clips[idx];
+  cur.big = v; renderBig();
+  try {
+    const res = await fetch('/api/clips/' + c.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ big: v || false }) });
+    if (!res.ok) throw new Error(res.status);
+    c.review.big = (await res.json()).review.big;
+    setStatus('saved', 'saved');
+  } catch (e) { setStatus('save failed: ' + e.message, 'err'); }
+}
+$('bigPick').onclick = e => { const b = e.target.closest('button'); if (b) setBig(b.dataset.v); };
 function setHit() { queueSave({ hit: +video.currentTime.toFixed(3), no_hit: false }); renderHit(); }
 function clearHit() { queueSave({ hit: null, no_hit: false }); renderHit(); }
 function noHit() { queueSave({ hit: null, no_hit: !cur.no_hit }); renderHit(); }
@@ -1526,6 +1665,7 @@ function reelView(v) {
 function closeReel() {
   $('reel').classList.remove('pub');
   if (typeof mtStop === 'function') mtStop();
+  if (typeof syPause === 'function') syPause();
   reelOpen = false; $('reel').hidden = true; $('pv').hidden = true; $('pvVideo').pause(); closePicker();
   document.body.classList.remove('reel-open');
   if (location.hash) history.replaceState(null, '', location.pathname);
@@ -1570,11 +1710,21 @@ async function loadReel() {
   $('rStyle').textContent = STYLE_NAMES[s.highlight] || s.highlight;
   $('rSync').checked = s.beat_sync !== false;
   $('rFx').checked = s.hit_fx !== false;
+  $('rGhost').checked = s.ghost_trail !== false;
+  $('rJourney').checked = !!s.journey;
+  if (document.activeElement !== $('rBorn')) $('rBorn').value = s.journey_born || '';
+  $('rDrop').checked = s.drop !== false;
+  $('rColour').checked = s.colour !== false;
+  $('rRecut').checked = s.recut !== false;
+  $('rMatch').checked = !!s.match_cuts;
+  const nBig = reelInfo.clips.filter(c => c.big && c.included).length;
+  $('rBigHint').innerHTML = (nBig ? `<b style="color:var(--accent-hi)">${nBig} big play${nBig > 1 ? 's' : ''}</b> marked with &#9889;.` : 'No big plays yet.') + ' Choose <b>&#9889; Big play: Trail or 3D</b> where you mark the hit: on the review page under Big moment, or in Fix-ups on the Hit tab. Big plays get:';
   $('rSlow').checked = !!s.slowmo;
   $('rSlowSpeed').value = String(s.slowmo_speed ?? 0.4);
   $('rSlowSpeed').disabled = !s.slowmo;
   $('rMStart').value = s.music_start || 0;
   loadMusicTl();
+  loadPlan();
   renderReelList();
   showJob(reelInfo.job);
 }
@@ -1655,14 +1805,15 @@ function rbSummaries() {
   const fmtTxt = fmt === 'Both' ? 'Wide + Vertical' : fmt;
   put('sum_output', join([make, fmtTxt, pl]));
   const intro = ($('rIntroPick').querySelector('.spname')?.textContent || '').trim();
-  put('sum_story', join([intro && intro + ' intro', seg('rIntroOut') && 'into play: ' + seg('rIntroOut').toLowerCase(),
+  put('sum_story', join([$('rJourney').checked ? 'The Journey' : (intro && intro + ' intro'), seg('rIntroOut') && 'into play: ' + seg('rIntroOut').toLowerCase(),
     seg('rTrans').toLowerCase(), seg('rBanner') && 'banner: ' + seg('rBanner').toLowerCase()]));
   const comp = seg('rMusicSrc') === 'Made for this reel';
   const song = (reelInfo && reelInfo.assets && reelInfo.assets.music) ? reelInfo.assets.music.split(/[\\/]/).pop().replace(/\.[^.]+$/, '') : '';
   const start = parseFloat($('rMStart').value) || 0;
   put('sum_music', join([comp ? seg('rCompStyle') + ' soundtrack' : (song && song.toLowerCase() !== 'music' ? song : (song ? 'your song' : 'no song yet')), !comp && start ? `from ${start} s` : '',
     'game audio ' + ($('rGame').value || 0) + '%', on('rSync') ? 'hits on beat' : '']));
-  put('sum_motion', join([on('rSlow') ? 'slow-mo ' + $('rSlowSpeed').value + '×' : 'no slow-mo', on('rFx') ? 'hit punch' : '']));
+  put('sum_motion', join([on('rSlow') ? 'slow-mo ' + $('rSlowSpeed').value + '×' : 'no slow-mo', on('rFx') ? 'hit punch' : '',
+    reelInfo.clips.some(c => c.big && c.included) && (on('rGhost') || on('rDrop') || on('rColour')) ? reelInfo.clips.filter(c => c.big && c.included).length + ' big' : '']));
   const outro = ($('rOutroPick').querySelector('.spname')?.textContent || '').trim();
   put('sum_ending', join(['end card', outro && outro + ' ending', on('rCredit') ? 'ScottForge card' : '']));
   put('bbOut', join([make, fmtTxt]));
@@ -1717,6 +1868,7 @@ function renderReelList() {
       <span class="grip">⋮⋮</span><span class="num">${num}</span>
       <input type="checkbox" data-act="inc" ${c.included ? 'checked' : ''} ${c.kind === 'pre_edited' && !c.labeled ? 'disabled title="trim it in review first"' : ''}>
       <button class="mini star${c.star ? ' on' : ''}" data-act="star" title="${c.star ? 'Top play: opens the recruiting cut. Click to unstar' : 'Star a top play: starred plays open the recruiting cut'}">${c.star ? '★' : '☆'}</button>
+      <button class="mini big${c.big ? ' on' : ''}" data-act="big" aria-pressed="${!!c.big}" title="${c.big === '3d' ? 'Big play with the 3D freeze on its hit. Click to turn off' : c.big ? 'Big play with a ghost trail on its hit. Click for the 3D freeze instead' : 'Make this a big play: the drop and a ghost trail on its hit'}">&#9889;${c.big === '3d' ? ' 3D' : c.big ? ' TRAIL' : ''}</button>
       <span class="name">${esc(c.source.split('/').pop())}</span>${(window.hrRes ? hrRes(c.width, c.height, c.fps) : '')}<span class="game">${esc(c.group)}</span>${rec}${badges}
       <span class="len">${c.seconds.toFixed(1)}s</span>
       <button class="mini" data-act="up">↑</button><button class="mini" data-act="down">↓</button>
@@ -1733,6 +1885,11 @@ function renderReelList() {
   // The recruiting cut: starred plays first, then the rest until ~3 min.
   const cut = reelInfo.settings.cut || 'reel', recs = rows.filter(c => c.recruit);
   $('rCutHint').hidden = cut === 'reel';
+  $('rCoachBox').hidden = cut === 'reel';
+  const coaches = reelInfo.settings.coaches || [];
+  if (document.activeElement !== $('rCoaches')) $('rCoaches').value = coaches.map(c => c.school + (c.coach ? ', ' + c.coach : '')).join('\n');
+  $('rCoachHint').innerHTML = (coaches.length ? `<b>${coaches.length} coach cop${coaches.length > 1 ? 'ies' : 'y'}</b> will be made with the recruiting cut. ` : '')
+    + "One school per line; add a comma and the coach's name if you know it. Each gets its own copy of the recruiting cut that opens on a card addressed to them.";
   if (cut !== 'reel') {
     const rs = recs.reduce((s, c) => s + c.seconds, 0) + 8 - tr * (recs.length + 1);
     const nStar = recs.filter(c => c.star).length, pl = reelInfo.player || {};
@@ -1773,6 +1930,12 @@ $('rList').addEventListener('click', async e => {
     await fetch('/api/clips/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ keep: b.checked }) });
     const dc = data.clips.find(c => c.id === id); if (dc) dc.review.keep = b.checked;
     await loadReel(); renderList();
+  } else if (act === 'big') {
+    const c = reelInfo.clips[i];
+    await fetch('/api/clips/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ big: !c.big ? 'trail' : c.big === 'trail' && (!sy.plan || sy.plan.can_3d) ? '3d' : false }) });
+    await loadReel();
+    const dc = data.clips.find(x => x.id === id), nb = reelInfo.clips.find(x => x.id === id);
+    if (dc && nb) { dc.review.big = nb.big; if (data.clips[idx] === dc && cur) { cur.big = nb.big || ''; renderBig(); } }
   } else if (act === 'star') {
     const c = reelInfo.clips[i];
     await fetch('/api/clips/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ star: !c.star }) });
@@ -2030,6 +2193,13 @@ $('rFreeze').onchange = e => saveReelSetting({ freeze: e.target.checked });
 $('rFreezeRing').onchange = e => saveReelSetting({ freeze_ring: e.target.checked });
 $('rSync').onchange = e => saveReelSetting({ beat_sync: e.target.checked });
 $('rFx').onchange = e => saveReelSetting({ hit_fx: e.target.checked });
+$('rGhost').onchange = e => saveReelSetting({ ghost_trail: e.target.checked });
+$('rJourney').onchange = e => saveReelSetting({ journey: e.target.checked });
+$('rBorn').onchange = e => saveReelSetting({ journey_born: e.target.value.trim() === '' ? null : +e.target.value });
+$('rDrop').onchange = e => saveReelSetting({ drop: e.target.checked });
+$('rColour').onchange = e => saveReelSetting({ colour: e.target.checked });
+$('rRecut').onchange = e => saveReelSetting({ recut: e.target.checked });
+$('rMatch').onchange = e => saveReelSetting({ match_cuts: e.target.checked });
 $('rSlow').onchange = e => saveReelSetting({ slowmo: e.target.checked });
 $('rSlowSpeed').onchange = e => saveReelSetting({ slowmo_speed: +e.target.value });
 $('rMStart').onchange = e => saveReelSetting({ music_start: +e.target.value || 0 });
@@ -2043,6 +2213,7 @@ function mtSettings() {
   return { ms, me, fin: s.music_fade_in ?? 0.5, fout: s.music_fade_out ?? 3, vol: s.music_volume ?? 0.9 };
 }
 function mtReelLen() {
+  if (sy.plan) return sy.plan.total;                 // the build's own timing, once the plan is in
   const inc = reelInfo.clips.filter(c => c.included);
   const tr = { crossfade: 1 / 3, dip: 0.6, cut: 0 }[reelInfo.settings.transition] || 0;
   return inc.reduce((a, c) => a + c.seconds, 0) + reelInfo.card_s - tr * (inc.length + 1);
@@ -2087,6 +2258,14 @@ function drawMusicTl(live) {
   const inc = reelInfo.clips.filter(c => c.included);
   const tr = { crossfade: 1 / 3, dip: 0.6, cut: 0 }[reelInfo.settings.transition] || 0;
   let t = st.ms + (reelInfo.title_s || 4) - tr, k = 0;
+  if (sy.plan) {                                     // exact: where the build will put each play
+    $('mPlays').innerHTML = sy.plan.items.filter(it => st.ms + it.start <= mt.dur && it.kind !== 'end' && it.kind !== 'credit').map(it => {
+      const a = x(st.ms + it.start), w = Math.max(2, x(Math.min(mt.dur, st.ms + it.end)) - a - 1);
+      return it.kind === 'intro' ? `<span class="mintro" style="left:${a}px;width:${w}px" title="intro">IN</span>`
+        : `<span style="left:${a}px;width:${w}px" title="${it.kind === 'play' ? '#' + it.n + ' ' : 'photo '}${esc(it.name)}">${it.kind === 'play' ? it.n : ''}</span>`;
+    }).join('');
+    inc.length = 0;
+  }
   const blocks = [`<span class="mintro" style="left:${x(st.ms)}px;width:${Math.max(2, x(st.ms + (reelInfo.title_s || 4)) - x(st.ms))}px" title="intro">IN</span>`];
   for (const c of inc) {
     k++;
@@ -2094,7 +2273,7 @@ function drawMusicTl(live) {
     blocks.push(`<span style="left:${x(t)}px;width:${Math.max(2, x(Math.min(mt.dur, t + c.seconds)) - x(t) - 1)}px" title="#${k} ${esc(c.source.split('/').pop())}">${k}</span>`);
     t += c.seconds - tr;
   }
-  $('mPlays').innerHTML = blocks.join('');
+  if (!sy.plan) $('mPlays').innerHTML = blocks.join('');
   $('mTime').textContent = `${mmss(st.ms)} → ${mmss(stop)} of ${mmss(mt.dur)}`;
   const used = st.me - st.ms;
   $('mFit').innerHTML = used + 0.5 < reelLen
@@ -2140,6 +2319,7 @@ function mtStop() {
   $('mHead').hidden = true; $('mPlay').innerHTML = '&#9654;'; $('mPlay').setAttribute('aria-label', 'Play the trimmed song');
 }
 function mtPlay(from) {
+  syPause();
   const st = mtSettings(), stop = Math.min(st.me, st.ms + mtReelLen());
   if (!mt.audio) mt.audio = new Audio('/media/music?v=' + encodeURIComponent(mt.name || ''));
   const a = mt.audio;
@@ -2164,6 +2344,265 @@ for (const [id, key, k] of [['mFin', 'music_fade_in', 1], ['mFout', 'music_fade_
   $(id).onchange = e => saveReelSetting({ [key]: +e.target.value / k });
 }
 new ResizeObserver(() => drawMusicTl()).observe($('mWave'));
+
+// ---------- Preview with the song: the review copies of the plays, played on the build's own timing
+// (/api/reel/plan = reel.preview_plan) with the song underneath, so hits can be seen landing on beats ----------
+const sy = { plan: null, t: 0, playing: false, raf: 0, last: 0, cur: -1, zoom: false, audio: null, name: null, drag: false, req: 0 };
+const syFmt = t => `${Math.floor(t / 60)}:${(t % 60).toFixed(1).padStart(4, '0')}`;
+async function loadPlan() {
+  const req = ++sy.req;
+  let j = null;
+  try { const r = await fetch('/api/reel/plan'); j = r.ok ? await r.json() : null; } catch (e) {}
+  if (req !== sy.req) return;                          // a newer setting change is already on its way
+  sy.plan = j && j.items ? j : null;
+  $('syBox').hidden = !sy.plan;
+  if (!sy.plan) { syPause(); drawMusicTl(); return; }
+  sy.t = Math.min(sy.t, sy.plan.total); sy.cur = -1;
+  const p = sy.plan, plays = p.items.filter(i => i.kind === 'play');
+  $('sySum').innerHTML = (p.beat_sync
+      ? `<b style="color:${p.on_beat === p.hits ? 'var(--ok)' : 'var(--warn)'}">${p.on_beat} of ${p.hits} hits land on a beat</b> · ${Math.round(p.bpm)} BPM`
+      : (p.music.has ? 'Beat sync is off, so hits stay where they fall.' : 'No song yet: add one to see where hits land.'))
+    + ` · reel ${mmss(p.total)}` + (p.music.composing ? ' · the soundtrack is written at build time, so the preview is silent' : '')
+    + (p.big ? ` · <b style="color:var(--accent-hi)">${p.big} big play${p.big > 1 ? 's' : ''}</b>` : '')
+    + (p.trails_pending ? `<br>${p.trails_pending} big-play freeze${p.trails_pending > 1 ? 's are' : ' is'} made when you build (a 3D freeze takes about a minute and a half each).` : '')
+    + (p.approx ? `<br><span style="color:var(--warn)">${p.approx} play${p.approx > 1 ? 's are' : ' is'} still being tracked, so ${p.approx > 1 ? 'their' : 'its'} freeze isn't shown yet.</span>` : '');
+  $('syHits').innerHTML = plays.map(i => {
+    const st = i.hit == null ? '<span class="st no">no hit</span>'
+      : !p.beat_sync ? '<span class="st no">not synced</span>'
+      : i.on_beat ? '<span class="st ok">on the beat</span>'
+      : i.err == null ? '<span class="st off">no beat in reach</span>'
+      : `<span class="st off">${Math.abs(i.err).toFixed(2)} s ${i.err > 0 ? 'late' : 'early'}</span>`;
+    return `<li data-id="${i.id}" title="Play from just before this ${i.hit == null ? 'play' : 'hit'}"><span class="n">${i.n}</span><span class="nm">${i.big ? '&#9889; ' : ''}${esc(i.name)}</span><span class="at">${i.hit == null ? '' : syFmt(i.hit)}</span>${st}</li>`;
+  }).join('');
+  const jn = p.journey || {};
+  const yrs = Object.entries(jn.years || {}).map(([y, n]) => `${y} (${n})`).join(', ');
+  $('rJourneyInfo').innerHTML = jn.found
+    ? `Old plays found: <b>${yrs}</b>, plus ${jn.now} from this reel. About ${Math.round(jn.seconds)} s.` + (jn.on && !jn.born ? ' <span style="color:var(--warn)">Add his birth year to show his age.</span>' : '')
+    : `<span style="color:${jn.on ? 'var(--warn)' : 'inherit'}">No older footage of him found${jn.error ? ' (' + esc(jn.error) + ')' : ''}. Make a project from an old season's folder with the same player name and click him in a play or two.</span>`;
+  drawMusicTl();
+  sySync(); syDraw();
+}
+function syItemAt(t) {
+  const its = sy.plan.items;
+  let k = 0;
+  for (let i = 0; i < its.length; i++) if (its[i].start <= t + 1e-6) k = i;
+  return k;
+}
+// Source time (in the play's own video) and speed for a moment of the reel.
+function sySource(it, t) {
+  const u = Math.max(0, t - it.start);
+  if (u < it.lead) return { s: it.from + u, rate: 1 };
+  if (u < it.lead + it.fz) return { s: it.split, rate: 0, frozen: true };
+  let v = u - it.lead - it.fz, ghost = false;
+  if (it.ghost) {                                       // the ghost-trail freeze sits on the hit
+    const g0 = it.ghost.at - it.lead - it.fz;
+    if (v >= g0 && v < g0 + it.ghost.len) { v = g0; ghost = true; }
+    else if (v >= g0 + it.ghost.len) v -= it.ghost.len;
+  }
+  const a = it.post_t, x = v / 0.1, k = Math.min(Math.floor(x), a.length - 2);
+  if (ghost && k >= 0 && a.length > 1) return { s: a[k] + (a[k + 1] - a[k]) * Math.min(1, x - k), rate: 0, frozen: true, ghost: true };
+  if (k < 0 || a.length < 2) return { s: a.length ? a[0] : it.split, rate: 1 };
+  const step = a[k + 1] - a[k];
+  return { s: a[k] + step * Math.min(1, x - k), rate: Math.min(4, Math.max(0.1, step / 0.1)) };
+}
+function sySync() {
+  const p = sy.plan; if (!p) return;
+  const vid = $('syVid'), k = syItemAt(sy.t), it = p.items[k], m = p.music;
+  // ---- song ----
+  const cut = (m.cuts || [[0, m.start]]).filter(c => c[0] <= sy.t + 1e-6).pop() || [0, m.start];
+  const want = cut[1] + (sy.t - cut[0]), songOn = m.has && !m.composing && mt.dur && sy.t < m.stop && want < mt.dur;
+  if (songOn && sy.playing) {
+    if (!sy.audio || sy.name !== mt.name) { if (sy.audio) sy.audio.pause(); sy.audio = new Audio('/media/music?v=' + encodeURIComponent(mt.name || '')); sy.name = mt.name; }
+    const a = sy.audio;
+    let v = 1;
+    if (m.fade_in > 0 && sy.t < m.fade_in) v = sy.t / m.fade_in;
+    if (m.fade_out > 0 && sy.t > m.stop - m.fade_out) v = Math.min(v, (m.stop - sy.t) / m.fade_out);
+    if (p.items.some(i => i.drop && i.hit != null && sy.t >= i.hit - p.gap && sy.t < i.hit)) v = 0;   // the silence before a drop
+    if (p.items[0].journey && p.journey.cut) v = sy.t < p.journey.cut - p.gap ? v * 0.35 : sy.t < p.journey.cut ? 0 : v;   // far away, silent, then the drop
+    a.volume = Math.min(1, Math.max(0, v * Math.min(1, m.volume)));
+    if (a.paused) { a.currentTime = want; a.play().catch(() => {}); }
+    else if (Math.abs(a.currentTime - want) > 0.25) a.currentTime = want;
+  } else if (sy.audio && !sy.audio.paused) sy.audio.pause();
+  // ---- picture ----
+  if (k !== sy.cur) {
+    sy.cur = k;
+    const card = $('syCard');
+    if (it.kind === 'play') {
+      card.hidden = true;
+      if (vid.dataset.id !== it.id) { vid.dataset.id = it.id; vid.src = `/proxy/${it.id}.mp4`; }
+    } else {
+      vid.pause();
+      card.hidden = false;
+      card.innerHTML = it.kind === 'photo' ? `<img src="/api/photos/${it.id}/thumb" alt="">`
+        : it.kind === 'intro' ? (it.journey ? '<b>The Journey</b>him as a kid, then through the years to now (made when you build)' : '<b>Intro</b>the number and name slam in on the beat')
+        : it.kind === 'end' ? '<b>End card</b>' : '<b>ScottForge</b>closing card';
+    }
+    document.querySelectorAll('#syHits li').forEach(li => li.classList.toggle('on', li.dataset.id === it.id));
+    const on = document.querySelector('#syHits li.on'); if (on) on.scrollIntoView({ block: 'nearest' });
+  }
+  let tag = '', cls = '', hitNow = false;
+  if (it.kind === 'play') {
+    const src = sySource(it, sy.t);
+    if (vid.readyState >= 1) {
+      if (src.frozen || !sy.playing) {
+        if (!vid.paused) vid.pause();
+        if (Math.abs(vid.currentTime - src.s) > 0.04) vid.currentTime = src.s;
+      } else {
+        const lag = src.s - vid.currentTime;              // ease small lags away instead of jumping
+        const rate = src.rate * (1 + Math.max(-0.2, Math.min(0.2, lag * 2)));
+        if (Math.abs(vid.playbackRate - rate) > 0.02) vid.playbackRate = rate;
+        if (Math.abs(lag) > 0.3) vid.currentTime = src.s;
+        if (vid.paused) vid.play().catch(() => {});
+      }
+    }
+    hitNow = it.hit != null && sy.t >= it.hit - 0.03 && sy.t < it.hit + 0.3;
+    const runUp = it.colour && it.hit != null && sy.t >= it.hit - it.colour && sy.t < it.hit;    // (the preview can only grey the whole picture)
+    vid.style.filter = runUp ? 'grayscale(1) brightness(.88)' : '';
+    if (hitNow) { tag = it.drop ? 'THE DROP' : 'HIT'; cls = 'hit'; }
+    else if (src.ghost) { tag = (it.ghost.kind === '3d' ? '3D FREEZE' : 'GHOST TRAIL') + ' (built with the reel)'; cls = 'fz'; }
+    else if (src.frozen) { tag = 'FREEZE'; cls = 'fz'; }
+    else if (runUp) tag = 'ONLY HIM IN COLOUR (built with the reel)';
+    else if (src.rate < 0.9) tag = 'SLOW-MO';
+    $('syNow').innerHTML = `Play ${it.n} · ${esc(it.name)}<small>${it.hit == null ? 'no hit marked on this play'
+      : !p.beat_sync ? 'hit at ' + syFmt(it.hit) : it.on_beat ? 'hit at ' + syFmt(it.hit) + ', right on a beat'
+      : it.err == null ? 'hit at ' + syFmt(it.hit) + ': no beat close enough to move it onto'
+      : 'hit at ' + syFmt(it.hit) + ', ' + Math.abs(it.err).toFixed(2) + ' s ' + (it.err > 0 ? 'after' : 'before') + ' the beat'}</small>`;
+  } else {
+    $('syNow').innerHTML = it.kind === 'photo' ? `Photo · ${esc(it.name)}` : it.kind === 'intro' ? (it.journey ? 'The Journey' : 'Intro') : it.kind === 'end' ? 'End card' : 'ScottForge card';
+    if (it.kind === 'intro') $('syCard').classList.toggle('slam', it.slams.some(t => sy.t >= t && sy.t < t + 0.18));
+  }
+  $('syStage').classList.toggle('hit', hitNow);
+  $('syTag').hidden = !tag; $('syTag').textContent = tag; $('syTag').className = 'sy-tag ' + cls;
+  // ---- beat light ----
+  const b = p.beats;
+  let lo = 0, hi = b.length - 1, at = -1;
+  while (lo <= hi) { const mid = (lo + hi) >> 1; if (b[mid][0] <= sy.t) { at = mid; lo = mid + 1; } else hi = mid - 1; }
+  const lit = at >= 0 && sy.t - b[at][0] < 0.09 && sy.playing;
+  $('syBeat').className = 'sy-beat' + (lit ? ' on' + (b[at][1] >= 0.75 ? ' strong' : '') : '');
+  $('syTime').textContent = `${syFmt(sy.t)} / ${syFmt(p.total)}`;
+  // the song's own waveform follows along
+  if (mt.dur && m.has && !m.composing && (sy.playing || sy.t > 0)) { $('mHead').hidden = false; $('mHead').style.left = (Math.min(mt.dur, want) / mt.dur * $('mWave').clientWidth) + 'px'; }
+}
+function syView() {
+  const p = sy.plan;
+  if (!sy.zoom) return [0, p.total];
+  const a = Math.max(0, Math.min(p.total - 20, sy.t - 6));
+  return [a, a + 20];
+}
+function syDraw() {
+  const p = sy.plan; if (!p || $('syBox').hidden) return;
+  const lane = $('syLane'), cv = $('syCanvas'), W = lane.clientWidth, H = lane.clientHeight;
+  if (!W) return;
+  const dpr = window.devicePixelRatio || 1;
+  if (cv.width !== Math.round(W * dpr) || cv.height !== Math.round(H * dpr)) { cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr); }
+  const g = cv.getContext('2d'); g.setTransform(dpr, 0, 0, dpr, 0, 0); g.clearRect(0, 0, W, H);
+  const [v0, v1] = syView(), X = t => (t - v0) / (v1 - v0) * W, pps = W / (v1 - v0);
+  // beats: every one when there's room, else the strong ones
+  for (const [t, st] of p.beats) {
+    if (t < v0 || t > v1) continue;
+    const strong = st >= 0.75;
+    if (pps < 6 && !strong) continue;
+    g.fillStyle = strong ? '#8A94A1' : '#3B4450';
+    g.fillRect(Math.round(X(t)), 2, 1, strong ? 14 : 8);
+  }
+  // items
+  const top = 22, bh = 36;
+  g.font = '600 11px "JetBrains Mono", Consolas, monospace'; g.textBaseline = 'middle';
+  p.items.forEach((it, i) => {
+    if (it.end < v0 || it.start > v1) return;
+    const a = X(it.start), w = Math.max(1.5, X(it.end) - a - 1);
+    const col = { play: ['#2A3B30', '#3A5A44'], photo: ['#3A2E4E', '#A88BFF'], intro: ['#2A1508', '#FF6B1A'], end: ['#1C2128', '#39424E'], credit: ['#1C2128', '#39424E'] }[it.kind];
+    g.fillStyle = col[0]; g.fillRect(a, top, w, bh);
+    g.strokeStyle = i === sy.cur ? '#fff' : col[1]; g.lineWidth = 1; g.strokeRect(a + 0.5, top + 0.5, w - 1, bh - 1);
+    if (it.kind === 'play' && it.fz > 0) {
+      const fa = X(it.start + it.lead), fw = Math.max(1, X(it.start + it.lead + it.fz) - fa);
+      g.fillStyle = '#1D3550'; g.fillRect(fa, top + 1, fw, bh - 2);
+      g.fillStyle = '#7FB8FF'; g.fillRect(fa, top + 1, 1, bh - 2);
+    }
+    if (it.kind === 'play' && it.ghost) {
+      const ga = X(it.start + it.ghost.at), gw = Math.max(1, X(it.start + it.ghost.at + it.ghost.len) - ga);
+      g.fillStyle = '#4A2A12'; g.fillRect(ga, top + 1, gw, bh - 2);
+      g.fillStyle = '#FF8A47'; it.ghost.pops.forEach(t => g.fillRect(X(it.start + it.ghost.at + t), top + 6, 1.5, bh - 12));
+      g.strokeStyle = '#FF6B1A'; g.strokeRect(ga + 0.5, top + 1.5, gw - 1, bh - 3);
+    }
+    if (it.kind === 'intro') { g.fillStyle = '#FF8A47'; it.slams.forEach(t => g.fillRect(X(t), top + 1, 1.5, bh - 2)); }
+    const label = it.kind === 'play' ? String(it.n) + (w > 150 ? '  ' + it.name : '') : it.kind === 'intro' ? 'INTRO' : it.kind === 'photo' ? (w > 44 ? 'photo' : '') : it.kind === 'end' ? 'END' : '';
+    if (w > 14 && label) { g.save(); g.beginPath(); g.rect(a, top, w, bh); g.clip(); g.fillStyle = '#C3CAD2'; g.fillText(label, Math.max(a, 0) + 5, top + bh - 9); g.restore(); }
+  });
+  // hits: a line through the beats row down to the play, so "on the beat" can be seen
+  for (const it of p.items) {
+    if (it.kind !== 'play' || it.hit == null || it.hit < v0 || it.hit > v1) continue;
+    const hx = X(it.hit), ok = it.on_beat || !p.beat_sync;
+    g.fillStyle = ok ? '#FFC83D' : '#FF5470';
+    g.fillRect(hx - 1, 0, 2, top + bh);
+    g.beginPath(); g.moveTo(hx, 14); g.lineTo(hx + 5, 20); g.lineTo(hx, 26); g.lineTo(hx - 5, 20); g.closePath(); g.fill();
+  }
+  // song: where it plays, with its fades
+  const m = p.music, my = top + bh + 8, mh = 16;
+  if (m.has || m.composing) {
+    const s0 = X(0), s1 = X(m.composing ? p.total : m.stop), f1 = X(m.fade_in), f2 = X((m.composing ? p.total : m.stop) - m.fade_out);
+    g.fillStyle = 'rgba(255,138,71,.75)';
+    g.beginPath(); g.moveTo(s0, my + mh); g.lineTo(Math.min(f1, s1), my); g.lineTo(Math.max(f2, f1), my); g.lineTo(s1, my + mh); g.closePath(); g.fill();
+    g.fillStyle = '#170901'; g.font = '600 10px "JetBrains Mono", Consolas, monospace';
+    if (s1 - Math.max(0, s0) > 60) g.fillText(m.composing ? 'SOUNDTRACK' : 'SONG', Math.max(f1, 0) + 6, my + mh / 2 + 1);
+    g.fillStyle = '#0F1216';                           // the silence before each drop
+    for (const it of p.items) if (it.drop && it.hit != null) g.fillRect(X(it.hit - p.gap), my - 1, Math.max(2, X(it.hit) - X(it.hit - p.gap)), mh + 2);
+  }
+  // playhead
+  const px = X(sy.t);
+  g.fillStyle = '#fff'; g.fillRect(px - 1, 0, 2, H);
+}
+function syTick(now) {
+  if (!sy.playing || !sy.plan) return;
+  const p = sy.plan, a = sy.audio, dt = Math.min(0.25, (now - sy.last) / 1000);
+  sy.last = now;
+  // the song is the clock while it plays (so picture and music can't drift apart)
+  const cuts = p.music.cuts || [[0, p.music.start]], ci = cuts.filter(c => c[0] <= sy.t + 1e-6).length - 1, cu = cuts[Math.max(0, ci)];
+  const nextCut = ci + 1 < cuts.length ? cuts[ci + 1][0] : Infinity;      // (near a jump the page's own clock carries it across)
+  if (a && !a.paused && a.readyState > 2 && !a.seeking && sy.t < p.music.stop - 0.05 && sy.t < nextCut - 0.3
+      && Math.abs(a.currentTime - cu[1] - (sy.t - cu[0])) < 0.25) sy.t = cu[0] + a.currentTime - cu[1];
+  else sy.t += dt;
+  if (sy.t >= p.total) { sy.t = p.total; syPause(); return; }
+  sySync(); syDraw();
+  sy.raf = requestAnimationFrame(syTick);
+}
+function syPause() {
+  if (!sy.playing && !(sy.audio && !sy.audio.paused)) return;
+  sy.playing = false; cancelAnimationFrame(sy.raf);
+  if (sy.audio) sy.audio.pause();
+  $('syVid').pause();
+  $('syPlay').innerHTML = '&#9654; Play preview';
+  if (sy.plan) { sySync(); syDraw(); }
+}
+function syStart(from) {
+  if (!sy.plan) return;
+  mtStop();
+  if (from != null) sy.t = Math.max(0, Math.min(sy.plan.total - 0.1, from));
+  if (sy.t >= sy.plan.total - 0.05) sy.t = 0;
+  if (sy.audio) sy.audio.pause();                       // re-seek the song to the new spot
+  sy.playing = true; sy.last = performance.now();
+  $('syPlay').innerHTML = '&#10073;&#10073; Pause';
+  sySync(); syDraw();
+  cancelAnimationFrame(sy.raf); sy.raf = requestAnimationFrame(syTick);
+}
+$('syPlay').onclick = () => { if (sy.playing) syPause(); else syStart(); };
+$('syZoom').onclick = () => { sy.zoom = !sy.zoom; $('syZoom').textContent = sy.zoom ? 'Whole reel' : 'Zoom in'; $('syZoom').setAttribute('aria-pressed', sy.zoom); syDraw(); };
+$('syVid').addEventListener('loadedmetadata', () => { if (sy.plan) sySync(); });
+$('syHits').addEventListener('click', e => {
+  const li = e.target.closest('li'); if (!li || !sy.plan) return;
+  const it = sy.plan.items.find(i => i.id === li.dataset.id);
+  if (it) syStart(it.hit == null ? it.start : Math.max(it.start, it.hit - 2.5));
+});
+function sySeek(e) {
+  const r = $('syLane').getBoundingClientRect(), [v0, v1] = sy.dragView || syView();
+  sy.t = Math.max(0, Math.min(sy.plan.total, v0 + (e.clientX - r.left) / r.width * (v1 - v0)));
+  if (sy.audio && !sy.audio.paused) { const c = (sy.plan.music.cuts || [[0, sy.plan.music.start]]).filter(c => c[0] <= sy.t + 1e-6).pop() || [0, sy.plan.music.start]; sy.audio.currentTime = c[1] + (sy.t - c[0]); }
+  sySync(); syDraw();
+}
+$('syLane').addEventListener('pointerdown', e => { if (!sy.plan) return; sy.drag = true; sy.dragView = syView(); $('syLane').setPointerCapture(e.pointerId); sySeek(e); });
+$('syLane').addEventListener('pointermove', e => { if (sy.drag) sySeek(e); });
+$('syLane').addEventListener('pointerup', () => { sy.drag = false; sy.dragView = null; });
+new ResizeObserver(() => syDraw()).observe($('syLane'));
 
 $('rGame').oninput = e => { $('rGameV').textContent = e.target.value + '% under music'; };
 $('rGame').onchange = e => saveReelSetting({ game_audio: e.target.value / 100 });
@@ -2250,6 +2689,7 @@ $('rCompHear').onclick = async () => {
 };
 document.querySelectorAll('#rFormat button').forEach(b => b.onclick = () => saveReelSetting({ format: b.dataset.v }));
 document.querySelectorAll('#rCut button').forEach(b => b.onclick = () => saveReelSetting({ cut: b.dataset.v }));
+$('rCoaches').onchange = e => saveReelSetting({ coaches: e.target.value });
 document.querySelectorAll('#rPhotoS button').forEach(b => b.onclick = () => saveReelSetting({ photo_s: +b.dataset.v }));
 $('rIntroSfx').onchange = e => saveReelSetting({ intro_sfx: e.target.checked });
 document.querySelectorAll('#rIntroSync button').forEach(b => b.onclick = e => { e.preventDefault(); saveReelSetting({ intro_sync: b.dataset.v }); });
@@ -2335,6 +2775,15 @@ window.addEventListener('beforeunload', flushSave);
   try { help.hidden = localStorage.getItem(key) !== '1'; } catch (e) {}
   const flip = () => { help.hidden = !help.hidden; try { localStorage.setItem(key, help.hidden ? '0' : '1'); } catch (e) {} };
   $('bKeys').onclick = flip;
+  // fold the plays list to thumbnails, for a bigger video
+  const fold = on => {
+    document.body.classList.toggle('plays-narrow', on);
+    const t = on ? 'Show the full list of plays' : 'Fold the list to thumbnails, for a bigger video';
+    $('bFold').title = t; $('bFold').setAttribute('aria-label', t); $('bFold').setAttribute('aria-pressed', on);
+    window.dispatchEvent(new Event('resize'));
+  };
+  fold(localStorage.getItem('hlvPlaysNarrow') === '1');
+  $('bFold').onclick = () => { const on = !document.body.classList.contains('plays-narrow'); localStorage.setItem('hlvPlaysNarrow', on ? '1' : '0'); fold(on); };
   document.addEventListener('keydown', e => {
     if (e.key === '?' && !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName)) { e.preventDefault(); flip(); }
   });

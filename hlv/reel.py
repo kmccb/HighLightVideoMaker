@@ -18,7 +18,7 @@ from xml.sax.saxutils import escape
 
 import numpy as np
 
-from . import encoder, graphics, library, outro, photo_slide, photos, profiles, project, segment
+from . import colour, encoder, ghost, graphics, recut, library, outro, parallax, photo_slide, photos, profiles, project, segment
 
 # Beat choice: per second away from the play's natural timing, and extra per second of
 # stretching. With beats ~0.5 s apart, a beat one step further must be ~0.5 stronger.
@@ -130,6 +130,45 @@ def _render_one(root: str, clip: dict, pl: dict, settings: dict) -> str:
     return str(segment.render(Path(root), clip, pl, settings))
 
 
+def _ghost_one(root: str, clip: dict, pl: dict, secs: float, period: float | None, size=None) -> str:
+    from . import hits
+    p = ghost.render(Path(root), clip, pl, hits.hit_of(Path(root), clip)[0], secs, period, size=size)
+    return str(p) if p else ""
+
+
+def _freeze3d_one(root: str, clip: dict, pl: dict, secs: float, size=None) -> str:
+    from . import hits
+    p = parallax.render(Path(root), clip, pl, hits.hit_of(Path(root), clip)[0], secs, size=size)
+    return str(p) if p else ""
+
+
+def _colour_one(root: str, clip: dict, seg: str, size=None) -> tuple[str, int] | None:
+    r = colour.render(Path(root), clip, Path(seg), size)
+    return (str(r[0]), r[1]) if r else None
+
+
+def big_kind(clip: dict) -> str | None:
+    """A big play's freeze on its hit: "trail" (ghost trail), "3d" (3D freeze), or None (not a big play)."""
+    b = (clip.get("review") or {}).get("big")
+    return None if not b else "3d" if b == "3d" else "trail"
+
+
+def big_play(clip: dict) -> bool:
+    return big_kind(clip) is not None
+
+
+def beat_period(root: Path, settings: dict) -> float | None:
+    """Seconds per beat of the reel's music (the song, or the soundtrack's grid); None without music."""
+    from . import beats as beatmod
+    if settings.get("music_source") == "compose":
+        from . import composer
+        g = composer.grid(settings.get("compose_style", "rock"))
+    else:
+        music = project.music_path(root, settings)
+        g = beatmod.cached(music, root / ".hlv_cache") if music else None
+    return 60.0 / g["bpm"] if g and g.get("bpm") else None
+
+
 def _to_vertical(src: Path, dst: Path) -> Path:
     """A 16:9 card/intro on a 9:16 frame: full width in the middle over a blurred, darkened fill."""
     W_, H_ = segment.VERTICAL
@@ -173,7 +212,19 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     # 1) play segments and photo slides, in parallel (decoding 4K is the slow part). Plays are
     #    rendered with extra lead/tail and a long freeze, photos a bit long; the timing below
     #    decides how much of each is used.
-    total = len(clips) + len(pics) + 3
+    # Big-play effects (not in the recruiting cut): the ghost-trail freeze is its own clip per play.
+    #    A play asks for a ghost trail or the 3D freeze; a trail that can't be made (he hardly moved) becomes a 3D freeze.
+    big = {} if recruiting else {c["id"]: big_kind(c) for c in clips if big_play(c)}
+    fx_on = settings.get("ghost_trail", True)
+    want_ghost = {i for i, k in big.items() if k == "trail"} if fx_on else set()
+    want_3d = {i for i, k in big.items() if k == "3d"} if fx_on and parallax.available() else set()
+    want_drop = set(big) if settings.get("drop", True) else set()
+    period = beat_period(root, settings)
+    ghost_s = ghost.seconds(period)
+    ghost_paths: dict[str, Path] = {}
+    fx_kind: dict[str, str] = {}
+    fx_size = segment.VERTICAL if vertical else None             # tall reels get their own tall freezes
+    total = len(clips) + len(pics) + 3 + len(want_ghost) + len(want_3d)
     seg_paths: list[Path | None] = [None] * len(clips)
     pic_paths: list[Path | None] = [None] * len(pics)
     skipped_photos: list[str] = []
@@ -187,8 +238,20 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         for k, ph in enumerate(pics):         # alternate slides zoom in / out
             futs[ex.submit(photo_slide.render, root, ph, photo_slide.slide_length(photo_s), k % 2 == 1,
                            segment.VERTICAL if vertical else None)] = ("photo", k)
+        for c in clips:
+            if c["id"] in want_ghost:
+                futs[ex.submit(_ghost_one, str(root), c, pl, ghost_s, period, fx_size)] = ("ghost", c["id"])
         for f in as_completed(futs):
             kind, i = futs[f]
+            if kind == "ghost":
+                try:
+                    if f.result():
+                        ghost_paths[i], fx_kind[i] = Path(f.result()), "trail"
+                except Exception as e:  # noqa: BLE001 - the play still goes in, without its trail
+                    print(f"  ghost trail skipped ({i}): {e}", flush=True)
+                done += 1
+                say("ghost trail", done, total)
+                continue
             if kind == "play":
                 seg_paths[i] = Path(f.result())
                 name = clips[i]["source"]
@@ -200,6 +263,34 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
                     skipped_photos.append(f"{name}: {e}")
             done += 1
             say(f"rendered {name.split('/')[-1]}", done, total)
+    if fx_on and parallax.available():
+        want_3d |= {i for i in want_ghost if i not in ghost_paths}
+    # "Only him in colour": the run into the hit, remade from the play's own rendered segment.
+    want_colour = set(big) if settings.get("colour", True) and parallax.available() else set()
+    colour_runs: dict[str, tuple[Path, int]] = {}
+    if want_3d or want_colour:                        # one at a time: each holds a model and a few seconds of frames
+        total += len(want_3d) - sum(1 for k in big.values() if k == "3d") + len(want_colour)
+        with ProcessPoolExecutor(1) as ex:
+            for c, sp in zip(clips, seg_paths):
+                if c["id"] in want_colour:
+                    try:
+                        rc = ex.submit(_colour_one, str(root), c, str(sp), fx_size).result()
+                        if rc:
+                            colour_runs[c["id"]] = (Path(rc[0]), rc[1])
+                    except Exception as e:  # noqa: BLE001 - the play still goes in, in full colour
+                        print(f"  only-him-in-colour skipped ({c['id']}): {e}", flush=True)
+                    done += 1
+                    say("only him in colour", done, total)
+                if c["id"] not in want_3d:
+                    continue
+                try:
+                    r3 = ex.submit(_freeze3d_one, str(root), c, pl, ghost_s, fx_size).result()
+                    if r3:
+                        ghost_paths[c["id"]], fx_kind[c["id"]] = Path(r3), "3d"
+                except Exception as e:  # noqa: BLE001 - the play still goes in, without its freeze
+                    print(f"  3D freeze skipped ({c['id']}): {e}", flush=True)
+                done += 1
+                say("3D freeze", done, total)
     rendered = {c["id"]: p for c, p in zip(clips, seg_paths)} | {c["id"]: p for c, p in zip(pics, pic_paths) if p}
     seq = [(c, rendered[c["id"]]) for c in entries if c["id"] in rendered]
 
@@ -223,9 +314,25 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         grid, music, music_start = composer.grid(settings.get("compose_style", "rock")), None, 0.0
     elif music and settings.get("beat_sync", True):
         grid = beatmod.cached(music, root / ".hlv_cache")
-    animated = settings.get("intro", "animated") != "classic" and not recruiting
+    jplan = jsrc = None                                              # the Journey opener takes the intro's place
+    if settings.get("journey") and not recruiting:
+        from . import journey
+        try:
+            jplan = journey.plan(root, pl, settings, period, None if composing else music, music_start)
+            if jplan is not None:
+                say("the Journey", done, total)
+                jsrc = journey.build(root, pl, jplan, size)
+        except Exception as e:  # noqa: BLE001 - e.g. the old footage is on a drive that's off: the normal intro instead
+            print(f"  the Journey skipped: {e}", flush=True)
+            jplan = jsrc = None
+    animated = settings.get("intro", "animated") != "classic" and not recruiting and jsrc is None
     burst_mov = None                                                 # the intro blowing apart into the first play
-    if animated:
+    if jsrc is not None:
+        intro_slams = []
+        title_s = jplan["seconds"]
+        title = seg_dir / "00_title.mp4"
+        _link_or_copy(jsrc, title)
+    elif animated:
         from . import intro
         say("animating the intro", done, total)
         intro_grid = grid or (beatmod.cached(music, root / ".hlv_cache") if music else None)
@@ -262,12 +369,23 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     done += 1
     say("cards", done, total)
     linked = []
+    ghost_pops: dict[str, list] = {}
     for i, (c, p) in enumerate(seq, 1):
         dst = seg_dir / f"{i:02d}_{c['id']}.mp4"      # readable names for Resolve
         _link_or_copy(p, dst)
         if not photos.is_photo(c):
             _link_or_copy(p.with_suffix(".json"), dst.with_suffix(".json"))
         linked.append(dst)
+        g = ghost_paths.get(c["id"])
+        if g is not None:
+            gd = seg_dir / f"{i:02d}_{c['id']}_trail.mp4"
+            _link_or_copy(g, gd)
+            ghost_paths[c["id"]] = gd
+            ghost_pops[c["id"]] = ghost.pops_of(g)
+        if c["id"] in colour_runs:
+            cd = seg_dir / f"{i:02d}_{c['id']}_colour.mp4"
+            _link_or_copy(colour_runs[c["id"]][0], cd)
+            colour_runs[c["id"]] = (cd, colour_runs[c["id"]][1])
 
     # 3) timing: nominal, or fitted so each hit lands on a strong beat
     _, d = TRANSITIONS[transition]
@@ -283,8 +401,12 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         metas.append({"lay": lay, "lead_nom": lay.get("split", snap) - t_in,
                       "post_nom": lay.get("post_nom", t_out - lay.get("split", snap)),
                       "hit": _hit_in_play(lay, hits.hit_of(root, c)[0], snap)})
+        _big_meta(metas[-1], c["id"] in want_drop, ghost_paths.get(c["id"]), ghost_pops.get(c["id"]), ghost_s, fx_kind.get(c["id"]),
+                  colour_runs.get(c["id"]))
     d0 = 0.0 if burst_mov else d                     # a burst is a hard cut on the hit, not a crossfade
-    timing = plan_timing(metas, grid, music_start, title_s - d0, d)
+    marks = recut.landmarks(music, root / ".hlv_cache") if (grid and music and not composing and settings.get("recut", True)
+                                                            and any(m.get("drop") for m in metas)) else None
+    timing = plan_timing(metas, grid, music_start, title_s - d0, d, marks)
 
     items = [[(title, 0.0, title_s)]]
     for p, m, tm in zip(linked, metas, timing):
@@ -296,8 +418,27 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         pieces = [(p, a - tm["lead"], tm["lead"])]
         if tm["fz"] > 0:
             pieces.append((p, a, tm["fz"]))
-        pieces.append((p, a + f, tm["post"]))
+        if m.get("ghost") or m.get("colour"):        # a big play: its run-up in black and white but for him,
+            hb = _fr(m["hit"])                       # then it stops on the hit for the freeze
+            run = m["colour"][1] / segment.FPS if m.get("colour") else 0.0
+            pieces.append((p, a + f, hb - run))
+            if run:
+                pieces.append((m["colour"][0], 0.0, run))
+            if m.get("ghost"):
+                pieces.append((m["ghost"], 0.0, m["extra"]))
+            pieces.append((p, a + f + hb, tm["post"] - hb))
+        else:
+            pieces.append((p, a + f, tm["post"]))
         items.append(pieces)
+    if settings.get("match_cuts"):                   # he ends one play where he starts the next (matchcut.py)
+        from . import matchcut
+
+        def _linked(src: Path, name: str) -> Path:
+            _link_or_copy(src, seg_dir / name)
+            return seg_dir / name
+        say("match cuts", done, total)
+        matchcut.apply(root, [(k, c, p) for k, ((c, _), p) in enumerate(zip(seq, linked), 1) if not photos.is_photo(c)],
+                       items, d, size, link=_linked)
     items.append([(endc, 0.0, END_S)])
     if credit is not None:
         items.append([(credit, 0.0, CREDIT_S)])     # music keeps playing and fades out over it
@@ -317,7 +458,16 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     if credit is not None and outro.has_sound(brand):
         gains[-1] = 1.0                             # the ending's own sound (hammer / quench) at full level
         duck = CREDIT_S                             # ... with the music pulled down under it
-    _assemble(items, transition, music, music_start, settings, out, gains, duck_tail=duck, burst=burst_mov)
+    events = [{"t": tm["hit_reel"], "drop": bool(m.get("drop")), "pops": m.get("pops"), "len": m.get("extra"),
+               "swing": m.get("kind") == "3d"}
+              for m, tm in zip(metas, timing) if m.get("drop") or m.get("ghost")]
+    if jsrc is not None:                              # the song drops on the Journey's cut to "now"
+        events.insert(0, {"t": jplan["cut"], "drop": True, "pops": None, "len": None})
+    sfx = ghost.sound_track(seg_dir / "big_plays.wav", max(e["t"] for e in events) + ghost_s + 4, events) if events else None
+    _assemble(items, transition, music, music_start, settings, out, gains, duck_tail=duck, burst=burst_mov,
+              sfx=sfx, gaps=[(e["t"] - ghost.GAP, e["t"]) for e in events if e["drop"]],
+              muffle_until=jplan["cut"] if jsrc is not None else None,
+              music_cuts=recut.cuts(music_start, timing) if marks else None)
     done += 1
     say("assembled", done, total)
 
@@ -331,7 +481,16 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     say("done", done, total)
     play_timing = [t for t in timing if not t.get("photo")]
     synced = [t for t in play_timing if t.get("beat") is not None]
+    coach_versions = []
+    if recruiting and settings.get("coaches"):       # a copy for each coach, opening on a card addressed to them
+        from . import coach
+        try:
+            say("coach versions", done, total)
+            coach_versions = coach.versions(lib, pl, out, coach.clean(settings["coaches"]), size)
+        except Exception as e:  # noqa: BLE001 - the recruiting cut itself is finished
+            print(f"  coach versions skipped: {e}", flush=True)
     return {"output": str(out), "fcpxml": str(fcp), "plays": len(clips), "vertical": vertical, "recruiting": recruiting,
+            "coach_versions": coach_versions,
             "photos": len(seq) - len(clips), "skipped_photos": skipped_photos,
             "duration": round(_duration(out), 1), "seconds": round(time.time() - t_start),
             "beat_sync": None if grid is None else {
@@ -342,6 +501,19 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
 
 def output_name(player_id: str, vertical: bool = False, recruiting: bool = False) -> str:
     return f"{player_id}_{'recruiting' if recruiting else 'reel'}{'_vertical' if vertical else ''}.mp4"
+
+
+def _big_meta(m: dict, drop: bool, ghost_clip: Path | None, pops: list | None, ghost_s: float,
+              kind: str | None = None, colour_run: tuple | None = None) -> None:
+    """Add a big play's effects to its timing meta: "drop" (silence, then the boom, on the hit) and
+    "ghost" / "extra" (the freeze clip cut in at the hit and how long it holds the reel up)."""
+    if m["hit"] <= 0:
+        return
+    m["drop"] = drop
+    if ghost_clip is not None and m["hit"] + 0.3 < m["lay"]["b_frames"] / segment.FPS:
+        m["ghost"], m["extra"], m["pops"], m["kind"] = ghost_clip, ghost_s, pops or [], kind or "trail"
+    if colour_run is not None and m["hit"] + 0.3 < m["lay"]["b_frames"] / segment.FPS:
+        m["colour"] = colour_run                                 # (clip, frames): replaces that much of the play before the hit
 
 
 def _hit_in_play(lay: dict, hit: float | None, snap: float) -> float:
@@ -379,8 +551,149 @@ def _timeline(items, metas, timing, d, slams, has_credit, first_d=None) -> dict:
             "credit": (round(starts[-1], 3), round(total, 3)) if has_credit else None, "total": round(total, 3)}
 
 
+def preview_plan(root: Path) -> dict:
+    """Where everything will land in the reel and on the song with the current settings, without
+    rendering anything: the same timing as build() (plan_timing), from predicted play layouts.
+    For the Build screen's preview. Wide highlight reel only (the vertical one is timed the same).
+    Each play carries what a player needs to show it from the review copy: the source time its
+    piece starts at, where it freezes, and the source time of the frames after that."""
+    from . import beats as beatmod, camera, hits, intro
+    proj = project.load(root)
+    settings = project.settings(proj)
+    transition = settings.get("transition", "crossfade")
+    if transition not in TRANSITIONS:
+        transition = "crossfade"
+    lib = library.home()
+    pl = profiles.get(lib, settings.get("player"))
+    cache = root / ".hlv_cache"
+    entries = [c for c in ordered_items(proj) if included(c)]
+    clips = [c for c in entries if not photos.is_photo(c)]
+    photo_s = float(settings.get("photo_s", 4))
+    music = project.music_path(root, settings)
+    music_start = float(settings.get("music_start") or 0)
+    composing = settings.get("music_source") == "compose"
+    grid = None
+    if composing:
+        from . import composer
+        grid, music, music_start = composer.grid(settings.get("compose_style", "rock")), None, 0.0
+    elif music and settings.get("beat_sync", True):
+        grid = beatmod.cached(music, cache)
+    slams, burst, title_s = [], False, TITLE_S
+    from . import journey
+    period = beat_period(root, settings)
+    jinfo = {"on": bool(settings.get("journey")), "born": settings.get("journey_born"), "years": {}, "now": 0, "found": False}
+    jplan = None
+    try:                                              # also when it's off, so the page can say what it would be made from
+        jplan = journey.plan(root, pl, settings, period, None if composing else music, music_start)
+    except Exception as e:  # noqa: BLE001 - e.g. the old footage is on a drive that's off
+        jinfo["error"] = str(e)
+    if jplan is not None:
+        jinfo.update(found=True, years=jplan["years"], now=len(jplan["now"]), cut=round(jplan["cut"], 3), seconds=round(jplan["seconds"], 3))
+    if jinfo["on"] and jplan is not None:
+        title_s = jplan["seconds"]
+    elif settings.get("intro", "animated") != "classic":
+        intro_grid = grid or (beatmod.cached(music, cache) if music else None)
+        intro_grid = intro.timing_grid(intro_grid, music, cache, settings)
+        slams = intro.beat_times(intro_grid, music_start)[0] if intro_grid else []
+        title_s = intro.cut_point(intro_grid, music_start)
+        burst = bool(intro_grid and intro_grid.get("burst"))
+
+    with_banner = banner_ids(clips, settings) if pl else set()
+    big = {c["id"]: big_kind(c) for c in clips if big_play(c)}
+    fx_on = settings.get("ghost_trail", True)
+    want_drop = set(big) if settings.get("drop", True) else set()
+    ghost_s = ghost.seconds(period)
+    can_3d = parallax.available()
+    pending = 0
+    metas, extra = [], []
+    for c in entries:
+        if photos.is_photo(c):
+            metas.append({"photo": True, "len": photo_s})
+            extra.append(None)
+            continue
+        hit, hit_set = hits.hit_of(root, c)
+        ft, known = camera.freeze_at(cache, c) if settings.get("freeze", True) else (None, True)
+        lay = segment.predict_layout(c, settings, hit, ft, c["id"] in with_banner)
+        t_in, t_out, snap = segment._window(c)
+        metas.append({"lay": lay, "lead_nom": lay["split"] - t_in, "post_nom": lay["post_nom"],
+                      "hit": _hit_in_play(lay, hit, snap)})
+        # A freeze not made yet is assumed to work out (the build makes it). A trail that can't be made
+        # (he hardly moves) becomes a 3D freeze, as in the build.
+        kind, made = big.get(c["id"]) if fx_on else None, {"none": "off"}
+        if kind == "trail":
+            made = ghost.status(root, c, pl, hit, ghost_s, period)
+            if (made or {}).get("none") and can_3d:
+                kind = "3d"
+        if kind == "3d":
+            made = parallax.status(root, c, pl, hit, ghost_s)
+        n_col = colour.frames(lay["hit_b"]) if c["id"] in big and settings.get("colour", True) and can_3d else 0
+        _big_meta(metas[-1], c["id"] in want_drop, None if (made or {}).get("none") else Path("freeze"),
+                  (made or {}).get("pops"), ghost_s, kind, (None, n_col) if n_col else None)
+        pending += made is None and "ghost" in metas[-1]
+        extra.append({"exact": known, "hit_set": hit_set, "big": big.get(c["id"]) or False})
+    _, d = TRANSITIONS[transition]
+    d0 = 0.0 if burst else d
+    marks = recut.landmarks(music, cache) if (grid and music and not composing and settings.get("recut", True)
+                                              and any(m.get("drop") for m in metas)) else None
+    timing = plan_timing(metas, grid, music_start, title_s - d0, d, marks)
+    song_cuts = recut.cuts(music_start, timing) if marks else [(0.0, music_start)]
+
+    credit = bool(settings.get("scottforge_card")) and library.branding_ready(library.branding())
+    durs = [title_s] + [tm["post"] if m.get("photo") else tm["lead"] + tm["fz"] + tm["post"] + float(m.get("extra") or 0)
+                        for m, tm in zip(metas, timing)] + [END_S] + ([CREDIT_S] if credit else [])
+    starts = [sum(durs[:i]) - (d0 + (i - 1) * d if i else 0.0) for i in range(len(durs))]
+    total = starts[-1] + durs[-1]
+    items = [{"kind": "intro", "start": 0.0, "end": round(title_s, 3), "slams": [round(float(t), 3) for t in slams],
+              "burst": burst, "journey": jinfo["on"] and jplan is not None}]
+    n = 0
+    for k, (c, m, tm, x) in enumerate(zip(entries, metas, timing, extra), 1):
+        it = {"id": c["id"], "name": c["source"].split("/")[-1], "start": round(starts[k], 3),
+              "end": round(starts[k] + durs[k], 3), "beat": tm.get("beat"), "err": tm.get("err")}
+        if m.get("photo"):
+            items.append({**it, "kind": "photo"})
+            continue
+        n += 1
+        lay = m["lay"]
+        post_t = lay["post_t"][:int(round(tm["post"] * segment.FPS)) + 1]
+        items.append({**it, "kind": "play", "n": n, "lead": tm["lead"], "fz": tm["fz"], "post": tm["post"],
+                      "hit": round(tm["hit_reel"], 3) if m["hit"] > 0 else None, "shift": tm["shift"],
+                      "on_beat": tm.get("err") is not None and abs(tm["err"]) <= 0.034,
+                      "split": round(lay["split"], 3), "from": round(lay["split"] - tm["lead"], 3),
+                      "post_t": [round(t, 3) for t in post_t[::3]],       # every 3rd output frame (0.1 s)
+                      "slowmo": lay["hit_b"] is not None and lay["hit"] is not None
+                      and lay["hit_b"] > lay["hit"] - lay["split"] + 0.1,
+                      "drop": bool(m.get("drop")),
+                      "colour": round(m["colour"][1] / segment.FPS, 3) if m.get("colour") else 0,
+                      "ghost": {"at": round(tm["lead"] + tm["fz"] + _fr(m["hit"]), 3), "len": m["extra"],
+                                "pops": m.get("pops") or [], "kind": m.get("kind")} if m.get("ghost") else None,
+                      **x})
+    k = len(entries) + 1
+    items.append({"kind": "end", "start": round(starts[k], 3), "end": round(starts[k] + durs[k], 3)})
+    if credit:
+        items.append({"kind": "credit", "start": round(starts[-1], 3), "end": round(total, 3)})
+    stop, fade_in, fade_out = music_window(total, settings, music_start)
+    beats = []
+    if grid:                                          # the beats as they'll be heard: piece by piece when the song jumps
+        for k, (rt, st_) in enumerate(song_cuts):
+            end = song_cuts[k + 1][0] if k + 1 < len(song_cuts) else total
+            for t, s in zip(grid["beats"], grid["strength"]):
+                if rt - 1e-6 <= t - st_ + rt < end and 0 <= t - st_:
+                    beats.append([round(float(t - st_ + rt), 3), round(float(s), 2)])
+    plays = [i for i in items if i["kind"] == "play"]
+    with_hit = [i for i in plays if i["hit"] is not None]
+    return {"total": round(total, 3), "transition": round(d, 3), "items": items, "beats": beats,
+            "bpm": None if not grid else grid.get("bpm"), "beat_sync": grid is not None,
+            "music": {"has": bool(music), "composing": composing, "start": music_start, "stop": round(stop, 3),
+                      "cuts": [[round(a, 3), round(b, 3)] for a, b in song_cuts],
+                      "fade_in": fade_in, "fade_out": fade_out, "volume": float(settings.get("music_volume", 0.9))},
+            "hits": len(with_hit), "on_beat": sum(1 for i in with_hit if i["on_beat"]),
+            "approx": sum(1 for i in plays if not i["exact"]),
+            "big": sum(1 for i in plays if i["big"]), "trails_pending": int(pending), "gap": ghost.GAP,
+            "journey": jinfo, "can_3d": can_3d}
+
+
 def plan_timing(metas: list[dict], grid: dict | None, music_start: float, t_first: float,
-                d: float) -> list[dict]:
+                d: float, marks: list | None = None) -> list[dict]:
     """Choose lead-in, freeze and tail per play.
 
     Without a beat grid: nominal values. With one: walk through the reel; for each play
@@ -388,10 +701,16 @@ def plan_timing(metas: list[dict], grid: dict | None, music_start: float, t_firs
     then split the needed shift between lead-in and freeze within their limits. If a play
     has no room of its own (clip starts right at the snap, no freeze), the previous play's
     tail is lengthened or shortened instead.
+
+    marks (recut.landmarks): on a play with a drop the song comes back on one of its big moments
+    ("jump" in that play's result = the song time heard from its hit), and the plays after it are
+    timed to the beats as they fall from there.
     """
     beats_t = beats_s = None
+    off = music_start                                 # song time minus reel time, until the song jumps
+    used: list[float] = []
     if grid:
-        beats_t = np.array(grid["beats"]) - music_start      # reel time of each beat
+        beats_t = np.array(grid["beats"]) - off              # reel time of each beat
         beats_s = np.array(grid["strength"])
     out, t = [], t_first
     prev_grow = prev_shrink = 0.0            # how much the previous play's tail can move
@@ -414,7 +733,7 @@ def plan_timing(metas: list[dict], grid: dict | None, music_start: float, t_firs
             if beat is not None:
                 err = round(t + length - d / 2 - beat, 3)
             out.append({"photo": True, "lead": 0.0, "fz": 0.0, "post": length, "shift": round(length - nom_len, 3),
-                        "beat": None if beat is None else round(beat + music_start, 3), "err": err})
+                        "beat": None if beat is None else round(beat + off, 3), "err": err})
             prev_grow, prev_shrink = max(0.0, hi - length), max(0.0, length - lo)
             t += length - d
             continue
@@ -467,8 +786,15 @@ def plan_timing(metas: list[dict], grid: dict | None, music_start: float, t_firs
         prev_grow, prev_shrink = max(0.0, b_max - post), max(0.0, post - min_post)
         out.append({"lead": lead, "fz": fz, "post": post, "hit_reel": round(hit_reel, 3),
                     "shift": round(lead + fz - nominal, 3),
-                    "beat": None if beat is None else round(beat + music_start, 3), "err": err})
-        t += lead + fz + post - d
+                    "beat": None if beat is None else round(beat + off, 3), "err": err})
+        if marks and beats_t is not None and m.get("drop") and h > 0:
+            jump = recut.pick(marks, hit_reel + off, used)
+            if jump is not None:                      # from this hit on the song plays from `jump`
+                used.append(jump)
+                off = jump - hit_reel
+                beats_t = np.array(grid["beats"]) - off
+                out[-1]["jump"] = round(jump, 3)
+        t += lead + fz + post - d + float(m.get("extra") or 0.0)      # a ghost-trail freeze holds the reel up
     return out
 
 
@@ -489,7 +815,8 @@ def music_window(total: float, settings: dict, music_start: float | None = None)
 
 def _assemble(items: list[list[tuple]], transition: str, music: Path | None, music_start: float,
               settings: dict, out: Path, gains: list | None = None, duck_tail: float | None = None,
-              burst: Path | None = None) -> None:
+              burst: Path | None = None, sfx: Path | None = None, gaps: list | tuple = (),
+              muffle_until: float | None = None, music_cuts: list | None = None) -> None:
     """items: per timeline item, a list of (file, start, duration) pieces played in order.
     gains: per-item audio level (None = game-audio level under the music).
     duck_tail: seconds at the end where the music drops to a third (an ending with its own sound).
@@ -505,9 +832,19 @@ def _assemble(items: list[list[tuple]], transition: str, music: Path | None, mus
     for p in files:
         cmd += ["-i", str(p)]
     if music:
-        cmd += ["-ss", f"{music_start:.3f}", "-stream_loop", "-1", "-i", str(music)]
+        if music_cuts and len(music_cuts) > 1:        # the song is laid down in pieces: read it from its start
+            cmd += ["-stream_loop", "-1", "-i", str(music)]
+        else:
+            music_cuts = None
+            cmd += ["-ss", f"{music_start:.3f}", "-stream_loop", "-1", "-i", str(music)]
     if burst is not None:
         cmd += ["-i", str(burst)]
+    if sfx is not None:
+        cmd += ["-i", str(sfx)]
+    si = len(files) + (1 if music else 0) + (1 if burst is not None else 0)
+    # Silence before a big play's hit: down in 30 ms, back at full on the hit.
+    hush = ("volume=eval=frame:volume='1-min(1," + "+".join(f"clip((t-{a - 0.03:.3f})/0.03,0,1)*lt(t,{b:.3f})" for a, b in gaps)
+            + ")'") if gaps else None
     f, durs = [], []
     for n_it, it in enumerate(items):
         parts = []
@@ -558,14 +895,36 @@ def _assemble(items: list[list[tuple]], transition: str, music: Path | None, mus
     if music:
         mvol = float(settings.get("music_volume", 0.9))
         stop, fin, fout = music_window(total, settings, music_start)
-        f.append("[ac]anull[g]")                      # per-item levels already applied
-        f.append(f"[{len(files)}:a]aresample=48000,aformat=channel_layouts=stereo,atrim=0:{max(stop, 0.05):.3f},"
+        f.append(f"[ac]{hush or 'anull'}[g]")          # per-item levels already applied
+        msrc = f"[{len(files)}:a]aresample=48000,aformat=channel_layouts=stereo"
+        if music_cuts:                                # each piece: that stretch of the song, placed at its reel time
+            mc = [c for c in music_cuts if c[0] < stop]
+            f.append(msrc + f",asplit={len(mc)}" + "".join(f"[mc{k}]" for k in range(len(mc))))
+            for k, (rt, st_) in enumerate(mc):
+                ln = (mc[k + 1][0] if k + 1 < len(mc) else stop + 1.0) - rt
+                f.append(f"[mc{k}]atrim=start={st_:.4f}:end={st_ + ln:.4f},asetpts=PTS-STARTPTS"
+                         + (f",adelay=delays={int(round(rt * 1000))}:all=1" if rt > 0 else "") + f"[md{k}]")
+            f.append("".join(f"[md{k}]" for k in range(len(mc))) + f"amix=inputs={len(mc)}:normalize=0:duration=longest[mcut]")
+            msrc = "[mcut]anull"
+        f.append(msrc + f",atrim=0:{max(stop, 0.05):.3f},"
                  + (f"afade=t=in:d={fin:.3f}," if fin > 0 else "")
                  + (f"afade=t=out:st={max(0.0, stop - fout):.3f}:d={fout:.3f}," if fout > 0 else "")
                  + f"volume={mvol}"
                  + (f",volume=eval=frame:volume='1-0.67*clip((t-{total - duck_tail:.3f})/0.4,0,1)'" if duck_tail else "")
-                 + "[m]")
-        f.append("[g][m]amix=inputs=2:normalize=0:duration=first[aout]")
+                 + (f",{hush}" if hush else "")
+                 + ("[m0]" if muffle_until else "[m]"))
+        if muffle_until:                              # far away under the old footage, full on the cut to "now"
+            f.append(f"[m0]asplit[ma][mb];[ma]lowpass=f=650,volume=eval=frame:volume='0.75*lt(t,{muffle_until:.3f})'[mf];"
+                     f"[mb]volume=eval=frame:volume='gte(t,{muffle_until:.3f})'[mn];[mf][mn]amix=inputs=2:normalize=0[m]")
+        if sfx is not None:                           # big-play sounds on top; a limiter keeps the booms clean
+            f.append(f"[{si}:a]aresample=48000,aformat=channel_layouts=stereo[fx]")
+            f.append("[g][m][fx]amix=inputs=3:normalize=0:duration=first,alimiter=limit=0.95:level=false[aout]")
+        else:
+            f.append("[g][m]amix=inputs=2:normalize=0:duration=first[aout]")
+    elif sfx is not None:
+        f.append(f"[ac]{hush + ',' if hush else ''}afade=t=out:st={max(0.0, total - 1.5):.3f}:d=1.5[g]")
+        f.append(f"[{si}:a]aresample=48000,aformat=channel_layouts=stereo[fx]")
+        f.append("[g][fx]amix=inputs=2:normalize=0:duration=first,alimiter=limit=0.95:level=false[aout]")
     else:
         f.append(f"[ac]afade=t=out:st={max(0.0, total - 1.5):.3f}:d=1.5[aout]")
     out.parent.mkdir(parents=True, exist_ok=True)

@@ -50,7 +50,7 @@
     NAV.map(n => n === 'sep' ? '<span class="hr-rail-sep"></span>' :
       `<a class="hr-rail-btn" href="${n.href}" data-k="${n.k}"${n.project ? ' data-project' : ''} aria-label="${n.label}" title="${n.label}">${icon(n.k)}<span class="hr-rail-badge" hidden></span></a>`).join('') +
     `<span class="hr-rail-fill"></span>
-     <button type="button" class="hr-rail-btn" id="hrJobs" aria-label="Background jobs" title="Nothing running">${icon('jobs')}<span class="hr-rail-dot" hidden></span></button>
+     <button type="button" class="hr-rail-btn" id="hrJobs" aria-label="Activity and log" title="Activity: nothing running">${icon('jobs')}<span class="hr-rail-dot" hidden></span></button>
      <button type="button" class="hr-rail-btn" id="hrFind" aria-label="Jump to (Ctrl K)" title="Jump to… (Ctrl K)">${icon('search')}</button>
      <a class="hr-rail-btn" href="/guide" data-k="guide" aria-label="Guide and shortcuts" title="Guide and shortcuts">${icon('guide')}</a>`;
   document.body.prepend(rail);
@@ -115,24 +115,84 @@
   // ---------- background jobs ----------
   const jobsBtn = document.getElementById('hrJobs');
   let jobTimer = null;
+  const jobLine = (what, j) => {
+    const pct = j.total ? Math.round(100 * (j.done || 0) / j.total) : null;
+    return what + (pct != null ? ` · ${pct}%` : '') + (j.step ? ` · ${j.step}` : '');
+  };
   async function pollJobs() {
     clearTimeout(jobTimer);
     let running = false, text = 'Nothing running';
     try {
-      const j = await (await fetch('/api/reel/status')).json();
-      if (j && j.state === 'running') {
-        running = true;
-        const pct = j.total ? Math.round(100 * (j.done || 0) / j.total) : null;
-        text = 'Building the reel' + (pct != null ? ` · ${pct}%` : '') + (j.step ? ` · ${j.step}` : '');
-      }
+      const j = await (await fetch('/api/log?after=999999999')).json();
+      if (j.setup && j.setup.state === 'running') { running = true; text = jobLine('Setting up a project', j.setup); }
+      else if (j.reel && j.reel.state === 'running') { running = true; text = jobLine('Building the reel', j.reel); }
     } catch (e) {}
     jobsBtn.querySelector('.hr-rail-dot').hidden = !running;
     jobsBtn.classList.toggle('busy', running);
-    jobsBtn.title = text;
-    jobsBtn.setAttribute('aria-label', 'Background jobs: ' + text);
+    jobsBtn.title = 'Activity: ' + text;
+    jobsBtn.setAttribute('aria-label', 'Activity and log: ' + text);
     jobTimer = setTimeout(pollJobs, running ? 3000 : 15000);
   }
-  jobsBtn.onclick = () => { location = '/review#publish'; };
+
+  // ---------- activity panel: what's running now, and the app's log ----------
+  let act = null, actTimer = null, actLast = 0, actText = [];
+  const ago = s => s < 90 ? Math.round(s) + ' s' : s < 5400 ? Math.round(s / 60) + ' min' : Math.round(s / 3600) + ' h';
+  function jobCard(title, j, link) {
+    if (!j || !j.state || j.state === 'idle') return '';
+    const pct = j.total ? Math.round(100 * (j.done || 0) / j.total) : 0;
+    const head = j.state === 'running' ? `${esc(j.step || 'working')} · ${j.done || 0} of ${j.total || 1}`
+      : j.state === 'error' ? `Stopped: ${esc(j.error || 'unknown error')}` : 'Finished';
+    return `<div class="hr-act-job ${j.state}"><b>${title}</b>${j.folder ? `<span class="hr-act-sub">${esc(j.folder)}</span>` : ''}
+      <span>${head}</span>${j.state === 'running' ? `<div class="hr-act-bar"><div style="width:${pct}%"></div></div>` : ''}${link || ''}</div>`;
+  }
+  async function drawAct() {
+    clearTimeout(actTimer);
+    if (!act || act.hidden) return;
+    let busy = false;
+    try {
+      const j = await (await fetch('/api/log?after=' + actLast)).json();
+      busy = (j.setup && j.setup.state === 'running') || (j.reel && j.reel.state === 'running');
+      const cards = jobCard('New project', j.setup) + jobCard('Reel build', j.reel, '<a href="/review#publish">Open renders</a>');
+      const quiet = j.quiet == null ? '' : `Last log line ${ago(j.quiet)} ago.`;
+      document.getElementById('hrActNow').innerHTML = (cards || '<div class="hr-act-job"><b>Nothing is running.</b></div>') +
+        `<p class="hr-act-note">${busy ? 'Working. ' : ''}${quiet}${busy && j.quiet > 600 ? ' <b>No output for a long time: it may be stuck.</b>' : ''}</p>`;
+      const box = document.getElementById('hrActLog');
+      const atEnd = box.scrollHeight - box.scrollTop - box.clientHeight < 40;
+      if (j.last < actLast) { box.textContent = ''; actText = []; }   // the app restarted: start the list again
+      j.lines.forEach(l => {
+        const d = document.createElement('div'), at = new Date(l.t * 1000).toLocaleTimeString();
+        actText.push(at + '  ' + l.text);
+        if (/FAIL|Traceback|Error|skipped/.test(l.text)) d.className = 'bad';
+        d.innerHTML = `<time>${at}</time>${esc(l.text)}`;
+        box.appendChild(d);
+      });
+      actLast = j.last;
+      if (j.lines.length && atEnd) box.scrollTop = box.scrollHeight;
+      document.getElementById('hrActFile').textContent = j.file ? 'Also saved in ' + j.file : '';
+    } catch (e) {
+      document.getElementById('hrActNow').innerHTML = '<div class="hr-act-job error"><b>The app isn\'t answering.</b><span>Start it again with the Highlight Reels shortcut.</span></div>';
+    }
+    actTimer = setTimeout(drawAct, busy ? 1000 : 4000);
+  }
+  function openAct() {
+    if (!act) {
+      act = document.createElement('aside');
+      act.className = 'hr-act';
+      act.setAttribute('aria-label', 'Activity and log');
+      act.innerHTML = `<header><h2>Activity</h2><button type="button" class="hr-ghost" id="hrActCopy">Copy log</button>
+        <button type="button" class="hr-ghost" id="hrActClose" aria-label="Close">Close</button></header>
+        <div id="hrActNow"></div><div class="hr-act-log" id="hrActLog" role="log" aria-live="off"></div><footer id="hrActFile"></footer>`;
+      document.body.appendChild(act);
+      document.getElementById('hrActClose').onclick = () => { act.hidden = true; };
+      document.getElementById('hrActCopy').onclick = e => {
+        navigator.clipboard.writeText(actText.join('\n'));
+        e.target.textContent = 'Copied'; setTimeout(() => { e.target.textContent = 'Copy log'; }, 1500);
+      };
+    }
+    act.hidden = false;
+    drawAct();
+  }
+  jobsBtn.onclick = () => { if (act && !act.hidden) act.hidden = true; else openAct(); };
 
   // ---------- Ctrl K palette ----------
   let pal = null, palItems = [], palSel = 0;
@@ -179,6 +239,7 @@
   }
   async function go(it) {
     closePal();
+    if (it.act) { openAct(); return; }
     if (it.project) {
       if (it.project.current) { location = '/review'; return; }
       const r = await fetch('/api/projects/open', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ folder: it.project.folder }) });
@@ -202,6 +263,7 @@
       { group: 'Go to', label: 'Renders & publish', sub: 'videos, YouTube', href: '/review#publish' },
       { group: 'Go to', label: 'Player profiles', href: '/players' },
       { group: 'Go to', label: 'Guide and shortcuts', href: '/guide' },
+      { group: 'Go to', label: 'Activity and log', sub: 'what the app is doing', act: true },
     ];
     pal.hidden = false;
     const q = document.getElementById('hrPalQ');
@@ -231,6 +293,7 @@
     setActive(k) { current = k; setActive(k); },
     refreshStages,
     pollJobs,
+    openActivity: openAct,
   };
   setActive(page);
   if (steps) refreshStages();

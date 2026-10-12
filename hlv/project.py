@@ -24,6 +24,9 @@ def settings(project: dict) -> dict:
             "slowmo": False, "slowmo_speed": 0.4, "name_banner": "first",
             "music": None, "scottforge_card": True, "intro": "animated", "intro_sfx": False,
             "photo_s": 4, "format": "wide", "cut": "reel",
+            "ghost_trail": True, "drop": True, "colour": True, "recut": True,   # big-play effects (plays marked review.big)
+            "journey": False, "journey_born": None, "match_cuts": False,
+            "coaches": [],                                # a copy of the recruiting cut per coach (coach.py)       # the Journey opener (journey.py) and his birth year, for the ages
             **(project.get("settings") or {})}
 
 

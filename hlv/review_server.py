@@ -11,19 +11,20 @@ import os
 import re
 import subprocess
 import threading
+import traceback
 import webbrowser
 from datetime import datetime
 from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import camera, library, photo_slide, photos, profiles, project, proxy, reel, score, segment, youtube
+from . import applog, camera, coach, library, photo_slide, photos, profiles, project, proxy, reel, score, segment, youtube
 from .config import DetectConfig
 from .pipeline import CACHE_DIRNAME
 
 STATIC = Path(__file__).parent / "static"
 EDITABLE = {"snap", "end", "labeled", "keep", "notes", "spotlight", "zoom", "hit", "no_hit", "ring_off", "side", "limit",
-            "floor", "star"}
+            "floor", "star", "big"}
 ZOOM_LEVELS = (0, 1.25, 1.5, 1.8)
 
 
@@ -207,13 +208,17 @@ class ReviewApp:
         job = self.setup
 
         def run():
+            applog.say(f"new project: setting up {folder}")
             try:
                 res = setup_job.run(folder, player, music_rel, jobs=min(self.jobs, 3),
                                     progress=lambda st, d, t: job.update(step=st, done=d, total=t))
                 self.open_project(folder)
                 job.update(state="done", result=res)
+                applog.say(f"new project: ready, {res['clips']} clips"
+                           + (f" ({len(res['skipped'])} skipped)" if res["skipped"] else ""))
             except Exception as e:  # noqa: BLE001 - report to the page
                 job.update(state="error", error=str(e))
+                applog.say(f"new project: FAILED: {e}\n{traceback.format_exc()}")
         threading.Thread(target=run, daemon=True).start()
         return job
 
@@ -290,7 +295,7 @@ class ReviewApp:
                 "id": c["id"], "source": c["source"], "group": c.get("group", ""), "kind": c["kind"],
                 "included": reel.included(c), "keep": r.get("keep"), "labeled": bool(r.get("labeled")),
                 "spotlight": spot, "zoom": r.get("zoom") or 0, "hit_set": r.get("hit") is not None, "no_hit": bool(r.get("no_hit")),
-                "star": bool(r.get("star")), "recruit": c["id"] in recruit,
+                "star": bool(r.get("star")), "big": reel.big_kind(c) or False, "recruit": c["id"] in recruit,
                 # False: he isn't found at the snap, so this play won't freeze (None: unknown / not wanted)
                 "freeze_ok": camera.freeze_found(self.cache, c) if spot and s.get("freeze", True) else None,
                 "seconds": round(max(0.0, t1 - max(0.0, t0)) + (segment.FREEZE_S if spot and s.get("freeze") else 0), 2),
@@ -327,6 +332,18 @@ class ReviewApp:
                                 "yt_title": youtube.default_title(profiles.get(library.home(), pl), vert, rec, built),
                                 "label": ("Recruiting cut" if rec else "Highlight reel") + (" · vertical 9:16" if vert else ""),
                                 "built": datetime.fromtimestamp(f.stat().st_mtime).isoformat(timespec="minutes")})
+                if f and rec:                         # ... and the copies made for each coach
+                    for c in coach.clean(s.get("coaches")):
+                        g = f.with_name(coach.name_for(f, c["school"]))
+                        if g.exists():
+                            built = datetime.fromtimestamp(g.stat().st_mtime)
+                            out.append({"file": g.name, "path": str(g), "vertical": vert, "recruiting": True, "coach": c,
+                                        "youtube": youtube.published(g),
+                                        "yt_title": youtube.clean(youtube.default_title(profiles.get(library.home(), pl), vert, True, built)
+                                                                  + f" – {c['school']}", 100),
+                                        "label": f"For {c['school']}" + (f" ({c['coach']})" if c["coach"] else "")
+                                        + (" · vertical 9:16" if vert else ""),
+                                        "built": built.isoformat(timespec="minutes")})
         return sorted(out, key=lambda o: o["built"], reverse=True)
 
     # ---------------- player profiles ----------------
@@ -550,9 +567,12 @@ class ReviewApp:
         root = self.root
 
         def progress(step, done, total):
+            if step != self.job.get("step"):
+                applog.say(f"reel: {step} ({done}/{total})")
             self.job.update(step=step, done=done, total=total)
 
         def run():
+            applog.say(f"reel: building for {root.name}")
             try:
                 with self.lock:
                     s = project.settings(project.load(root))
@@ -568,10 +588,16 @@ class ReviewApp:
                 res = {**res, "outputs": [{"file": Path(r["output"]).name, "path": r["output"], "vertical": r["vertical"],
                                            "recruiting": r["recruiting"], "plays": r["plays"], "duration": r["duration"],
                                            "label": ("Recruiting cut" if r["recruiting"] else "Highlight reel")
-                                           + (" · vertical 9:16" if r["vertical"] else "")} for r in outs]}
+                                           + (" · vertical 9:16" if r["vertical"] else "")} for r in outs]
+                       + [{"file": Path(v["path"]).name, "path": v["path"], "vertical": r["vertical"], "recruiting": True,
+                           "plays": r["plays"], "duration": round(r["duration"] + coach.CARD_S, 1),
+                           "label": f"For {v['school']}" + (f" ({v['coach']})" if v["coach"] else "")
+                           + (" · vertical 9:16" if r["vertical"] else "")} for r in outs for v in r.get("coach_versions") or []]}
                 self.job.update(state="done", result=res, step="done")
+                applog.say("reel: finished " + ", ".join(o["file"] for o in res["outputs"]))
             except Exception as e:  # noqa: BLE001 - report any failure to the page
                 self.job.update(state="error", error=str(e))
+                applog.say(f"reel: FAILED: {e}\n{traceback.format_exc()}")
         threading.Thread(target=run, daemon=True).start()
         return self.job
 
@@ -594,9 +620,14 @@ class ReviewApp:
                 s["format"] = patch["format"]
             if patch.get("cut") in reel.CUTS:
                 s["cut"] = patch["cut"]
+            if "coaches" in patch:
+                s["coaches"] = coach.clean(patch["coaches"])
             if patch.get("intro") in ("animated", "inferno", "storm", "shatter", "stadium",
                                       "glitch", "smoke", "neon", "warp", "gold", "classic"):
                 s["intro"] = patch["intro"]
+            if "journey_born" in patch:
+                b = patch["journey_born"]
+                s["journey_born"] = int(b) if b not in (None, "") and 1980 <= int(b) <= datetime.now().year else None
             if "intro_sfx" in patch:
                 s["intro_sfx"] = bool(patch["intro_sfx"])
             if patch.get("intro_sync") in ("beat", "hits"):
@@ -609,7 +640,7 @@ class ReviewApp:
                 s["photo_s"] = int(float(patch["photo_s"]))
             if "slowmo_speed" in patch and float(patch["slowmo_speed"]) in (0.5, 0.4, 0.3):
                 s["slowmo_speed"] = float(patch["slowmo_speed"])
-            for k in ("beat_sync", "hit_fx", "slowmo", "scottforge_card", "freeze_ring"):
+            for k in ("beat_sync", "hit_fx", "slowmo", "scottforge_card", "freeze_ring", "ghost_trail", "drop", "journey", "colour", "recut", "match_cuts"):
                 if k in patch:
                     s[k] = bool(patch[k])
             if "music_start" in patch:
@@ -735,6 +766,8 @@ class ReviewApp:
                 patch.pop("side")
             if "star" in patch:
                 patch["star"] = bool(patch["star"])
+            if "big" in patch:                        # a big play's freeze: "trail", "3d", or not a big play
+                patch["big"] = patch["big"] if patch["big"] in ("trail", "3d") else "trail" if patch["big"] else False
             if "no_hit" in patch:
                 patch["no_hit"] = bool(patch["no_hit"])
             if "hit" in patch:
@@ -862,6 +895,15 @@ def make_handler(app: ReviewApp):
                 return self._json(app.projects_info())
             if path == "/api/projects/setup":
                 return self._json(app.setup)
+            if path == "/api/log":      # the Activity panel: what's running and what the app has printed
+                from urllib.parse import parse_qs
+                q = parse_qs(self.path.split("?", 1)[1] if "?" in self.path else "")
+                try:
+                    after = int(q.get("after", ["0"])[0])
+                except ValueError:
+                    after = 0
+                job = {k: app.job.get(k) for k in ("state", "step", "done", "total", "error")}
+                return self._json({**applog.lines(after), "setup": app.setup, "reel": job})
             if path == "/api/music/status":
                 return self._json(app.music_job)
             m = re.fullmatch(r"/api/music/suggest/([a-z0-9-]+)", path)
@@ -944,6 +986,13 @@ def make_handler(app: ReviewApp):
                 return self._json(youtube.status())
             if path == "/api/youtube/status":
                 return self._json(youtube.job)
+            if path == "/api/reel/plan":     # where everything lands on the song, for the Build preview
+                app._need()
+                try:
+                    return self._json(reel.preview_plan(app.root))
+                except Exception as e:  # noqa: BLE001 - the preview is optional; say why it's missing
+                    applog.say(f"reel plan failed: {e}\n{traceback.format_exc()}")
+                    return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
             if path == "/api/reel/status":
                 return self._json(app.job)
             m = re.fullmatch(r"/media/compose/(demo-[a-z]+-\d+-v\d+\.wav)", path)
@@ -1216,6 +1265,7 @@ def make_handler(app: ReviewApp):
 
 def serve(root: Path | None, port: int = 8765, open_browser: bool = True, jobs: int = 4) -> None:
     """root: open this project straight away; None starts on the project list."""
+    applog.install(library.home())
     app = ReviewApp(jobs)
     if root is not None:
         try:

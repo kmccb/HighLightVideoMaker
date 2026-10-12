@@ -48,6 +48,7 @@ def run(folder: Path, player: str | None, music: str | None, progress=lambda ste
     cache = root / CACHE_DIRNAME
     n = len(paths)
     total = 2 * n + 1
+    log(f"setup: {n} videos in {root}")
 
     # 1) small preview copies for the review page
     done = [0]
@@ -65,13 +66,15 @@ def run(folder: Path, player: str | None, music: str | None, progress=lambda ste
     # 2) motion + sound signals per clip (the slow part), in parallel
     ok_paths = []
     progress("finding the plays", done[0], total)
+    log(f"finding the plays in {n} videos (the slow part) ...")
     with ProcessPoolExecutor(jobs) as ex:
         futs = {ex.submit(_signals, str(root), str(p), cfg.to_dict()): p for p in paths}
         for f in as_completed(futs):
             p = futs[f]
             try:
-                f.result()
+                _, dt = f.result()
                 ok_paths.append(p)
+                log(f"  plays found in {p.name}  ({dt:.0f}s)")
             except Exception as e:  # noqa: BLE001 - one bad file mustn't stop the rest
                 skipped.append(p.name)
                 log(f"  skipped {p.name}: {e}")
@@ -79,6 +82,7 @@ def run(folder: Path, player: str | None, music: str | None, progress=lambda ste
             progress(f"finding the plays ({p.name})", done[0], total)
 
     # 3) detection from the cached signals; review data starts empty
+    log("saving the project ...")
     proj = project.load(root)
     proj["config"] = cfg.to_dict()
     for p in sorted(ok_paths):

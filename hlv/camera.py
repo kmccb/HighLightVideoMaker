@@ -124,6 +124,21 @@ def freeze_found(cache: Path, clip: dict) -> str | None:
     return "none" if t is None else ("snap" if at_snap else "late")
 
 
+def freeze_at(cache: Path, clip: dict) -> tuple[float | None, bool]:
+    """(when the render will freeze on the player or None, known), from the saved track only
+    (never tracks). known is False when he's been clicked but the track isn't saved yet."""
+    if not anchors_of(clip):
+        return None, True
+    f = _track_file(cache, clip)
+    if not f.exists():
+        return None, False
+    from . import segment
+    player = np.nan_to_num(track.smooth_track(np.load(f), FPS), nan=-1)
+    t_in, t_out, snap = segment._window(clip)
+    t0, t1 = segment.extents(clip, clip["probe"]["duration"])
+    return segment.freeze_time(player, snap, t0, t1, t_out, [a["t"] for a in anchors_of(clip)])[0], True
+
+
 _live: dict[str, dict] = {}          # clip id -> unfinished tracker runs (track.Tracking live)
 _jobs: dict[str, "_Job"] = {}        # clip id -> latest tracking job
 CHUNK = 12                           # frames tracked between looks at "stop" (~0.3 s)

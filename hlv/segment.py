@@ -201,6 +201,30 @@ def layout(seg: Path) -> dict:
     return json.loads(seg.with_suffix(".json").read_text())
 
 
+def predict_layout(clip: dict, settings: dict, hit_t: float | None, freeze_t: float | None, banner: bool) -> dict:
+    """The layout render() will write for this play, worked out without rendering it (the same
+    frame lists as _render), so the Build screen can show where everything lands on the song.
+    freeze_t: camera.freeze_at; banner: this play shows the name banner. "post_t" is the source
+    time of every output frame from the freeze on (slow-mo stretches it)."""
+    _, t_out, snap = _window(clip)
+    t0, t1 = extents(clip, clip["probe"]["duration"])
+    if not settings.get("freeze", True):
+        freeze_t = None
+    nfz = int(round((BANNER_FREEZE[2] if banner else FREEZE_MAX) * FPS)) if freeze_t is not None else 0
+    split_t = min(max(freeze_t if freeze_t is not None else snap, t0), t1)
+    sspeed = float(settings.get("slowmo_speed", 0.4))
+    smo = None
+    if settings.get("slowmo") and hit_t is not None and split_t + 0.3 < hit_t < t1:
+        smo = slowmo.window(hit_t, split_t + 0.15, t1)
+    pre = slowmo.timeline(t0, split_t, FPS, None, 1.0)
+    post = slowmo.timeline(split_t, t1, FPS, smo, sspeed)
+    return {"fps": FPS, "t0": t0, "snap": snap, "split": split_t, "hit": hit_t,
+            "a_frames": len(pre), "f_frames": nfz, "banner": bool(banner and freeze_t is not None),
+            "b_frames": len(post),
+            "hit_b": None if hit_t is None else sum(1 for t in post if t < hit_t) / FPS,
+            "post_nom": sum(1 for t in post if t < t_out) / FPS, "post_t": post}
+
+
 VERTICAL = (1080, 1920)
 
 
