@@ -86,6 +86,8 @@ main { gap: 18px; padding: 18px 20px 60px; }
 .ctl .t { font-family: var(--mono); }
 .side { border-color: var(--line-2); border-radius: var(--r); }
 .side button.on { background: var(--sel) !important; box-shadow: inset 0 -2px 0 var(--accent); }
+.ctl select[data-big] { height: 32px; padding: 0 8px; border-radius: var(--r); border: 1px solid var(--line-2); background: var(--panel-2); color: var(--dim); font: inherit; }
+.ctl select[data-big].on { color: var(--accent-ink); background: var(--accent); border-color: var(--accent); font-weight: 600; }
 .keys kbd { background: #0F1216; border-color: #2E3540; }
 </style>
 </head>
@@ -298,7 +300,7 @@ function hitCard(c) {
     <div class="strip"><img alt=""><div class="sug" hidden></div><div class="sel" hidden></div><div class="hov" hidden></div></div>
     <div class="ctl"><button data-n="-0.1">− 0.1s</button><span class="t"></span><button data-n="0.1">+ 0.1s</button>
       <span class="side" title="Which side of the ball he is on in this play: the hit means contact/tackle on defense, the catch or big move on offense. Suggestions learn each side separately."><button data-side="O">Offense</button><button data-side="D">Defense</button></span>
-      <span class="side" title="Big play: on the hit the picture freezes. Trail = copies of him along the path he ran. 3D = the camera swings round him. Click the lit one again to turn it off."><button data-big="trail">&#9889; Trail</button><button data-big="3d">&#9889; 3D</button></span>
+      <select data-big title="Big play: an effect on this play's hit. For a run: Trail (copies of him along his path) or 3D (the camera swings round him). For a hit: Shockwave, Impact frames, Triple hit (three times on three beats) or Instant replay."><option value="">&#9889; Big play: off</option><option value="trail">&#9889; Trail</option><option value="3d">&#9889; 3D</option><option value="shock">&#9889; Shockwave</option><option value="frames">&#9889; Impact frames</option><option value="triple">&#9889; Triple hit</option><option value="replay">&#9889; Instant replay</option></select>
       <span class="grow"></span><button data-act="sug" hidden title="the app’s guess (dashed outline), learned from the hits you've marked">Use suggestion</button><button data-act="nohit" title="no hit on this play: no punch, no slow-mo, timing left alone">✕ No hit</button></div>`;
   const strip = el.querySelector('.strip'), simg = strip.querySelector('img'), sel = strip.querySelector('.sel'), hov = strip.querySelector('.hov');
   const big = el.querySelector('.big img');
@@ -332,10 +334,10 @@ function hitCard(c) {
     await save(c, { side: c.review.side === b.dataset.side ? null : b.dataset.side }); sides();
   });
   sides();
-  const bigOf = () => c.review.big === '3d' ? '3d' : c.review.big ? 'trail' : '';
-  const bigs = () => el.querySelectorAll('[data-big]').forEach(b => b.classList.toggle('on', bigOf() === b.dataset.big));
-  el.querySelectorAll('[data-big]').forEach(b => b.onclick = async () => {
-    await save(c, { big: bigOf() === b.dataset.big ? false : b.dataset.big }); bigs();
+  const bigSel = el.querySelector('[data-big]');
+  const bigs = () => { const b = c.review.big; bigSel.value = [...bigSel.options].some(o => o.value === b) ? b : b ? 'trail' : ''; bigSel.classList.toggle('on', !!bigSel.value); };
+  [bigSel].forEach(b => b.onchange = async () => {
+    await save(c, { big: b.value || false }); bigs();
   });
   bigs();
   let cur = null, sugT = null;                                 // keyboard cursor on the strip

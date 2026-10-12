@@ -395,10 +395,11 @@ body.plays-narrow #bFold svg { transform: scaleX(-1); }
 .insp .tg-btns .btn { justify-content: flex-start; text-align: left; min-height: 40px; font-size: 13px; }
 .insp #bSpot, .insp #bRing, .insp #bHit { grid-column: 1 / -1; }
 .insp .bigpick, .insp #bigHint { grid-column: 1 / -1; }
-.insp .bigpick { display: flex; align-items: center; gap: 10px; }
+.insp .bigpick { display: flex; flex-direction: column; align-items: stretch; gap: 6px; }
 .insp .bigpick .bp-l { flex: none; font-size: 13px; font-weight: 600; white-space: nowrap; }
-.insp .bigpick .segctl { flex: 1; }
-.insp .bigpick .segctl button { padding: 6px 4px; }
+.insp .bigpick .segctl { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); }
+.insp .bigpick .segctl button { padding: 6px 2px; font-size: 12.5px; }
+.insp .bigpick .segctl button[data-v=""] { grid-column: span 2; }
 .insp .bigpick .segctl button.on:not([data-v=""]) { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
 .insp #bigHint { font-size: 12px; }
 .insp #bigHint:empty { display: none; }
@@ -723,7 +724,7 @@ body.plays-narrow #bFold svg { transform: scaleX(-1); }
       <div class="tgroup"><span class="hr-eyebrow">Big moment</span><div class="tg-btns">
           <button class="btn hit" id="bHit" title="K marks the hit at the playhead"><kbd>K</kbd> Hit <span class="val" id="vHit">–</span><span class="x" id="bNoHit" title="No hit on this play: no punch, no slow-mo, timing left alone (N)">✕</span></button>
           <div class="bigpick"><span class="bp-l">&#9889; Big play</span>
-            <span class="segctl" id="bigPick" role="group" aria-label="Big play"><button data-v="" title="A normal play">Off</button><button data-v="trail" title="On the hit the picture freezes and copies of your player appear along the path he ran">Trail</button><button data-v="3d" title="On the hit the picture freezes and the camera swings round him, with his name">3D</button></span></div>
+            <span class="segctl" id="bigPick" role="group" aria-label="Big play"><button data-v="" title="A normal play">Off</button><button data-v="trail" title="On the hit the picture freezes and copies of your player appear along the path he ran">Trail</button><button data-v="3d" title="On the hit the picture freezes and the camera swings round him, with his name">3D</button><button data-v="shock" title="For a big hit: a shockwave spreads from the contact, with a hard shake">Shock</button><button data-v="frames" title="For a big hit: a flash of black-and-white comic-book frames with speed lines">Impact</button><button data-v="triple" title="For a big hit: the hit plays three times on three beats, closer each time">Triple</button><button data-v="replay" title="For a big hit: the tape runs back and the hit plays again in slow motion">Replay</button></span></div>
           <span class="hint" id="bigHint"></span>
       </div></div>
       <div class="tgroup"><label class="hr-eyebrow" for="notes">Notes</label>
@@ -915,8 +916,8 @@ body.plays-narrow #bFold svg { transform: scaleX(-1); }
           <span class="hint">quick zoom bump + flash on the hit</span></label>
         <div class="row" style="align-items:flex-start"><span class="lbl">Big plays</span>
           <span class="hint" id="rBigHint">Make a play a big play where you mark its hit. Big plays get:</span></div>
-        <label class="row"><span class="lbl">Freeze on the hit</span><input type="checkbox" id="rGhost">
-          <span class="hint">about 4 s, the kind you picked with &#9889;: <b>Trail</b> = copies of your player along the path he ran; <b>3D</b> = the camera swings round him with his name. A trail that can't be made (he hardly moved) becomes 3D.</span></label>
+        <label class="row"><span class="lbl">Effect on the hit</span><input type="checkbox" id="rGhost">
+          <span class="hint">the kind you picked for the play. For a run: <b>Trail</b> (copies of him along his path) or <b>3D</b> (the camera swings round him); about 4 s. For a hit: <b>Shock</b>wave, <b>Impact</b> frames, <b>Triple</b> hit on three beats, or instant <b>Replay</b> in slow motion.</span></label>
         <label class="row"><span class="lbl">Only him in colour</span><input type="checkbox" id="rColour">
           <span class="hint">the second and a half before the hit drains to black and white, except your player; colour comes back on the hit</span></label>
         <label class="row"><span class="lbl">Silence, then the drop</span><input type="checkbox" id="rDrop">
@@ -995,6 +996,10 @@ async function load() {
   select(first < 0 ? 0 : first);
 }
 
+// A big play's effect on its hit: [short label, what happens]
+const BIG_KINDS = { trail: ['TRAIL', 'freeze, and copies of him along the path he ran'], '3d': ['3D', 'freeze, and the camera swings round him'],
+  shock: ['SHOCK', 'a shockwave spreads from the contact'], frames: ['IMPACT', 'a flash of black-and-white impact frames'],
+  triple: ['TRIPLE', 'the hit plays three times, on three beats'], replay: ['REPLAY', 'the tape runs back and the hit replays in slow motion'] };
 function stateOf(c) {
   const r = c.review;
   return {
@@ -1007,7 +1012,7 @@ function stateOf(c) {
     zoom: r.zoom || 0,
     hit: r.hit ?? null,
     no_hit: !!r.no_hit,
-    big: r.big === '3d' ? '3d' : r.big ? 'trail' : '',
+    big: BIG_KINDS[r.big] ? r.big : r.big ? 'trail' : '',
     ring_off: Array.isArray(r.ring_off) ? r.ring_off : [],
     edited: r.snap != null || r.end != null,
   };
@@ -1504,7 +1509,11 @@ function renderBig() {
   const h = $('bigHint'), need = !cur.big ? '' : cur.no_hit || hitTime() == null ? 'A big play needs a hit: press K on the moment.'
     : !cur.spotlight.length ? 'A big play needs your player: press F and click him.' : '';
   h.className = 'hint' + (need ? ' need' : '');
-  h.textContent = need || (cur.big === '3d' ? 'On the hit: freeze, and the camera swings round him.' : cur.big ? 'On the hit: freeze, and copies of him along the path he ran.' : '');
+  h.textContent = need || (cur.big ? 'On the hit: ' + BIG_KINDS[cur.big][1] + '.' : '');
+}
+function bigNext(b) {                      // off, then each kind in turn, then off again
+  const order = Object.keys(BIG_KINDS).filter(k => k !== '3d' || !sy.plan || sy.plan.can_3d);
+  return !b ? order[0] : order[order.indexOf(b) + 1] || false;
 }
 async function setBig(v) {
   const c = data.clips[idx];
@@ -1718,7 +1727,7 @@ async function loadReel() {
   $('rRecut').checked = s.recut !== false;
   $('rMatch').checked = !!s.match_cuts;
   const nBig = reelInfo.clips.filter(c => c.big && c.included).length;
-  $('rBigHint').innerHTML = (nBig ? `<b style="color:var(--accent-hi)">${nBig} big play${nBig > 1 ? 's' : ''}</b> marked with &#9889;.` : 'No big plays yet.') + ' Choose <b>&#9889; Big play: Trail or 3D</b> where you mark the hit: on the review page under Big moment, or in Fix-ups on the Hit tab. Big plays get:';
+  $('rBigHint').innerHTML = (nBig ? `<b style="color:var(--accent-hi)">${nBig} big play${nBig > 1 ? 's' : ''}</b> marked with &#9889;.` : 'No big plays yet.') + ' Choose a <b>&#9889; Big play</b> kind where you mark the hit: on the review page under Big moment, or in Fix-ups on the Hit tab. Big plays get:';
   $('rSlow').checked = !!s.slowmo;
   $('rSlowSpeed').value = String(s.slowmo_speed ?? 0.4);
   $('rSlowSpeed').disabled = !s.slowmo;
@@ -1868,7 +1877,7 @@ function renderReelList() {
       <span class="grip">⋮⋮</span><span class="num">${num}</span>
       <input type="checkbox" data-act="inc" ${c.included ? 'checked' : ''} ${c.kind === 'pre_edited' && !c.labeled ? 'disabled title="trim it in review first"' : ''}>
       <button class="mini star${c.star ? ' on' : ''}" data-act="star" title="${c.star ? 'Top play: opens the recruiting cut. Click to unstar' : 'Star a top play: starred plays open the recruiting cut'}">${c.star ? '★' : '☆'}</button>
-      <button class="mini big${c.big ? ' on' : ''}" data-act="big" aria-pressed="${!!c.big}" title="${c.big === '3d' ? 'Big play with the 3D freeze on its hit. Click to turn off' : c.big ? 'Big play with a ghost trail on its hit. Click for the 3D freeze instead' : 'Make this a big play: the drop and a ghost trail on its hit'}">&#9889;${c.big === '3d' ? ' 3D' : c.big ? ' TRAIL' : ''}</button>
+      <button class="mini big${c.big ? ' on' : ''}" data-act="big" aria-pressed="${!!c.big}" title="${c.big ? 'Big play. On the hit: ' + BIG_KINDS[c.big][1] + '. Click for the next kind' : 'Make this a big play (click again to step through the kinds)'}">&#9889;${c.big ? ' ' + BIG_KINDS[c.big][0] : ''}</button>
       <span class="name">${esc(c.source.split('/').pop())}</span>${(window.hrRes ? hrRes(c.width, c.height, c.fps) : '')}<span class="game">${esc(c.group)}</span>${rec}${badges}
       <span class="len">${c.seconds.toFixed(1)}s</span>
       <button class="mini" data-act="up">↑</button><button class="mini" data-act="down">↓</button>
@@ -1932,7 +1941,7 @@ $('rList').addEventListener('click', async e => {
     await loadReel(); renderList();
   } else if (act === 'big') {
     const c = reelInfo.clips[i];
-    await fetch('/api/clips/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ big: !c.big ? 'trail' : c.big === 'trail' && (!sy.plan || sy.plan.can_3d) ? '3d' : false }) });
+    await fetch('/api/clips/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ big: bigNext(c.big) }) });
     await loadReel();
     const dc = data.clips.find(x => x.id === id), nb = reelInfo.clips.find(x => x.id === id);
     if (dc && nb) { dc.review.big = nb.big; if (data.clips[idx] === dc && cur) { cur.big = nb.big || ''; renderBig(); } }
@@ -2459,7 +2468,7 @@ function sySync() {
     const runUp = it.colour && it.hit != null && sy.t >= it.hit - it.colour && sy.t < it.hit;    // (the preview can only grey the whole picture)
     vid.style.filter = runUp ? 'grayscale(1) brightness(.88)' : '';
     if (hitNow) { tag = it.drop ? 'THE DROP' : 'HIT'; cls = 'hit'; }
-    else if (src.ghost) { tag = (it.ghost.kind === '3d' ? '3D FREEZE' : 'GHOST TRAIL') + ' (built with the reel)'; cls = 'fz'; }
+    else if (src.ghost) { tag = ({ '3d': '3D FREEZE', triple: 'TRIPLE HIT', replay: 'INSTANT REPLAY' }[it.ghost.kind] || 'GHOST TRAIL') + ' (built with the reel)'; cls = 'fz'; }
     else if (src.frozen) { tag = 'FREEZE'; cls = 'fz'; }
     else if (runUp) tag = 'ONLY HIM IN COLOUR (built with the reel)';
     else if (src.rate < 0.9) tag = 'SLOW-MO';

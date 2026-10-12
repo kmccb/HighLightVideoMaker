@@ -18,7 +18,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import applog, camera, coach, library, photo_slide, photos, profiles, project, proxy, reel, score, segment, youtube
+from . import applog, camera, coach, impact, library, photo_slide, photos, profiles, project, proxy, reel, score, segment, youtube
 from .config import DetectConfig
 from .pipeline import CACHE_DIRNAME
 
@@ -767,7 +767,7 @@ class ReviewApp:
             if "star" in patch:
                 patch["star"] = bool(patch["star"])
             if "big" in patch:                        # a big play's freeze: "trail", "3d", or not a big play
-                patch["big"] = patch["big"] if patch["big"] in ("trail", "3d") else "trail" if patch["big"] else False
+                patch["big"] = patch["big"] if patch["big"] in ("trail", "3d", *impact.KINDS) else "trail" if patch["big"] else False
             if "no_hit" in patch:
                 patch["no_hit"] = bool(patch["no_hit"])
             if "hit" in patch:

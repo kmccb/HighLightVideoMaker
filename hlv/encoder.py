@@ -26,8 +26,8 @@ def qsv() -> bool:
     return r.returncode == 0
 
 
-def h264(crf: int = 17, preset: str = "fast") -> list[str]:
+def h264(crf: int = 17, preset: str = "fast", software: bool = False) -> list[str]:
     """ffmpeg output args (codec, quality, pixel format) for x264-style quality crf."""
-    if qsv():
+    if qsv() and not software:
         return ["-c:v", "h264_qsv", "-global_quality", str(crf + 1), "-preset", "medium", "-pix_fmt", "nv12"]
     return ["-c:v", "libx264", "-preset", preset, "-crf", str(crf), "-pix_fmt", "yuv420p"]

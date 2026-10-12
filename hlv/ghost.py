@@ -503,8 +503,21 @@ def sound_track(path: Path, total: float, events: list[dict]) -> Path:
     ct = np.arange(int(0.35 * SR)) / SR
     tick = norm(_bandpass(rng.standard_normal(len(ct)), 2500, 9000) * np.exp(-ct / 0.03))
 
+    wt = np.arange(int(0.45 * SR)) / SR
+    ot = np.arange(int(2.2 * SR)) / SR
+    ohh = np.stack([_bandpass(rng.standard_normal(len(ot)), 300, 1100) + 0.5 * _bandpass(rng.standard_normal(len(ot)), 1100, 2600) for _ in range(2)], 1)
+    bank = {"boom": boom, "crack": crack, "air": air,
+            "whoosh": norm(_bandpass(rng.standard_normal(len(wt)), 500, 6000) * np.sin(np.pi * wt / 0.45) ** 2 * (1 + 0.5 * np.sin(2 * np.pi * 30 * wt))),
+            "ohh": norm(ohh * (np.clip(ot / 0.25, 0, 1) * np.exp(-np.clip(ot - 0.5, 0, None) / 0.6) * (1 + 0.2 * np.sin(2 * np.pi * 1.3 * ot)))[:, None])}
+
     for ev in events:
         th = float(ev["t"])
+        if ev.get("sounds"):                                     # a hit effect (impact.py) brings its own
+            if not ev.get("drop"):
+                place(boom, th, 0.5)
+                place(crack, th, 0.3)
+            for name, at, gain in ev["sounds"]:
+                place(bank[name], th + at, gain)
         if ev.get("drop"):
             place(riser, th - GAP - 1.3, 0.5)
             place(boom, th, 0.6)

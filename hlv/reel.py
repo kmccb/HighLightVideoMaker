@@ -18,7 +18,7 @@ from xml.sax.saxutils import escape
 
 import numpy as np
 
-from . import colour, encoder, ghost, graphics, recut, library, outro, parallax, photo_slide, photos, profiles, project, segment
+from . import colour, encoder, ghost, graphics, impact, recut, library, outro, parallax, photo_slide, photos, profiles, project, segment
 
 # Beat choice: per second away from the play's natural timing, and extra per second of
 # stretching. With beats ~0.5 s apart, a beat one step further must be ~0.5 stronger.
@@ -147,10 +147,16 @@ def _colour_one(root: str, clip: dict, seg: str, size=None) -> tuple[str, int] |
     return (str(r[0]), r[1]) if r else None
 
 
+def _impact_one(root: str, clip: dict, seg: str, kind: str, period: float | None, size=None) -> str | None:
+    p = impact.render(Path(root), clip, Path(seg), kind, period, size)
+    return str(p) if p else None
+
+
 def big_kind(clip: dict) -> str | None:
-    """A big play's freeze on its hit: "trail" (ghost trail), "3d" (3D freeze), or None (not a big play)."""
+    """A big play's effect on its hit: "trail" (ghost trail), "3d" (3D freeze), one of impact.KINDS
+    (shockwave, impact frames, triple hit, instant replay), or None (not a big play)."""
     b = (clip.get("review") or {}).get("big")
-    return None if not b else "3d" if b == "3d" else "trail"
+    return None if not b else b if b == "3d" or b in impact.KINDS else "trail"
 
 
 def big_play(clip: dict) -> bool:
@@ -218,6 +224,8 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     fx_on = settings.get("ghost_trail", True)
     want_ghost = {i for i, k in big.items() if k == "trail"} if fx_on else set()
     want_3d = {i for i, k in big.items() if k == "3d"} if fx_on and parallax.available() else set()
+    want_fx = {i: k for i, k in big.items() if k in impact.KINDS} if fx_on else {}
+    fx_clips: dict[str, Path] = {}
     want_drop = set(big) if settings.get("drop", True) else set()
     period = beat_period(root, settings)
     ghost_s = ghost.seconds(period)
@@ -253,8 +261,13 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
                 say("ghost trail", done, total)
                 continue
             if kind == "play":
-                seg_paths[i] = Path(f.result())
                 name = clips[i]["source"]
+                try:
+                    seg_paths[i] = Path(f.result())
+                except Exception as e:
+                    for o in futs:             # don't sit through the plays still queued before saying so
+                        o.cancel()
+                    raise RuntimeError(f"{name.split('/')[-1]} could not be rendered: {e}") from e
             else:
                 name = pics[i]["source"]
                 try:
@@ -268,8 +281,8 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
     # "Only him in colour": the run into the hit, remade from the play's own rendered segment.
     want_colour = set(big) if settings.get("colour", True) and parallax.available() else set()
     colour_runs: dict[str, tuple[Path, int]] = {}
-    if want_3d or want_colour:                        # one at a time: each holds a model and a few seconds of frames
-        total += len(want_3d) - sum(1 for k in big.values() if k == "3d") + len(want_colour)
+    if want_3d or want_colour or want_fx:             # one at a time: each holds a model and a few seconds of frames
+        total += len(want_3d) - sum(1 for k in big.values() if k == "3d") + len(want_colour) + len(want_fx)
         with ProcessPoolExecutor(1) as ex:
             for c, sp in zip(clips, seg_paths):
                 if c["id"] in want_colour:
@@ -281,6 +294,15 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
                         print(f"  only-him-in-colour skipped ({c['id']}): {e}", flush=True)
                     done += 1
                     say("only him in colour", done, total)
+                if c["id"] in want_fx:
+                    try:
+                        rf = ex.submit(_impact_one, str(root), c, str(sp), want_fx[c["id"]], period, fx_size).result()
+                        if rf:
+                            fx_clips[c["id"]] = Path(rf)
+                    except Exception as e:  # noqa: BLE001 - the play still goes in, without the effect
+                        print(f"  {impact.NAMES[want_fx[c['id']]]} skipped ({c['id']}): {e}", flush=True)
+                    done += 1
+                    say(impact.NAMES[want_fx[c["id"]]], done, total)
                 if c["id"] not in want_3d:
                     continue
                 try:
@@ -386,6 +408,10 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
             cd = seg_dir / f"{i:02d}_{c['id']}_colour.mp4"
             _link_or_copy(colour_runs[c["id"]][0], cd)
             colour_runs[c["id"]] = (cd, colour_runs[c["id"]][1])
+        if c["id"] in fx_clips:
+            fd = seg_dir / f"{i:02d}_{c['id']}_{want_fx[c['id']]}.mp4"
+            _link_or_copy(fx_clips[c["id"]], fd)
+            fx_clips[c["id"]] = fd
 
     # 3) timing: nominal, or fitted so each hit lands on a strong beat
     _, d = TRANSITIONS[transition]
@@ -402,7 +428,8 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
                       "post_nom": lay.get("post_nom", t_out - lay.get("split", snap)),
                       "hit": _hit_in_play(lay, hits.hit_of(root, c)[0], snap)})
         _big_meta(metas[-1], c["id"] in want_drop, ghost_paths.get(c["id"]), ghost_pops.get(c["id"]), ghost_s, fx_kind.get(c["id"]),
-                  colour_runs.get(c["id"]))
+                  colour_runs.get(c["id"]),
+                  (fx_clips[c["id"]], want_fx[c["id"]], impact.spec(want_fx[c["id"]], period)) if c["id"] in fx_clips else None)
     d0 = 0.0 if burst_mov else d                     # a burst is a hard cut on the hit, not a crossfade
     marks = recut.landmarks(music, root / ".hlv_cache") if (grid and music and not composing and settings.get("recut", True)
                                                             and any(m.get("drop") for m in metas)) else None
@@ -418,7 +445,7 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         pieces = [(p, a - tm["lead"], tm["lead"])]
         if tm["fz"] > 0:
             pieces.append((p, a, tm["fz"]))
-        if m.get("ghost") or m.get("colour"):        # a big play: its run-up in black and white but for him,
+        if m.get("ghost") or m.get("colour") or m.get("fx"):   # a big play: its run-up in black and white but for him,
             hb = _fr(m["hit"])                       # then it stops on the hit for the freeze
             run = m["colour"][1] / segment.FPS if m.get("colour") else 0.0
             pieces.append((p, a + f, hb - run))
@@ -426,7 +453,11 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
                 pieces.append((m["colour"][0], 0.0, run))
             if m.get("ghost"):
                 pieces.append((m["ghost"], 0.0, m["extra"]))
-            pieces.append((p, a + f + hb, tm["post"] - hb))
+            rep = 0.0
+            if m.get("fx"):                          # a hit effect: its clip stands in for the first moments after the hit
+                rep = m["fx"][2]["rep"] / segment.FPS
+                pieces.append((m["fx"][0], 0.0, rep + float(m.get("extra") or 0.0)))
+            pieces.append((p, a + f + hb + rep, tm["post"] - hb - rep))
         else:
             pieces.append((p, a + f, tm["post"]))
         items.append(pieces)
@@ -459,8 +490,8 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         gains[-1] = 1.0                             # the ending's own sound (hammer / quench) at full level
         duck = CREDIT_S                             # ... with the music pulled down under it
     events = [{"t": tm["hit_reel"], "drop": bool(m.get("drop")), "pops": m.get("pops"), "len": m.get("extra"),
-               "swing": m.get("kind") == "3d"}
-              for m, tm in zip(metas, timing) if m.get("drop") or m.get("ghost")]
+               "swing": m.get("kind") == "3d", "sounds": m["fx"][2]["sounds"] if m.get("fx") else None}
+              for m, tm in zip(metas, timing) if m.get("drop") or m.get("ghost") or m.get("fx")]
     if jsrc is not None:                              # the song drops on the Journey's cut to "now"
         events.insert(0, {"t": jplan["cut"], "drop": True, "pops": None, "len": None})
     sfx = ghost.sound_track(seg_dir / "big_plays.wav", max(e["t"] for e in events) + ghost_s + 4, events) if events else None
@@ -504,7 +535,7 @@ def output_name(player_id: str, vertical: bool = False, recruiting: bool = False
 
 
 def _big_meta(m: dict, drop: bool, ghost_clip: Path | None, pops: list | None, ghost_s: float,
-              kind: str | None = None, colour_run: tuple | None = None) -> None:
+              kind: str | None = None, colour_run: tuple | None = None, fx: tuple | None = None) -> None:
     """Add a big play's effects to its timing meta: "drop" (silence, then the boom, on the hit) and
     "ghost" / "extra" (the freeze clip cut in at the hit and how long it holds the reel up)."""
     if m["hit"] <= 0:
@@ -514,6 +545,10 @@ def _big_meta(m: dict, drop: bool, ghost_clip: Path | None, pops: list | None, g
         m["ghost"], m["extra"], m["pops"], m["kind"] = ghost_clip, ghost_s, pops or [], kind or "trail"
     if colour_run is not None and m["hit"] + 0.3 < m["lay"]["b_frames"] / segment.FPS:
         m["colour"] = colour_run                                 # (clip, frames): replaces that much of the play before the hit
+    if fx is not None and m["hit"] + impact.TAIL <= m["lay"]["b_frames"] / segment.FPS:
+        m["fx"], m["kind"], m["tail"] = fx, fx[1], impact.TAIL   # (clip, kind, impact.spec): replaces the moments after the hit
+        if fx[2]["extra"]:
+            m["extra"] = fx[2]["extra"] / segment.FPS            # ... and, for a triple hit or a replay, holds the reel up
 
 
 def _hit_in_play(lay: dict, hit: float | None, snap: float) -> float:
@@ -620,6 +655,7 @@ def preview_plan(root: Path) -> dict:
         # A freeze not made yet is assumed to work out (the build makes it). A trail that can't be made
         # (he hardly moves) becomes a 3D freeze, as in the build.
         kind, made = big.get(c["id"]) if fx_on else None, {"none": "off"}
+        fx = (None, kind, impact.spec(kind, period)) if kind in impact.KINDS else None
         if kind == "trail":
             made = ghost.status(root, c, pl, hit, ghost_s, period)
             if (made or {}).get("none") and can_3d:
@@ -628,7 +664,7 @@ def preview_plan(root: Path) -> dict:
             made = parallax.status(root, c, pl, hit, ghost_s)
         n_col = colour.frames(lay["hit_b"]) if c["id"] in big and settings.get("colour", True) and can_3d else 0
         _big_meta(metas[-1], c["id"] in want_drop, None if (made or {}).get("none") else Path("freeze"),
-                  (made or {}).get("pops"), ghost_s, kind, (None, n_col) if n_col else None)
+                  (made or {}).get("pops"), ghost_s, kind, (None, n_col) if n_col else None, fx)
         pending += made is None and "ghost" in metas[-1]
         extra.append({"exact": known, "hit_set": hit_set, "big": big.get(c["id"]) or False})
     _, d = TRANSITIONS[transition]
@@ -665,7 +701,10 @@ def preview_plan(root: Path) -> dict:
                       "drop": bool(m.get("drop")),
                       "colour": round(m["colour"][1] / segment.FPS, 3) if m.get("colour") else 0,
                       "ghost": {"at": round(tm["lead"] + tm["fz"] + _fr(m["hit"]), 3), "len": m["extra"],
-                                "pops": m.get("pops") or [], "kind": m.get("kind")} if m.get("ghost") else None,
+                                "pops": m.get("pops") or [], "kind": m.get("kind")} if m.get("ghost") else
+                      {"at": round(tm["lead"] + tm["fz"] + _fr(m["hit"]) + m["fx"][2]["at"] / segment.FPS, 3), "len": m["extra"],
+                       "pops": [], "kind": m["kind"]} if m.get("fx") and m.get("extra") else None,
+                      "fx": m["kind"] if m.get("fx") else None,
                       **x})
     k = len(entries) + 1
     items.append({"kind": "end", "start": round(starts[k], 3), "end": round(starts[k] + durs[k], 3)})
@@ -777,12 +816,13 @@ def plan_timing(metas: list[dict], grid: dict | None, music_start: float, t_firs
                 fz = float(np.clip(shift - lead, fz_lo, fz_hi)) if has_fz else 0.0
         lead, fz = _fr(lead), _fr(fz)
         b_max = lay["b_frames"] / segment.FPS
-        post = _fr(float(np.clip(max(m["post_nom"], h + 0.8) if h > 0 else m["post_nom"], 0.5, b_max)))
+        tail = float(m.get("tail") or 0.8)        # what a play keeps after its hit (more when an effect clip sits there)
+        post = _fr(float(np.clip(max(m["post_nom"], h + tail) if h > 0 else m["post_nom"], 0.5, b_max)))
         hit_reel = t + lead + fz + h
         if beat is not None:
             err = round(hit_reel - beat, 3)
         nominal = lead_nom + fz_nom
-        min_post = max(h + 0.8, 0.5) if h > 0 else 0.5
+        min_post = max(h + tail, 0.5) if h > 0 else 0.5
         prev_grow, prev_shrink = max(0.0, b_max - post), max(0.0, post - min_post)
         out.append({"lead": lead, "fz": fz, "post": post, "hit_reel": round(hit_reel, 3),
                     "shift": round(lead + fz - nominal, 3),

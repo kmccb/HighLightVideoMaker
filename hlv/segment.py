@@ -11,6 +11,7 @@ from __future__ import annotations
 import hashlib
 import json
 import subprocess
+import tempfile
 from pathlib import Path
 
 import cv2
@@ -193,7 +194,11 @@ def render(root: Path, clip: dict, pl: dict | None, settings: dict, log=print) -
     if out.exists() and out.with_suffix(".json").exists():
         return out
     out.parent.mkdir(parents=True, exist_ok=True)
-    _render(src, clip, pl, settings, plan, out)
+    try:
+        _render(src, clip, pl, settings, plan, out)
+    except RuntimeError as e:      # the hardware encoder now and then quits mid-play: once more, in software
+        print(f"  {e}; trying again with the software encoder", flush=True)
+        _render(src, clip, pl, settings, plan, out, software=True)
     return out
 
 
@@ -255,7 +260,7 @@ def _vertical_rects(rects: np.ndarray, player: np.ndarray | None, W: int, H: int
     return out
 
 
-def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, out: Path) -> None:
+def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, out: Path, software: bool = False) -> None:
     vertical = settings.get("_aspect") == "9:16"
     OW, OH = VERTICAL if vertical else (graphics.W, graphics.H)
     info = probe(src)
@@ -388,8 +393,9 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
         labels.append(f"[q{n_pc}]")
     fc.append("".join(labels) + f"concat=n={len(labels)}:v=0:a=1,atrim=0:{total_out:.4f}[aout]")
     cmd += ["-filter_complex", ";".join(fc), "-map", "0:v", "-map", "[aout]",
-            *encoder.h264(17), "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out)]
-    enc = subprocess.Popen(cmd, stdin=subprocess.PIPE)
+            *encoder.h264(17, software=software), "-c:a", "aac", "-b:a", "192k", "-shortest", "-movflags", "+faststart", str(out)]
+    enc_err = tempfile.TemporaryFile()
+    enc = subprocess.Popen(cmd, stdin=subprocess.PIPE, stderr=enc_err)
 
     vf = ([f"crop={crop['w']}:{crop['h']}:{crop['x']}:{crop['y']}"] if crop else []) + [f"fps={D}", "format=bgr24"]
     dec = subprocess.Popen(["ffmpeg", "-v", "error", "-ss", f"{t0:.3f}", "-i", str(src), "-t", f"{dur:.3f}",
@@ -430,7 +436,7 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
                 img = interp.between(img, img_b, frac, key=n)
         return img, rect
 
-    written = 0
+    written, broke = 0, False
     hit_k = next((i for i, t in enumerate(post) if hit_t is not None and t >= hit_t), None) if fx else None
     try:
         for t in pre:
@@ -475,13 +481,24 @@ def _render(src: Path, clip: dict, pl: dict | None, settings: dict, plan: dict, 
                     img[:] = (img.astype(np.float32) * (1 - a) + 255 * a).astype(np.uint8)
             enc.stdin.write(img.tobytes())
             written += 1
+    except OSError:                # the encoder went away (on Windows a write to its closed pipe is EINVAL)
+        broke = True
     finally:
+        if broke:
+            dec.kill()
         dec.stdout.close()
         dec.wait()
-        enc.stdin.close()
+        try:
+            enc.stdin.close()
+        except OSError:
+            pass
         enc.wait()
-    if enc.returncode != 0 or not out.exists():
-        raise RuntimeError(f"segment render failed for {clip['source']}")
+        enc_err.seek(0)
+        why = enc_err.read().decode("utf-8", "replace").strip()[-600:]
+        enc_err.close()
+    if broke or enc.returncode != 0 or not out.exists():
+        out.unlink(missing_ok=True)
+        raise RuntimeError(f"segment render failed for {clip['source']}" + (f": {why}" if why else ""))
     t_in, t_out, _ = _window(clip)
     b_frames = max(0, written - len(pre) - nfz)
     out.with_suffix(".json").write_text(json.dumps({
