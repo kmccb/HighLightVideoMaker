@@ -67,6 +67,9 @@ Tom approved the Claude Design canvas "Highlight Reel Maker — Design Review" (
 - **Fixed 2026-10-09:** the vertical (9:16) build failed at "animating the intro" with `cannot convert float NaN to integer`: in `burst._bricks` the bottom-corner bricks were farther from the burst centre (at 47% height) than `maxd`, so `near` went negative and `near ** 1.5` was NaN. `maxd` now measures to the farthest corner and `near` is clamped at 0 (`tests/test_burst.py`).
 - `.claude/launch.json` has a `review-test` config on port 8766, for testing UI changes without touching Tom's server on 8765.
 
+## Sales website: ScottForge Reels (2026-10-12)
+Tom is selling done-for-you reels. The site is its own repo at `C:\Users\tom\Claude\ScottForgeReels` (read its README) and is **live at https://reels.scottforge.ai on Cloudflare Pages** (project `scottforge-reels`; deploy with `npx wrangler pages deploy public --project-name scottforge-reels --branch main`). The order form emails the order via Resend; payment is by PayPal / Venmo / Zelle / Cash App for now (Stripe checkout is built but switched off until Tom has his LLC). Two tiers, Basic and Spotlight, priced by play count (10/20/30); recruiting packages deliberately left for later. Spec and plan: `docs\superpowers\` (2026-10-12-scottforge-reels-site). Local preview: `preview_start name=reels-site` (port 3210). The hero loop and both sample reels are Caleb's (samples in `Claude outputs\Sales site samples\`; the hero's ring-free big plays came from a scratch build with highlight off). Its `/privacy` page is the one the YouTube API review needs. Backed up in the private GitHub repo kmccb/ScottForgeReels (pushing does not deploy; run the wrangler command). forgedreels.com / forgedreel.com not bought yet.
+
 ## Built so far (all working)
 | Phase | What | Key files |
 |---|---|---|
