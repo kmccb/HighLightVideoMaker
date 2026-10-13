@@ -18,7 +18,7 @@ from http import HTTPStatus
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
-from . import applog, camera, coach, impact, library, photo_slide, photos, profiles, project, proxy, reel, score, segment, youtube
+from . import applog, camera, coach, impact, library, photo_slide, photos, profiles, project, proxy, reel, score, segment, watermark, youtube
 from .config import DetectConfig
 from .pipeline import CACHE_DIRNAME
 
@@ -42,6 +42,7 @@ class ReviewApp:
         self.cfg: DetectConfig | None = None
         self.jobs = jobs
         self.job = {"state": "idle"}
+        self.preview_job = {"state": "idle"}     # making a watermarked preview of a finished video
         self._gen = 0          # bumps on every project switch; background work for older ones stops
         self.setup = {"state": "idle"}     # new-project setup job
         self.music_job = {"state": "idle"}  # YouTube download job
@@ -362,7 +363,8 @@ class ReviewApp:
                 for ph in proj.get("photos") or []]
         return {"pad_before": self.cfg.pad_before, "pad_after": self.cfg.pad_after,
                 "settings": project.settings(proj), "clips": out, "photos": pics,
-                "folder": str(self.root), "new_videos": self.new_videos(proj)}
+                "folder": str(self.root), "new_videos": self.new_videos(proj),
+                "sport": profiles.sport_of(profiles.get(library.home(), project.settings(proj).get("player")))}
 
     # ---------------- reel ----------------
     @staticmethod
@@ -430,6 +432,7 @@ class ReviewApp:
             "clips": rows, "job": self.job, "photo_count": sum(1 for r in rows if r.get("type") == "photo"),
             "last_reel": self._reel_entry(s), "last_vertical": self._reel_entry(s, True),
             "outputs": self._outputs(s), "recruit_max_s": reel.RECRUIT_MAX_S,
+            "sport": profiles.sport_of(pl),
         }
 
     def _outputs(self, s: dict) -> list[dict]:
@@ -459,6 +462,11 @@ class ReviewApp:
                                         "label": f"For {c['school']}" + (f" ({c['coach']})" if c["coach"] else "")
                                         + (" · vertical 9:16" if vert else ""),
                                         "built": built.isoformat(timespec="minutes")})
+        for o in out:                                 # a watermarked preview made from it, if there is one
+            p = watermark.preview_path(Path(o["path"]))
+            if p.exists():
+                o["preview"] = {"file": p.name, "built": datetime.fromtimestamp(p.stat().st_mtime).isoformat(timespec="minutes"),
+                                "stale": p.stat().st_mtime < Path(o["path"]).stat().st_mtime}
         return sorted(out, key=lambda o: o["built"], reverse=True)
 
     # ---------------- player profiles ----------------
@@ -640,6 +648,31 @@ class ReviewApp:
         else:
             raise ValueError("unknown action")
         return {"ok": True, "path": str(f)}
+
+    def make_preview(self, file: str) -> dict:
+        """Start making the watermarked preview of one finished video (smaller, marked PREVIEW), to send
+        before the customer has paid. Runs in the background; the page polls preview_job."""
+        self._need()
+        if not re.fullmatch(r"[A-Za-z0-9_.-]+\.mp4", file or "") or watermark.is_preview(Path(file)):
+            raise ValueError("bad file name")
+        f = self.root / reel.OUT_DIRNAME / file
+        if not f.exists():
+            raise ValueError("that video isn't there any more - build the reel again")
+        if self.preview_job.get("state") == "running":
+            return self.preview_job
+        self.preview_job = job = {"state": "running", "file": file, "preview": None, "error": None}
+
+        def work():
+            try:
+                out = watermark.make(f)
+                job.update(state="done", preview=out.name)
+                applog.say(f"preview: made {out.name}")
+            except Exception as e:  # noqa: BLE001 - shown to Tom on the page
+                applog.say(f"preview failed: {e}\n{traceback.format_exc()}")
+                job.update(state="error", error=str(e))
+
+        threading.Thread(target=work, daemon=True).start()
+        return job
 
     def youtube_publish(self, body: dict) -> dict:
         """Upload ticked finished videos of this project: [{file, title}] + the shared description + visibility."""
@@ -1124,6 +1157,8 @@ def make_handler(app: ReviewApp):
                     return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
             if path == "/api/reel/status":
                 return self._json(app.job)
+            if path == "/api/reel/watermark":
+                return self._json(app.preview_job)
             m = re.fullmatch(r"/media/compose/(demo-[a-z]+-\d+-v\d+\.wav)", path)
             if m:
                 return self._file(library.home() / "cache" / "compose" / m.group(1), "audio/wav")
@@ -1231,6 +1266,11 @@ def make_handler(app: ReviewApp):
                     return self._json(app.open_folder() if self.path.endswith("folder") else app.add_new_videos())
                 except ValueError as e:
                     return self._json({"error": str(e)}, HTTPStatus.CONFLICT)
+            if self.path == "/api/reel/watermark":
+                try:
+                    return self._json(app.make_preview(str((json.loads(self.rfile.read(n) or b"{}") or {}).get("file") or "")))
+                except ValueError as e:
+                    return self._json({"error": str(e)}, HTTPStatus.BAD_REQUEST)
             if self.path == "/api/reel/reveal":
                 try:
                     body = json.loads(self.rfile.read(n) or b"{}")

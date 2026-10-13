@@ -140,6 +140,7 @@ function render() {
   document.querySelectorAll('.tabs button').forEach(b => b.classList.toggle('on', b.dataset.tab === tab));
   $('help').textContent = tab === 'player'
     ? 'Click your player in each frame (drag a box if he looks much bigger or smaller than usual). It opens at the snap; if he is hidden there, step a little with the arrows. Tracking starts on its own.'
+    : data.sport === 'basketball' ? 'Click the frame with the key moment: the release or the finish on a score, the steal, the block, the pass on an assist. The dashed frame is the app’s guess (Use suggestion takes it). ± nudges a tenth of a second. ✕ = this play has none.'
     : 'Click the frame with the hit: contact or tackle on defense, the catch or big move on offense. The dashed frame is the app’s guess (Use suggestion takes it). ± nudges a tenth of a second. ✕ = this play has no hit.';
   const clips = data.clips.filter(included);
   const need = clips.filter(c => tab === 'player' ? !playerOk(c) : !hitOk(c));
@@ -300,7 +301,7 @@ function hitCard(c) {
     <div class="strip"><img alt=""><div class="sug" hidden></div><div class="sel" hidden></div><div class="hov" hidden></div></div>
     <div class="ctl"><button data-n="-0.1">− 0.1s</button><span class="t"></span><button data-n="0.1">+ 0.1s</button>
       <span class="side" title="Which side of the ball he is on in this play: the hit means contact/tackle on defense, the catch or big move on offense. Suggestions learn each side separately."><button data-side="O">Offense</button><button data-side="D">Defense</button></span>
-      <select data-big title="Big play: an effect on this play's hit. For a run: Trail (copies of him along his path) or 3D (the camera swings round him). For a hit: Shockwave, Impact frames, Triple hit (three times on three beats) or Instant replay."><option value="">&#9889; Big play: off</option><option value="trail">&#9889; Trail</option><option value="3d">&#9889; 3D</option><option value="shock">&#9889; Shockwave</option><option value="frames">&#9889; Impact frames</option><option value="triple">&#9889; Triple hit</option><option value="replay">&#9889; Instant replay</option></select>
+      <select data-big title="Big play: an effect on this play's hit. For a run: Trail (copies of him along his path) or 3D (the camera swings round him). For a hit: Shockwave, Impact frames, Triple hit (three times on three beats) or Instant replay."><option value="">&#9889; Big play: off</option><option value="trail">&#9889; Trail</option><option value="3d">&#9889; 3D</option>${data.sport === 'basketball' ? '' : '<option value="shock">&#9889; Shockwave</option><option value="frames">&#9889; Impact frames</option>'}<option value="triple">&#9889; Triple hit</option><option value="replay">&#9889; Instant replay</option></select>
       <span class="grow"></span><button data-act="sug" hidden title="the app’s guess (dashed outline), learned from the hits you've marked">Use suggestion</button><button data-act="nohit" title="no hit on this play: no punch, no slow-mo, timing left alone">✕ No hit</button></div>`;
   const strip = el.querySelector('.strip'), simg = strip.querySelector('img'), sel = strip.querySelector('.sel'), hov = strip.querySelector('.hov');
   const big = el.querySelector('.big img');

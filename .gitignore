@@ -13,3 +13,6 @@ previews/
 *.mp3
 
 hlv/models/
+
+.superpowers/
+Claude outputs/

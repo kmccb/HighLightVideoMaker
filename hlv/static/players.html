@@ -191,7 +191,12 @@ function render() {
           <div class="grid2">
             ${field('name', 'Name', 'Caleb Scott', true)}
             ${field('number', 'Jersey number', '22')}
-            ${field('position', 'Position', 'LB / RB')}
+            ${field('position', 'Position', (players[sel].sport === 'basketball') ? 'G / F' : 'LB / RB')}
+            <label class="f">Sport
+              <select data-k="sport" title="Changes the app's wording (snap / start, hit / key moment) and which big-play effects are offered for this player's projects">
+                <option value="football"${players[sel].sport === 'basketball' ? '' : ' selected'}>Football</option>
+                <option value="basketball"${players[sel].sport === 'basketball' ? ' selected' : ''}>Basketball</option>
+              </select></label>
             ${field('class_year', 'Class of (year)', '2029')}
             ${field('height_weight', 'Height / weight', '6\'0" 180')}
             ${field('tagline', 'Line under the name (optional, replaces position · class of · size)', '2026 Highlights', true)}

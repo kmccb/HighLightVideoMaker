@@ -70,3 +70,10 @@ def test_ring_and_song_jump_are_off_until_ticked():
     s = project.settings({})
     assert s["freeze_ring"] is False and s["recut"] is False
     assert project.settings({"settings": {"freeze_ring": True, "recut": True}})["recut"] is True
+
+
+def test_sport_defaults_to_football():
+    from hlv import profiles
+    assert profiles.sport_of(None) == "football" and profiles.sport_of({"sport": ""}) == "football"
+    assert profiles.sport_of({"sport": "Basketball"}) == "basketball" and profiles.sport_of({"sport": "curling"}) == "football"
+    assert "sport" in profiles.FIELDS

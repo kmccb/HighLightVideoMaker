@@ -93,7 +93,7 @@ video { display: block; max-width: 100%; max-height: 58vh; }
 .tl-hit { position: absolute; top: 2px; bottom: 14px; width: 0; border-left: 2px solid var(--hit); pointer-events: none; }
 .tl-hit.auto { border-left-style: dashed; opacity: .6; }
 .tl-hit.tl-trail { border-left-color: var(--accent-hi); } .tl-hit.tl-trail span { color: var(--accent-hi); top: 10px; }
-.insp .tg-btns .btn[hidden] { display: none; }
+.insp .tg-btns .btn[hidden], #bigPick button[hidden] { display: none; }
 .insp #bTrA .val, .insp #bTrB .val { color: var(--accent-hi); }
 .tl-hit span { position: absolute; top: -1px; left: 4px; font: 700 10px var(--mono); color: var(--hit); }
 
@@ -576,6 +576,7 @@ body.plays-narrow .item.big .vthumb::after { content: '\26A1'; position: absolut
 #rResult .reel-actions { background: var(--rail); border: 1px solid var(--line); border-radius: var(--r-lg); padding: 12px 14px; gap: 8px 10px; }
 #rResult .reel-actions > b { flex: 1 1 100%; font-size: 15px; }
 #rResult .reel-actions + .hint { margin: -6px 0 0 14px; }
+#rResult .hint.pvw { margin: -2px 0 0 14px; display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 #rResult .reel-actions + .hint code { font-size: 11px; color: var(--faint); background: none; border: 0; padding: 0; word-break: break-all; }
 #reel.pub #ytBox { margin: 0; background: var(--rail); border-radius: var(--r-lg); padding: 16px; position: sticky; top: 0; }
 #ytBox h3 { font: 700 20px/1 var(--display) !important; text-transform: uppercase; letter-spacing: .03em; }
@@ -701,7 +702,7 @@ body.plays-narrow .item.big .vthumb::after { content: '\26A1'; position: absolut
       <canvas class="tl-conf" id="tlConf"></canvas>
       <div id="tlRingOff"></div>
       <div id="tlAnchors"></div>
-      <div class="tl-hit" id="mHit"><span>HIT</span></div>
+      <div class="tl-hit" id="mHit"><span data-w="HIT">HIT</span></div>
       <div class="tl-hit tl-trail" id="mTrA" style="display:none"><span>TRAIL</span></div>
       <div class="tl-hit tl-trail" id="mTrB" style="display:none"><span>FREEZE</span></div>
       <div class="tl-head" id="tlHead"></div>
@@ -712,8 +713,8 @@ body.plays-narrow .item.big .vthumb::after { content: '\26A1'; position: absolut
       <div><kbd>Space</kbd> play / pause</div>
       <div><kbd>←</kbd><kbd>→</kbd> step 1 frame</div>
       <div><kbd>Shift</kbd>+<kbd>←</kbd><kbd>→</kbd> jump 0.5 s</div>
-      <div><kbd>S</kbd> / <kbd>E</kbd> set snap / end here</div>
-      <div><kbd>[</kbd> / <kbd>]</kbd> go to snap / end</div>
+      <div><kbd>S</kbd> / <kbd>E</kbd> set <span data-w="snap">snap</span> / end here</div>
+      <div><kbd>[</kbd> / <kbd>]</kbd> go to <span data-w="snap">snap</span> / end</div>
       <div><kbd>1</kbd><kbd>2</kbd><kbd>3</kbd> speed ¼ · ½ · 1×</div>
       <div><kbd>P</kbd> preview the trimmed clip</div>
       <div><kbd>X</kbd> include in reel / leave out (or the tick box in the clip list)</div>
@@ -736,7 +737,7 @@ body.plays-narrow .item.big .vthumb::after { content: '\26A1'; position: absolut
     <div class="controls">
       <div class="tgroup"><span class="hr-eyebrow">Trim the play</span><div class="tg-btns">
           <button class="btn" id="bPlay"><kbd>Space</kbd> Play</button>
-          <button class="btn snap" id="bSnap"><kbd>S</kbd> Snap <span class="val" id="vSnap">–</span></button>
+          <button class="btn snap" id="bSnap"><kbd>S</kbd> <span data-w="Snap">Snap</span> <span class="val" id="vSnap">–</span></button>
           <button class="btn end" id="bEnd"><kbd>E</kbd> End <span class="val" id="vEnd">–</span></button>
           <button class="btn" id="bWin"><kbd>P</kbd> Play clip window</button>
       </div></div>
@@ -748,7 +749,7 @@ body.plays-narrow .item.big .vthumb::after { content: '\26A1'; position: absolut
           <button class="btn" id="bRing" title="Hide the highlight from here (e.g. once he's in a pile); press again where it should come back"><kbd>O</kbd> <span id="ringLbl">Ring off here</span></button>
       </div></div>
       <div class="tgroup"><span class="hr-eyebrow">Big moment</span><div class="tg-btns">
-          <button class="btn hit" id="bHit" title="K marks the hit at the playhead"><kbd>K</kbd> Hit <span class="val" id="vHit">–</span><span class="x" id="bNoHit" title="No hit on this play: no punch, no slow-mo, timing left alone (N)">✕</span></button>
+          <button class="btn hit" id="bHit" title="K marks the hit at the playhead"><kbd>K</kbd> <span data-w="Hit">Hit</span> <span class="val" id="vHit">–</span><span class="x" id="bNoHit" title="No hit on this play: no punch, no slow-mo, timing left alone (N)">✕</span></button>
           <div class="bigpick"><span class="bp-l">&#9889; Big play</span>
             <span class="segctl" id="bigPick" role="group" aria-label="Big play"><button data-v="" title="A normal play">Off</button><button data-v="trail" title="On the hit the picture freezes and copies of your player appear along the path he ran">Trail</button><button data-v="3d" title="On the hit the picture freezes and the camera swings round him, with his name">3D</button><button data-v="shock" title="For a big hit: a shockwave spreads from the contact, with a hard shake">Shock</button><button data-v="frames" title="For a big hit: a flash of black-and-white comic-book frames with speed lines">Impact</button><button data-v="triple" title="For a big hit: the hit plays three times on three beats, closer each time">Triple</button><button data-v="replay" title="For a big hit: the tape runs back and the hit plays again in slow motion">Replay</button></span></div>
           <button class="btn" id="bTrA" hidden title="The trail begins at the playhead instead of the snap. The x puts it back on the snap.">Trail starts <span class="val" id="vTrA"></span><span class="x" id="xTrA" title="Back to the snap">✕</span></button>
@@ -1070,6 +1071,7 @@ async function load() {
   const res = await fetch('/api/clips');
   if (res.status === 409) { location = '/'; return; }   // no project open
   data = await res.json();
+  applySport(data.sport);
   renderFolder();
   fetch('/api/project/play_counts').then(r => r.json()).then(pc => { data.play_counts = pc; renderFolder(); }).catch(() => {});
   fetch('/api/projects').then(r => r.json()).then(pi => {
@@ -1081,6 +1083,18 @@ async function load() {
   select(first < 0 ? 0 : first);
 }
 
+// The player's sport changes a few words and which big-play effects are offered (profiles.sport_of).
+const SPORT_WORDS = { football: { snap: 'snap', Snap: 'Snap', hit: 'hit', Hit: 'Hit', HIT: 'HIT' },
+  basketball: { snap: 'start', Snap: 'Start', hit: 'key moment', Hit: 'Moment', HIT: 'KEY' } };
+const SPORT_KINDS = { basketball: ['trail', '3d', 'triple', 'replay'] };      // not listed = every kind
+let W = SPORT_WORDS.football, sport = 'football';
+function applySport(s) {
+  sport = SPORT_WORDS[s] ? s : 'football'; W = SPORT_WORDS[sport];
+  document.body.dataset.sport = sport;
+  document.querySelectorAll('[data-w]').forEach(e => { e.textContent = W[e.dataset.w]; });
+  const ok = SPORT_KINDS[sport];
+  document.querySelectorAll('#bigPick button').forEach(b => { b.hidden = !!(ok && b.dataset.v && !ok.includes(b.dataset.v)); });
+}
 // What a play is called: the name typed for it (review.notes), else its file name. (shell.js has the same for the other pages.)
 const hrClipName = (c, s) => String((s || c.review || {}).notes || '').trim().replace(/\s+/g, ' ') || c.source.split('/').pop();
 // A big play's effect on its hit: [short label, what happens]
@@ -1157,10 +1171,10 @@ function renderList() {
     const len = Math.max(0, s.end - s.snap) + pads;
     const bits = [];
     if (s.keep !== false && !s.labeled) bits.push('<span class="s-need">not confirmed</span>');
-    else if (needsYou(c, s)) bits.push('<span class="s-need">' + (spotAtSnap(s) ? 'needs a hit' : 'click him at the snap') + '</span>');
+    else if (needsYou(c, s)) bits.push('<span class="s-need">' + (spotAtSnap(s) ? 'needs a ' + W.hit : 'click him at the ' + W.snap) + '</span>');
     else {
       if (s.spotlight.length) bits.push('<span class="s-spot">&#9679; spotlight</span>');
-      bits.push(s.no_hit ? '<span>no hit</span>' : (s.hit != null ? '<span class="s-hit">HIT</span>' : ''));
+      bits.push(s.no_hit ? '<span>no hit</span>' : (s.hit != null ? `<span class="s-hit">${W.HIT}</span>` : ''));
     }
     if (s.big && s.keep !== false) bits.push(`<span class="s-big" title="Big play: ${BIG_KINDS[s.big][1]}">&#9889;</span>`);
     b.innerHTML = `<span class="vthumb"><img alt="" loading="lazy" src="/api/clips/${encodeURIComponent(c.id)}/frame.jpg?t=${(s.snap || 0).toFixed(2)}"><span class="dot ${dot}"></span><span class="res">${(window.hrRes ? hrRes(c.width, c.height, c.fps) : '')}</span><span class="dur">${len.toFixed(1)}</span></span>` +
@@ -1603,23 +1617,25 @@ function renderHit() {
 function renderBig() {
   document.querySelectorAll('#bigPick button').forEach(b => { b.classList.toggle('on', b.dataset.v === cur.big); b.setAttribute('aria-pressed', b.dataset.v === cur.big); });
   const trail = cur.big === 'trail', tEnd = trail && cur.trail_end != null ? cur.trail_end : null;
-  for (const [b, v, m, t, dflt] of [['bTrA', 'vTrA', 'mTrA', trail ? cur.trail_start : null, 'snap'], ['bTrB', 'vTrB', 'mTrB', tEnd, 'hit']]) {
+  for (const [b, v, m, t, dflt] of [['bTrA', 'vTrA', 'mTrA', trail ? cur.trail_start : null, W.snap], ['bTrB', 'vTrB', 'mTrB', tEnd, W.hit]]) {
     $(b).hidden = !trail; $(v).textContent = t == null ? dflt : t.toFixed(2);
     $(m).style.display = t == null ? 'none' : ''; if (t != null) $(m).style.left = pct(t);
   }
-  const h = $('bigHint'), need = !cur.big ? '' : tEnd == null && (cur.no_hit || hitTime() == null) ? 'A big play needs a hit: press K on the moment.'
+  const h = $('bigHint'), need = !cur.big ? '' : tEnd == null && (cur.no_hit || hitTime() == null) ? `A big play needs a ${W.hit}: press K on it.`
     : !cur.spotlight.length ? 'A big play needs your player: press F and click him.' : '';
   h.className = 'hint' + (need ? ' need' : '');
   h.textContent = need || (trail && (tEnd != null || cur.trail_start != null)
-    ? `Trail from ${cur.trail_start != null ? cur.trail_start.toFixed(1) + ' s' : 'the snap'} to ${tEnd != null ? tEnd.toFixed(1) + ' s' : 'the hit'}; the picture freezes there, on the beat.`
-    : cur.big ? 'On the hit: ' + BIG_KINDS[cur.big][1] + '.' : '');
+    ? `Trail from ${cur.trail_start != null ? cur.trail_start.toFixed(1) + ' s' : 'the ' + W.snap} to ${tEnd != null ? tEnd.toFixed(1) + ' s' : 'the ' + W.hit}; the picture freezes there, on the beat.`
+    : cur.big ? `On the ${W.hit}: ` + BIG_KINDS[cur.big][1] + '.' : '');
+  const okK = SPORT_KINDS[sport];                       // a kind this sport doesn't offer stays visible while it is the one chosen
+  document.querySelectorAll('#bigPick button').forEach(b => { b.hidden = !!(okK && b.dataset.v && !okK.includes(b.dataset.v) && b.dataset.v !== cur.big); });
   const bt = $('bigText');
   bt.hidden = cur.big !== '3d';
   if (document.activeElement !== bt) bt.value = cur.big_text || '';
   $('bigPv').hidden = !cur.big || !!need;
 }
 function bigNext(b) {                      // off, then each kind in turn, then off again
-  const order = Object.keys(BIG_KINDS).filter(k => k !== '3d' || !sy.plan || sy.plan.can_3d);
+  const order = Object.keys(BIG_KINDS).filter(k => (k !== '3d' || !sy.plan || sy.plan.can_3d) && (!SPORT_KINDS[sport] || SPORT_KINDS[sport].includes(k)));
   return !b ? order[0] : order[order.indexOf(b) + 1] || false;
 }
 async function setBig(v) {
@@ -2182,8 +2198,33 @@ function outputRow(o, label) {
   return `<div class="reel-actions"${f}><b>${esc(label)}</b>
     <button class="btn" data-reel="play"${f}>▶ Play here</button>
     <button class="btn" data-reel="open"${f}>Open in video player</button>
-    <button class="btn" data-reel="folder"${f}>Show in File Explorer</button></div>
-    <div class="hint"><code>${esc(o.path)}</code></div>`;
+    <button class="btn" data-reel="folder"${f}>Show in File Explorer</button>
+    <button class="btn" data-reel="preview"${f} title="A smaller copy marked PREVIEW, to send before the customer has paid">Make watermarked preview</button></div>
+    <div class="hint"><code>${esc(o.path)}</code></div>${previewLine(o)}`;
+}
+// The watermarked copy of a finished video, when one has been made: open it or find it to send.
+function previewLine(o) {
+  const p = o.preview; if (!p) return '';
+  const when = new Date(p.built).toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
+  const old = p.stale ? ' <span class="warn">(older than this video: make it again)</span>' : '';
+  return `<div class="hint pvw" data-for="${esc(o.file)}">Watermarked preview, made ${when}${old}:
+    <button class="btn" data-reel="open" data-file="${esc(p.file)}">Open</button>
+    <button class="btn" data-reel="folder" data-file="${esc(p.file)}">Show in File Explorer</button></div>`;
+}
+async function makePreview(btn, file) {
+  const label = btn.textContent;
+  btn.disabled = true; btn.textContent = 'Making the preview…';
+  try {
+    let j = await (await fetch('/api/reel/watermark', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ file }) })).json();
+    if (!j.state) throw new Error(j.error || 'the app did not answer');
+    if (j.file !== file) throw new Error('another preview is still being made. Try again in a minute');
+    while (j.state === 'running') { await new Promise(r => setTimeout(r, 1500)); j = await (await fetch('/api/reel/watermark')).json(); }
+    if (j.state !== 'done') throw new Error(j.error || 'it stopped');
+    $('rResult').querySelectorAll(`.pvw[data-for="${CSS.escape(file)}"]`).forEach(n => n.remove());
+    btn.closest('.reel-actions').nextElementSibling.insertAdjacentHTML('afterend',
+      previewLine({ file, preview: { file: j.preview, built: new Date().toISOString(), stale: false } }));
+  } catch (err) { alert('The preview could not be made: ' + err.message); }
+  finally { btn.disabled = false; btn.textContent = label; }
 }
 function playOutput(o, start = true) {
   const row = $('rResult').querySelector(`.reel-actions[data-file="${CSS.escape(o.file)}"]`);
@@ -2205,6 +2246,7 @@ $('rResult').addEventListener('click', async e => {
   const b = e.target.closest('[data-reel]'); if (!b) return;
   const o = { file: b.dataset.file, vertical: !!b.dataset.v };
   if (b.dataset.reel === 'play') { playOutput(o); return; }
+  if (b.dataset.reel === 'preview') { makePreview(b, o.file); return; }
   const res = await fetch('/api/reel/reveal', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action: b.dataset.reel, file: o.file }) });
   if (!res.ok) alert((await res.json()).error || 'Could not open the video');
 });

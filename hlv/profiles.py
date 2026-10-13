@@ -20,6 +20,7 @@ TEMPLATE = {
             "name": "Caleb",
             "number": "",
             "position": "",
+            "sport": "",
             "class_year": "",
             "tagline": "",
             "school": "",
@@ -36,6 +37,7 @@ TEMPLATE = {
         "id": "short name used for the output file, no spaces",
         "number": "jersey number, e.g. 22",
         "position": "e.g. LB / RB",
+        "sport": "football (the default) or basketball: changes the app's wording and which effects are offered",
         "class_year": "graduation year, e.g. 2029",
         "tagline": "optional: your own line under the name instead of position / class of / size, e.g. 8th Grade Highlights",
         "height_weight": "optional, e.g. 6'1\" 185",
@@ -49,6 +51,13 @@ TEMPLATE = {
 }
 
 FIELDS = [k for k in TEMPLATE["players"][0]]
+SPORTS = ("football", "basketball")
+
+
+def sport_of(pl: dict | None) -> str:
+    """The player's sport: it changes the pages' wording and which big-play effects are offered."""
+    s = str((pl or {}).get("sport") or "").lower()
+    return s if s in SPORTS else "football"
 
 
 def path(root: Path) -> Path:
