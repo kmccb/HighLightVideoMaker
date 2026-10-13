@@ -25,7 +25,7 @@ import numpy as np
 from . import camera, encoder, graphics
 from .pipeline import CACHE_DIRNAME
 
-VERSION = 1
+VERSION = 2
 FPS = 30
 WIDE = (1920, 1080)
 SR = 48000
@@ -73,6 +73,8 @@ def _key(root: Path, clip: dict, pl: dict | None, hit_t: float, secs: float, per
     payload = {"v": VERSION, "src": [src.stat().st_size, src.stat().st_mtime], "win": segment._window(clip),
                "hit": round(float(hit_t), 3), "spot": r.get("spotlight"), "zoom": r.get("zoom"), "crop": clip.get("crop"),
                "secs": secs, "period": None if not period else round(period, 4), "color": (pl or {}).get("color")}
+    if r.get("trail_start") is not None:
+        payload["start"] = round(float(r["trail_start"]), 3)
     if size and tuple(size) != WIDE:
         payload["size"] = list(size)
     return hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:12]
@@ -236,7 +238,12 @@ def render(root: Path, clip: dict, pl: dict | None, hit_t: float | None, secs: f
     _, _, snap = segment._window(clip)
     t0, _ = segment.extents(clip, info["duration"])
     tF = round(float(hit_t) * FPS) / FPS
-    ta = round(max(t0, snap - 0.3, tF - MAX_BACK) * FPS) / FPS
+    mark = (clip.get("review") or {}).get("trail_start")       # where the trail begins: marked, else the snap
+    start = max(t0, float(mark)) if mark is not None else max(t0, snap - 0.3)
+    if tF - start > MAX_BACK:                                   # a long run: the camera travels along it (longtrail.py)
+        from . import longtrail
+        return longtrail.render(root, clip, pl, tF, start, secs, period, size, mp4, meta, plan, log)
+    ta = round(max(start, tF - MAX_BACK) * FPS) / FPS
     iF = int(round((tF - ta) * FPS))
     if iF < 18:
         return none("the hit comes too soon after the snap")
@@ -274,6 +281,10 @@ def render(root: Path, clip: dict, pl: dict | None, hit_t: float | None, secs: f
     chosen = pick({i: p for i, p in pos.items() if i < last}, (fx, fy), 1.55 * fw)
     if len(chosen) < MIN_GHOSTS:
         return none("he doesn't cover enough ground before the hit")
+    if any(not (0 <= pos[i][0] <= W and 0 <= pos[i][1] <= H) for i in chosen):   # the camera panned past where he was
+        del frames
+        from . import longtrail
+        return longtrail.render(root, clip, pl, tF, start, secs, period, size, mp4, meta, plan, log)
 
     def matte(i: int, grow: float = 1.0) -> np.ndarray:
         """A soft mask of the player in frame i (freeze picture): what differs from the empty field around his box."""

@@ -10,6 +10,8 @@
   const REACH = 1.5;
 
   // Resolution badge for a video: SD / HD / FHD / QHD / 4K by its short side, exact size in the tooltip.
+  // What a play is called: the name typed for it on the review page (review.notes), else its file name.
+  window.hrClipName = (c, s) => String((s || c.review || {}).notes || '').trim().replace(/\s+/g, ' ') || c.source.split('/').pop();
   window.hrRes = (w, h, fps) => {
     const short = Math.min(w || 0, h || 0);
     if (!short) return '';
@@ -274,7 +276,7 @@
         fetch('/api/projects').then(r => r.ok ? r.json() : null).catch(() => null),
       ]);
       if (cl && cl.clips) cl.clips.forEach(c => palItems.push({
-        group: 'Plays', label: c.source.split('/').pop(), sub: [c.group, c.review.keep === false ? 'left out' : ''].filter(Boolean).join(' · '),
+        group: 'Plays', label: hrClipName(c), sub: [c.group, c.review.keep === false ? 'left out' : ''].filter(Boolean).join(' · '),
         href: '/review#clip=' + encodeURIComponent(c.id) }));
       if (pr && pr.projects) pr.projects.filter(p => p.ready).forEach(p => palItems.push({
         group: 'Projects', label: (p.player && p.player.name) || p.name, sub: p.name + (p.current ? ' · open now' : ''), project: p }));

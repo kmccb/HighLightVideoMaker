@@ -92,6 +92,9 @@ video { display: block; max-width: 100%; max-height: 58vh; }
 .btn.hit .val { color: var(--hit); }
 .tl-hit { position: absolute; top: 2px; bottom: 14px; width: 0; border-left: 2px solid var(--hit); pointer-events: none; }
 .tl-hit.auto { border-left-style: dashed; opacity: .6; }
+.tl-hit.tl-trail { border-left-color: var(--accent-hi); } .tl-hit.tl-trail span { color: var(--accent-hi); top: 10px; }
+.insp .tg-btns .btn[hidden] { display: none; }
+.insp #bTrA .val, .insp #bTrB .val { color: var(--accent-hi); }
 .tl-hit span { position: absolute; top: -1px; left: 4px; font: 700 10px var(--mono); color: var(--hit); }
 
 /* ---------- timeline ---------- */
@@ -357,6 +360,16 @@ body.plays-narrow #bFold svg { transform: scaleX(-1); }
 .pf-tabs button:hover { color: var(--text); }
 .pf-tabs button.on { background: var(--sel); color: var(--text); }
 .pf-tabs button[data-f=need] b:not(:empty) { color: var(--warn); }
+.pfolder { padding: 8px 12px; display: grid; gap: 8px; border-bottom: 1px solid var(--line); }
+.pf-where { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.pf-path { flex: 1; min-width: 0; font: 11px var(--mono); color: var(--faint); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; direction: rtl; text-align: left; }
+.pf-where .btn { flex: none; min-height: 28px; padding: 0 10px; font-size: 12px; }
+.pf-new { display: flex; align-items: center; gap: 8px; padding: 8px 10px; border: 1px solid rgba(255,181,71,.45); background: rgba(255,181,71,.07); border-radius: var(--r); font-size: 12.5px; }
+.pf-new[hidden], .pf-new .btn[hidden] { display: none; }
+.pf-split { flex-wrap: wrap; } .pf-split span { flex: 1 1 100%; }
+.pf-new span { flex: 1; min-width: 0; }
+.pf-new .btn { flex: none; min-height: 30px; padding: 0 10px; font-size: 12.5px; }
+body.plays-narrow .pfolder { display: none; }
 .list-empty { padding: 24px 12px; color: var(--dim); font-size: 13px; text-align: center; }
 .item { padding: 6px 8px; gap: 10px; }
 .item .vthumb { position: relative; flex: none; width: 64px; height: 36px; border-radius: 4px; overflow: hidden; background: var(--panel-2); }
@@ -374,6 +387,8 @@ body.plays-narrow #bFold svg { transform: scaleX(-1); }
 .item .sub { font-size: 11.5px; color: var(--dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; display: flex; gap: 6px; align-items: center; }
 .item .sub .s-spot { color: var(--spot); } .item .sub .s-hit { color: var(--hit); font-family: var(--mono); font-size: 10.5px; font-weight: 600; }
 .item .sub .s-need { color: var(--warn); }
+.item .sub .s-big { color: var(--accent-hi); font-size: 12.5px; line-height: 1; }
+body.plays-narrow .item.big .vthumb::after { content: '\26A1'; position: absolute; left: 2px; bottom: 1px; font-size: 11px; color: var(--accent-hi); text-shadow: 0 0 2px #000, 0 0 2px #000; }
 .item.skipped .name { text-decoration: none; color: var(--dim); }
 .item.skipped .vthumb { opacity: .45; }
 .item .pill-out { flex: none; font-size: 10.5px; font-weight: 600; color: var(--dim); border: 1px solid var(--line-2); border-radius: 999px; padding: 2px 7px; }
@@ -402,6 +417,10 @@ body.plays-narrow #bFold svg { transform: scaleX(-1); }
 .insp .bigpick .segctl button[data-v=""] { grid-column: span 2; }
 .insp .bigpick .segctl button.on:not([data-v=""]) { background: var(--accent); color: var(--accent-ink); box-shadow: none; }
 .insp #bigHint { font-size: 12px; }
+.insp #bigText, .insp #bigPv { grid-column: 1 / -1; }
+.insp #bigText { height: 36px; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r); padding: 0 12px; color: var(--text); font: 400 13px var(--sans); }
+.insp #bigText:focus { border-color: var(--accent); outline: none; }
+.insp #bigText[hidden], .insp #bigPv[hidden] { display: none; }
 .insp #bigHint:empty { display: none; }
 .insp #bigHint.need { color: var(--warn); }
 .insp #notes { height: 38px; background: var(--panel); border: 1px solid var(--line-2); border-radius: var(--r); padding: 0 12px; color: var(--text); font: 400 13px var(--sans); }
@@ -638,6 +657,11 @@ body.plays-narrow #bFold svg { transform: scaleX(-1); }
         <button role="tab" data-f="all">All <b></b></button><button role="tab" data-f="need">Needs you <b></b></button><button role="tab" data-f="in">In reel <b></b></button><button role="tab" data-f="out">Left out <b></b></button>
       </div>
     </div>
+    <div class="pfolder" id="pFolder">
+      <div class="pf-new" id="pfNew" hidden><span id="pfNewTxt"></span><button class="btn primary" id="pfAdd">Add them</button></div>
+      <div class="pf-new pf-split" id="pfSplit" hidden><span id="pfSplitTxt"></span><button class="btn primary" id="pfSplitOne">Split it</button><button class="btn" id="pfSplitAll" hidden></button></div>
+      <div class="pf-where"><span class="pf-path" id="pfPath"></span><button class="btn" id="pfOpen" title="Open this project's folder in File Explorer. Put new videos or photos in it, then come back here.">Open folder</button></div>
+    </div>
     <div class="list" id="list"></div>
   </aside>
 
@@ -678,6 +702,8 @@ body.plays-narrow #bFold svg { transform: scaleX(-1); }
       <div id="tlRingOff"></div>
       <div id="tlAnchors"></div>
       <div class="tl-hit" id="mHit"><span>HIT</span></div>
+      <div class="tl-hit tl-trail" id="mTrA" style="display:none"><span>TRAIL</span></div>
+      <div class="tl-hit tl-trail" id="mTrB" style="display:none"><span>FREEZE</span></div>
       <div class="tl-head" id="tlHead"></div>
       <div class="tl-ticks" id="tlTicks"></div>
     </div>
@@ -725,10 +751,14 @@ body.plays-narrow #bFold svg { transform: scaleX(-1); }
           <button class="btn hit" id="bHit" title="K marks the hit at the playhead"><kbd>K</kbd> Hit <span class="val" id="vHit">–</span><span class="x" id="bNoHit" title="No hit on this play: no punch, no slow-mo, timing left alone (N)">✕</span></button>
           <div class="bigpick"><span class="bp-l">&#9889; Big play</span>
             <span class="segctl" id="bigPick" role="group" aria-label="Big play"><button data-v="" title="A normal play">Off</button><button data-v="trail" title="On the hit the picture freezes and copies of your player appear along the path he ran">Trail</button><button data-v="3d" title="On the hit the picture freezes and the camera swings round him, with his name">3D</button><button data-v="shock" title="For a big hit: a shockwave spreads from the contact, with a hard shake">Shock</button><button data-v="frames" title="For a big hit: a flash of black-and-white comic-book frames with speed lines">Impact</button><button data-v="triple" title="For a big hit: the hit plays three times on three beats, closer each time">Triple</button><button data-v="replay" title="For a big hit: the tape runs back and the hit plays again in slow motion">Replay</button></span></div>
+          <button class="btn" id="bTrA" hidden title="The trail begins at the playhead instead of the snap. The x puts it back on the snap.">Trail starts <span class="val" id="vTrA"></span><span class="x" id="xTrA" title="Back to the snap">✕</span></button>
+          <button class="btn" id="bTrB" hidden title="The trail ends, and the picture freezes, at the playhead instead of the hit. The x puts it back on the hit.">Trail ends <span class="val" id="vTrB"></span><span class="x" id="xTrB" title="Back to the hit">✕</span></button>
+          <input id="bigText" maxlength="40" autocomplete="off" placeholder="Words on the 3D freeze (blank = none)" hidden>
           <span class="hint" id="bigHint"></span>
+          <button class="btn" id="bigPv" hidden title="Make just this play's effect, with the song, so you can see it before building the whole reel">&#9654; Preview this effect</button>
       </div></div>
-      <div class="tgroup"><label class="hr-eyebrow" for="notes">Notes</label>
-        <input id="notes" placeholder="e.g. Caleb #22 tackle, bad angle…" autocomplete="off">
+      <div class="tgroup"><label class="hr-eyebrow" for="notes">Name</label>
+        <input id="notes" maxlength="60" placeholder="e.g. Week 5 pancake block (blank = the file name)" autocomplete="off" title="What this play is called in the lists, in place of its file name. It isn't shown in the reel.">
       </div>
     </div>
     <div class="insp-foot">
@@ -983,10 +1013,65 @@ const STYLE_NAMES = { ring: 'ring', arrow: 'arrow', shadow: 'spot shadow', off: 
 
 const fmt = t => t == null ? '–' : t.toFixed(2);
 
+// The project's folder, and videos put in it since the project was made.
+let busySplit = false;
+function renderFolder() {
+  $('pfPath').textContent = '\u200e' + (data.folder || ''); $('pfPath').title = data.folder || '';
+  const n = (data.new_videos || []).length;
+  $('pfNew').hidden = !n;
+  $('pfNewTxt').textContent = n === 1 ? '1 new video in the folder' : n + ' new videos in the folder';
+  $('pfNewTxt').title = (data.new_videos || []).join('\n');
+  // a video that is several plays already cut together (a game's highlights): offer to split it
+  const pc = data.play_counts || {}, c = (data.clips || [])[idx], np = c ? pc[c.id] : 0, all = Object.keys(pc);
+  $('pfSplit').hidden = !np || busySplit;
+  if (np) $('pfSplitTxt').textContent = `This video is ${np} plays cut together. Split it so each play can have its own trim, marks and effects.`;
+  $('pfSplitOne').textContent = 'Split into ' + np + ' plays';
+  $('pfSplitAll').hidden = all.length < 2; $('pfSplitAll').textContent = `Split all ${all.length} videos like this`;
+}
+async function splitVideos(ids) {
+  const names = ids.length === 1 ? '"' + hrClipName(data.clips.find(c => c.id === ids[0])) + '"' : ids.length + ' videos';
+  if (!confirm(`Split ${names} into separate plays?\n\nEach play becomes its own video in the project folder. The original is moved to a folder called "split originals" (not deleted). Marks made on the whole video are not kept.\n\nThis takes a minute or two per video.`)) return;
+  const res = await fetch('/api/project/split', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ clips: ids }) });
+  const j = await res.json();
+  if (!res.ok) { alert(j.error || 'Could not split'); return; }
+  busySplit = true; video.pause();
+  $('pfSplit').hidden = true; $('pfNew').hidden = false; $('pfAdd').hidden = true;
+  const tick = async () => {
+    const s = await (await fetch('/api/projects/setup')).json();
+    if (s.state === 'running') { $('pfNewTxt').textContent = 'Working: ' + s.step + (s.total > 1 ? ` (${s.done}/${s.total})` : ''); setTimeout(tick, 1500); return; }
+    if (s.state === 'error') alert('Splitting failed: ' + s.error);
+    location.reload();
+  };
+  tick();
+}
+$('pfSplitOne').onclick = () => splitVideos([data.clips[idx].id]);
+$('pfSplitAll').onclick = () => splitVideos(Object.keys(data.play_counts || {}));
+$('pfOpen').onclick = () => fetch('/api/project/folder', { method: 'POST' });
+$('pfAdd').onclick = async () => {
+  const b = $('pfAdd');
+  const res = await fetch('/api/project/add_new', { method: 'POST' });
+  const j = await res.json();
+  if (!res.ok) { alert(j.error || 'Could not add the videos'); return; }
+  b.disabled = true;
+  const tick = async () => {
+    const s = await (await fetch('/api/projects/setup')).json();
+    if (s.state === 'running') { $('pfNewTxt').textContent = 'Adding: ' + s.step + (s.total > 1 ? ` (${s.done}/${s.total})` : ''); setTimeout(tick, 1500); return; }
+    if (s.state === 'error') { alert('Adding the videos failed: ' + s.error); b.disabled = false; renderFolder(); return; }
+    location.reload();
+  };
+  tick();
+};
+window.addEventListener('focus', async () => {               // back from File Explorer: look for new videos
+  if (!data || reelOpen || $('pfAdd').disabled) return;
+  try { const d = await (await fetch('/api/clips')).json(); data.new_videos = d.new_videos; renderFolder(); } catch (e) { /* next time */ }
+});
+
 async function load() {
   const res = await fetch('/api/clips');
   if (res.status === 409) { location = '/'; return; }   // no project open
   data = await res.json();
+  renderFolder();
+  fetch('/api/project/play_counts').then(r => r.json()).then(pc => { data.play_counts = pc; renderFolder(); }).catch(() => {});
   fetch('/api/projects').then(r => r.json()).then(pi => {
     const p = pi.projects.find(x => x.current);
     if (p) { $('projName').textContent = p.player ? p.player.name : p.name; $('projName').title = p.folder; document.title = $('projName').textContent + ' · Play Review'; }
@@ -996,6 +1081,8 @@ async function load() {
   select(first < 0 ? 0 : first);
 }
 
+// What a play is called: the name typed for it (review.notes), else its file name. (shell.js has the same for the other pages.)
+const hrClipName = (c, s) => String((s || c.review || {}).notes || '').trim().replace(/\s+/g, ' ') || c.source.split('/').pop();
 // A big play's effect on its hit: [short label, what happens]
 const BIG_KINDS = { trail: ['TRAIL', 'freeze, and copies of him along the path he ran'], '3d': ['3D', 'freeze, and the camera swings round him'],
   shock: ['SHOCK', 'a shockwave spreads from the contact'], frames: ['IMPACT', 'a flash of black-and-white impact frames'],
@@ -1013,6 +1100,8 @@ function stateOf(c) {
     hit: r.hit ?? null,
     no_hit: !!r.no_hit,
     big: BIG_KINDS[r.big] ? r.big : r.big ? 'trail' : '',
+    big_text: r.big_text || '',
+    trail_start: r.trail_start ?? null, trail_end: r.trail_end ?? null,
     ring_off: Array.isArray(r.ring_off) ? r.ring_off : [],
     edited: r.snap != null || r.end != null,
   };
@@ -1059,8 +1148,8 @@ function renderList() {
     }
     const b = document.createElement('div');
     b.setAttribute('role', 'button'); b.tabIndex = -1;
-    b.className = 'item' + (i === idx ? ' active' : '') + (s.keep === false ? ' skipped' : '') + (needsYou(c, s) ? ' need' : '');
-    b.title = c.source.split('/').pop();
+    b.className = 'item' + (i === idx ? ' active' : '') + (s.keep === false ? ' skipped' : '') + (needsYou(c, s) ? ' need' : '') + (s.big && s.keep !== false ? ' big' : '');
+    b.title = c.source.split('/').pop() + (c.group ? ' · ' + c.group : '');
     const dot = s.labeled ? 'done' : (s.edited ? 'edited' : '');
     const kindTag = c.kind === 'pre_edited' ? '<span class="tag warn">TV</span>'
                   : c.kind === 'screen_recording' ? '<span class="tag">Hudl</span>' : '';
@@ -1073,11 +1162,12 @@ function renderList() {
       if (s.spotlight.length) bits.push('<span class="s-spot">&#9679; spotlight</span>');
       bits.push(s.no_hit ? '<span>no hit</span>' : (s.hit != null ? '<span class="s-hit">HIT</span>' : ''));
     }
+    if (s.big && s.keep !== false) bits.push(`<span class="s-big" title="Big play: ${BIG_KINDS[s.big][1]}">&#9889;</span>`);
     b.innerHTML = `<span class="vthumb"><img alt="" loading="lazy" src="/api/clips/${encodeURIComponent(c.id)}/frame.jpg?t=${(s.snap || 0).toFixed(2)}"><span class="dot ${dot}"></span><span class="res">${(window.hrRes ? hrRes(c.width, c.height, c.fps) : '')}</span><span class="dur">${len.toFixed(1)}</span></span>` +
       `<span class="txt"><span class="name"></span><span class="sub">${bits.join('')}</span></span>${kindTag}${flag}` +
       (s.keep === false ? '<span class="pill-out">Left out</span>' : '') +
       `<input type="checkbox" class="inc" ${s.keep !== false ? 'checked' : ''} title="${s.keep !== false ? 'In the reel: untick to leave it out' : 'Left out of the reel: tick to include'}" aria-label="In reel">`;
-    b.querySelector('.name').textContent = c.source.split('/').pop();
+    b.querySelector('.name').textContent = hrClipName(c, s);
     b.onclick = () => select(i);
     const box = b.querySelector('.inc');
     box.onclick = e => e.stopPropagation();
@@ -1131,7 +1221,8 @@ function select(i) {
   const c = data.clips[idx];
   cur = stateOf(c);
   windowStop = null;
-  $('title').textContent = c.source.split('/').pop();
+  $('title').textContent = hrClipName(c, cur); $('title').title = c.source;
+  renderFolder();
   const d = c.detection;
   $('resB').innerHTML = (window.hrRes ? hrRes(c.width, c.height, c.fps) : '');
   $('meta').textContent = `${c.group} · ${c.duration.toFixed(1)} s · ${c.kind.replace('_', ' ')} · auto confidence ${Math.round(d.confidence * 100)}%`;
@@ -1267,7 +1358,7 @@ async function setKeep(i, keep) {
                                                     body: JSON.stringify({ keep }) });
     if (!res.ok) throw new Error(res.status);
     c.review = (await res.json()).review;
-  } catch (e) { setStatus('could not update ' + c.source.split('/').pop() + ': ' + e.message, 'err'); }
+  } catch (e) { setStatus('could not update ' + hrClipName(c) + ': ' + e.message, 'err'); }
   renderList();
 }
 function resetAuto() { const d = data.clips[idx].detection; queueSave({ snap: d.snap, end: d.end }); }
@@ -1293,7 +1384,12 @@ $('pfQ').oninput = () => { pf.q = $('pfQ').value.trim(); renderList(); };
 $('pfQ').onkeydown = e => { if (e.key === 'Escape') { $('pfQ').value = ''; pf.q = ''; renderList(); $('pfQ').blur(); } e.stopPropagation(); };
 $('bReset').onclick = resetAuto;
 $('bOk').onclick = confirmNext;
-$('notes').addEventListener('input', e => queueSave({ notes: e.target.value }));
+$('notes').addEventListener('input', e => {             // the play's name, shown everywhere in place of the file name
+  queueSave({ notes: e.target.value });
+  const c = data.clips[idx];
+  $('title').textContent = hrClipName(c, cur);
+  const n = document.querySelector('#list .item.active .name'); if (n) n.textContent = hrClipName(c, cur);
+});
 document.querySelectorAll('.btn').forEach(b => b.addEventListener('mouseup', () => b.blur()));
 
 // ---------- camera plan / spotlight ----------
@@ -1506,10 +1602,21 @@ function renderHit() {
 // Big play (the freeze on the hit): chosen here, next to the hit it happens on.
 function renderBig() {
   document.querySelectorAll('#bigPick button').forEach(b => { b.classList.toggle('on', b.dataset.v === cur.big); b.setAttribute('aria-pressed', b.dataset.v === cur.big); });
-  const h = $('bigHint'), need = !cur.big ? '' : cur.no_hit || hitTime() == null ? 'A big play needs a hit: press K on the moment.'
+  const trail = cur.big === 'trail', tEnd = trail && cur.trail_end != null ? cur.trail_end : null;
+  for (const [b, v, m, t, dflt] of [['bTrA', 'vTrA', 'mTrA', trail ? cur.trail_start : null, 'snap'], ['bTrB', 'vTrB', 'mTrB', tEnd, 'hit']]) {
+    $(b).hidden = !trail; $(v).textContent = t == null ? dflt : t.toFixed(2);
+    $(m).style.display = t == null ? 'none' : ''; if (t != null) $(m).style.left = pct(t);
+  }
+  const h = $('bigHint'), need = !cur.big ? '' : tEnd == null && (cur.no_hit || hitTime() == null) ? 'A big play needs a hit: press K on the moment.'
     : !cur.spotlight.length ? 'A big play needs your player: press F and click him.' : '';
   h.className = 'hint' + (need ? ' need' : '');
-  h.textContent = need || (cur.big ? 'On the hit: ' + BIG_KINDS[cur.big][1] + '.' : '');
+  h.textContent = need || (trail && (tEnd != null || cur.trail_start != null)
+    ? `Trail from ${cur.trail_start != null ? cur.trail_start.toFixed(1) + ' s' : 'the snap'} to ${tEnd != null ? tEnd.toFixed(1) + ' s' : 'the hit'}; the picture freezes there, on the beat.`
+    : cur.big ? 'On the hit: ' + BIG_KINDS[cur.big][1] + '.' : '');
+  const bt = $('bigText');
+  bt.hidden = cur.big !== '3d';
+  if (document.activeElement !== bt) bt.value = cur.big_text || '';
+  $('bigPv').hidden = !cur.big || !!need;
 }
 function bigNext(b) {                      // off, then each kind in turn, then off again
   const order = Object.keys(BIG_KINDS).filter(k => k !== '3d' || !sy.plan || sy.plan.can_3d);
@@ -1523,9 +1630,54 @@ async function setBig(v) {
     if (!res.ok) throw new Error(res.status);
     c.review.big = (await res.json()).review.big;
     setStatus('saved', 'saved');
+    renderList();
   } catch (e) { setStatus('save failed: ' + e.message, 'err'); }
 }
 $('bigPick').onclick = e => { const b = e.target.closest('button'); if (b) setBig(b.dataset.v); };
+// A trail's own start and end: set at the playhead, cleared with the x.
+async function setTrail(key, v) {
+  const c = data.clips[idx];
+  if (v != null) {
+    const a = key === 'trail_start' ? v : (cur.trail_start ?? cur.snap), b = key === 'trail_end' ? v : (cur.trail_end ?? hitTime());
+    if (a != null && b != null && b - a < 1) { alert('The trail has to end at least a second after it starts.'); return; }
+  }
+  cur[key] = v; renderBig();
+  try {
+    const res = await fetch('/api/clips/' + c.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ [key]: v }) });
+    if (!res.ok) throw new Error(res.status);
+    c.review[key] = (await res.json()).review[key];
+    setStatus('saved', 'saved');
+  } catch (err) { setStatus('save failed: ' + err.message, 'err'); }
+}
+$('bTrA').onclick = e => setTrail('trail_start', e.target.id === 'xTrA' ? null : +video.currentTime.toFixed(3));
+$('bTrB').onclick = e => setTrail('trail_end', e.target.id === 'xTrB' ? null : +video.currentTime.toFixed(3));
+$('bigText').onchange = async e => {                     // the words on the 3D freeze's tag
+  const c = data.clips[idx], v = e.target.value.trim();
+  cur.big_text = v;
+  try {
+    const res = await fetch('/api/clips/' + c.id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ big_text: v }) });
+    if (!res.ok) throw new Error(res.status);
+    c.review.big_text = (await res.json()).review.big_text;
+    setStatus('saved', 'saved');
+  } catch (err) { setStatus('save failed: ' + err.message, 'err'); }
+};
+$('bigPv').onclick = async () => {
+  const c = data.clips[idx], b = $('bigPv'), old = b.innerHTML;
+  flushSave();
+  b.disabled = true;
+  b.textContent = 'Making the preview… ' + ({ '3d': '(a 3D freeze takes a couple of minutes the first time)', trail: '(up to a minute the first time)' }[cur.big] || '(under a minute)');
+  try {
+    const res = await fetch('/api/clips/' + c.id + '/big_preview', { method: 'POST' });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error || res.status);
+    video.pause();
+    $('pvTitle').textContent = hrClipName(c, cur) + ': ' + BIG_KINDS[cur.big][0].toLowerCase();
+    $('pvHint').textContent = 'The effect as the reel will show it: three seconds into the hit, the effect, and what follows, with the song. In the reel the hit lands on its own beat of the song.';
+    $('pv').hidden = false;
+    $('pvVideo').src = j.url + '?t=' + Date.now(); $('pvVideo').play();
+  } catch (err) { alert('The preview could not be made: ' + err.message); }
+  b.disabled = false; b.innerHTML = old;
+};
 function setHit() { queueSave({ hit: +video.currentTime.toFixed(3), no_hit: false }); renderHit(); }
 function clearHit() { queueSave({ hit: null, no_hit: false }); renderHit(); }
 function noHit() { queueSave({ hit: null, no_hit: !cur.no_hit }); renderHit(); }
@@ -1789,7 +1941,7 @@ function renderStory(rows, numOf) {
     const img = photo ? c.thumb : `/api/clips/${encodeURIComponent(c.id)}/frame.jpg?t=${snapOf(c.id).toFixed(2)}`;
     const warn = !photo && (c.freeze_ok === 'late' || c.freeze_ok === 'none' || !c.labeled) || dupe(c.id);
     const hit = !photo && c.hit_set && !c.no_hit;
-    const tip = `#${numOf[c.id]} ${c.source.split('/').pop()} · ${c.seconds.toFixed(1)} s` + (warn ? ' · needs a fix' : '');
+    const tip = `#${numOf[c.id]} ${c.name || c.source.split('/').pop()} · ${c.seconds.toFixed(1)} s` + (warn ? ' · needs a fix' : '');
     return `<button type="button" class="rb-tile${photo ? ' photo' : ''}${warn ? ' warn' : ''}${hit ? ' hit' : ''}" data-id="${esc(c.id)}"
       style="flex-grow:${c.seconds.toFixed(1)};background-image:url('${img}')" title="${esc(tip)}" aria-label="${esc(tip)}"><span class="n">${numOf[c.id]}</span></button>`;
   });
@@ -1878,7 +2030,7 @@ function renderReelList() {
       <input type="checkbox" data-act="inc" ${c.included ? 'checked' : ''} ${c.kind === 'pre_edited' && !c.labeled ? 'disabled title="trim it in review first"' : ''}>
       <button class="mini star${c.star ? ' on' : ''}" data-act="star" title="${c.star ? 'Top play: opens the recruiting cut. Click to unstar' : 'Star a top play: starred plays open the recruiting cut'}">${c.star ? '★' : '☆'}</button>
       <button class="mini big${c.big ? ' on' : ''}" data-act="big" aria-pressed="${!!c.big}" title="${c.big ? 'Big play. On the hit: ' + BIG_KINDS[c.big][1] + '. Click for the next kind' : 'Make this a big play (click again to step through the kinds)'}">&#9889;${c.big ? ' ' + BIG_KINDS[c.big][0] : ''}</button>
-      <span class="name">${esc(c.source.split('/').pop())}</span>${(window.hrRes ? hrRes(c.width, c.height, c.fps) : '')}<span class="game">${esc(c.group)}</span>${rec}${badges}
+      <span class="name" title="${esc(c.source)}">${esc(c.name || c.source.split('/').pop())}</span>${(window.hrRes ? hrRes(c.width, c.height, c.fps) : '')}<span class="game">${esc(c.group)}</span>${rec}${badges}
       <span class="len">${c.seconds.toFixed(1)}s</span>
       <button class="mini" data-act="up">↑</button><button class="mini" data-act="down">↓</button>
       <button class="mini" data-act="preview">Preview</button><button class="mini" data-act="edit">Edit</button></li>`;
@@ -1944,7 +2096,7 @@ $('rList').addEventListener('click', async e => {
     await fetch('/api/clips/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ big: bigNext(c.big) }) });
     await loadReel();
     const dc = data.clips.find(x => x.id === id), nb = reelInfo.clips.find(x => x.id === id);
-    if (dc && nb) { dc.review.big = nb.big; if (data.clips[idx] === dc && cur) { cur.big = nb.big || ''; renderBig(); } }
+    if (dc && nb) { dc.review.big = nb.big; if (data.clips[idx] === dc && cur) { cur.big = nb.big || ''; renderBig(); } renderList(); }
   } else if (act === 'star') {
     const c = reelInfo.clips[i];
     await fetch('/api/clips/' + id, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ star: !c.star }) });
@@ -2279,7 +2431,7 @@ function drawMusicTl(live) {
   for (const c of inc) {
     k++;
     if (t > mt.dur) break;
-    blocks.push(`<span style="left:${x(t)}px;width:${Math.max(2, x(Math.min(mt.dur, t + c.seconds)) - x(t) - 1)}px" title="#${k} ${esc(c.source.split('/').pop())}">${k}</span>`);
+    blocks.push(`<span style="left:${x(t)}px;width:${Math.max(2, x(Math.min(mt.dur, t + c.seconds)) - x(t) - 1)}px" title="#${k} ${esc(c.name || c.source.split('/').pop())}">${k}</span>`);
     t += c.seconds - tr;
   }
   if (!sy.plan) $('mPlays').innerHTML = blocks.join('');
@@ -2728,7 +2880,8 @@ document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { if (!$('pv').hidden) { $('pv').hidden = true; $('pvVideo').pause(); } else if (!$('sp').hidden) closePicker(); else closeReel(); }
     return;
   }
-  if (e.target === $('notes')) { if (e.key === 'Escape' || e.key === 'Enter') $('notes').blur(); return; }
+  if (!$('pv').hidden) { if (e.key === 'Escape') { $('pv').hidden = true; $('pvVideo').pause(); } return; }   // an effect preview is showing
+  if (e.target === $('notes') || e.target === $('bigText')) { if (e.key === 'Escape' || e.key === 'Enter') e.target.blur(); return; }
   if (e.ctrlKey || e.metaKey || e.altKey) return;
   const k = e.key;
   const handled = {

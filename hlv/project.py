@@ -18,13 +18,13 @@ HIGHLIGHT_STYLES = ("ring", "arrow", "shadow", "off")
 def settings(project: dict) -> dict:
     """Reel-wide look settings (same highlight style on every clip)."""
     return {"highlight": "ring", "highlight_color": "#ffd23f", "transition": "crossfade",
-            "freeze": True, "freeze_ring": True, "order": [], "player": None, "game_audio": 0.3, "music_volume": 0.9,
+            "freeze": True, "freeze_ring": False, "order": [], "player": None, "game_audio": 0.3, "music_volume": 0.9,
             "beat_sync": True, "hit_fx": True, "music_start": 0.0,
             "music_end": None, "music_fade_in": 0.5, "music_fade_out": 3.0,
             "slowmo": False, "slowmo_speed": 0.4, "name_banner": "first",
             "music": None, "scottforge_card": True, "intro": "animated", "intro_sfx": False,
             "photo_s": 4, "format": "wide", "cut": "reel",
-            "ghost_trail": True, "drop": True, "colour": True, "recut": True,   # big-play effects (plays marked review.big)
+            "ghost_trail": True, "drop": True, "colour": True, "recut": False,   # big-play effects (plays marked review.big)
             "journey": False, "journey_born": None, "match_cuts": False,
             "coaches": [],                                # a copy of the recruiting cut per coach (coach.py)       # the Journey opener (journey.py) and his birth year, for the ages
             **(project.get("settings") or {})}

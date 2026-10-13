@@ -185,7 +185,7 @@ function playerCard(c) {
   const el = document.createElement('div');
   el.className = 'card' + (playerOk(c) ? ' done' : '');
   el.dataset.id = c.id;
-  el.innerHTML = `<div class="head"><span class="name">${esc(c.source.split('/').pop())}</span><span class="chips">${chips(c)}</span></div>
+  el.innerHTML = `<div class="head"><span class="name" title="${esc(c.source.split('/').pop())}">${esc(window.hrClipName ? hrClipName(c) : c.source.split('/').pop())}</span><span class="chips">${chips(c)}</span></div>
     <div class="stage"><img alt=""><canvas></canvas></div>
     <div class="ctl"><button data-d="-1">◀◀ 1s</button><button data-d="-0.25">◀ ¼s</button>
       <span class="t"></span><button data-d="0.25">¼s ▶</button><button data-d="1">1s ▶▶</button>
@@ -295,7 +295,7 @@ function hitCard(c) {
   const el = document.createElement('div');
   el.className = 'card' + (hitOk(c) ? ' done' : '');
   el.dataset.id = c.id;
-  el.innerHTML = `<div class="head"><span class="name">${esc(c.source.split('/').pop())}</span><span class="chips">${chips(c)}</span></div>
+  el.innerHTML = `<div class="head"><span class="name" title="${esc(c.source.split('/').pop())}">${esc(window.hrClipName ? hrClipName(c) : c.source.split('/').pop())}</span><span class="chips">${chips(c)}</span></div>
     <div class="big"><img alt=""></div>
     <div class="strip"><img alt=""><div class="sug" hidden></div><div class="sel" hidden></div><div class="hov" hidden></div></div>
     <div class="ctl"><button data-n="-0.1">− 0.1s</button><span class="t"></span><button data-n="0.1">+ 0.1s</button>

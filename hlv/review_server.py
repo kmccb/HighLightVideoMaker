@@ -24,7 +24,7 @@ from .pipeline import CACHE_DIRNAME
 
 STATIC = Path(__file__).parent / "static"
 EDITABLE = {"snap", "end", "labeled", "keep", "notes", "spotlight", "zoom", "hit", "no_hit", "ring_off", "side", "limit",
-            "floor", "star", "big"}
+            "floor", "star", "big", "big_text", "trail_start", "trail_end"}
 ZOOM_LEVELS = (0, 1.25, 1.5, 1.8)
 
 
@@ -222,6 +222,120 @@ class ReviewApp:
         threading.Thread(target=run, daemon=True).start()
         return job
 
+    def new_videos(self, proj: dict | None = None) -> list[str]:
+        """Videos put in the project's folder since it was set up (names relative to the folder).
+        The folder is only listed every 20 s: it may be on a network drive."""
+        import time
+        from . import setup_job
+        got = getattr(self, "_new_seen", None)
+        if got and got[0] == self.root and time.time() - got[1] < 20:
+            return got[2]
+        if proj is None:
+            with self.lock:
+                proj = project.load(self.root)
+        try:
+            names = [p.relative_to(self.root).as_posix() for p in setup_job.new_videos(self.root, proj)]
+        except OSError:
+            names = []
+        self._new_seen = (self.root, time.time(), names)
+        return names
+
+    def add_new_videos(self) -> dict:
+        """Make the videos added to the folder into plays of the open project (the same steps as a new project)."""
+        from . import setup_job
+        self._need()
+        if self.setup.get("state") == "running":
+            raise ValueError("videos are already being added - see Activity")
+        if self.building():
+            raise ValueError("a reel is building - add the videos when it's finished")
+        root = self.root
+        with self.lock:
+            proj = project.load(root)
+        paths = setup_job.new_videos(root, proj)
+        if not paths:
+            raise ValueError("no new videos in the folder")
+        self.setup = {"state": "running", "step": "starting", "done": 0, "total": 1, "error": None, "folder": str(root), "adding": len(paths)}
+        job = self.setup
+
+        def run():
+            applog.say(f"adding {len(paths)} new video(s) to {root}")
+            try:
+                res = setup_job.run(root, None, None, jobs=min(self.jobs, 3), only=paths, lock=self.lock,
+                                    progress=lambda st, d, t: job.update(step=st, done=d, total=t))
+                self._new_seen = None
+                job.update(state="done", result=res)
+                applog.say(f"added {res['added']} video(s)" + (f" ({len(res['skipped'])} couldn't be read)" if res["skipped"] else ""))
+            except Exception as e:  # noqa: BLE001 - report to the page
+                job.update(state="error", error=str(e))
+                applog.say(f"adding videos FAILED: {e}\n{traceback.format_exc()}")
+        threading.Thread(target=run, daemon=True).start()
+        return job
+
+    def play_counts(self) -> dict:
+        """For every video that is several plays cut together: how many ({clip id: plays})."""
+        from . import split
+        self._need()
+        with self.lock:
+            proj = project.load(self.root)
+        out = {}
+        for c in proj["clips"]:
+            try:
+                n = len(split.cuts(self.root, c)) + 1
+            except OSError:
+                continue
+            if n > 1:
+                out[c["id"]] = n
+        return out
+
+    def split_videos(self, clip_ids: list[str]) -> dict:
+        """Split game-highlight videos into one video per play, and make those the project's plays instead."""
+        from . import setup_job, split
+        self._need()
+        if self.setup.get("state") == "running":
+            raise ValueError("the app is already adding videos - see Activity")
+        if self.building():
+            raise ValueError("a reel is building - split the videos when it's finished")
+        root = self.root
+        with self.lock:
+            proj = project.load(root)
+        todo = [c for c in proj["clips"] if c["id"] in set(clip_ids)]
+        if not todo:
+            raise ValueError("nothing to split")
+        self.setup = {"state": "running", "step": "splitting", "done": 0, "total": len(todo) + 1, "error": None, "folder": str(root), "adding": 0}
+        job = self.setup
+
+        def run():
+            applog.say(f"splitting {len(todo)} video(s) into plays in {root}")
+            try:
+                new, gone = [], []
+                for k, c in enumerate(todo):
+                    job.update(step=f"splitting {c['source'].split('/')[-1]}", done=k)
+                    made = split.split(root, c, log=applog.say)
+                    if made:
+                        new += made
+                        gone.append(c["id"])
+                if not new:
+                    raise ValueError("no cuts were found in those videos")
+                with self.lock:                                  # the whole videos are no longer plays of the project
+                    proj = project.load(root)
+                    proj["clips"] = [c for c in proj["clips"] if c["id"] not in gone]
+                    project.save(root, proj)
+                res = setup_job.run(root, None, None, jobs=min(self.jobs, 3), only=new, lock=self.lock,
+                                    progress=lambda st, d, t: job.update(step=st, done=d, total=t))
+                self._new_seen = None
+                job.update(state="done", result=res)
+                applog.say(f"split into {res['added']} plays")
+            except Exception as e:  # noqa: BLE001 - report to the page
+                job.update(state="error", error=str(e))
+                applog.say(f"splitting FAILED: {e}\n{traceback.format_exc()}")
+        threading.Thread(target=run, daemon=True).start()
+        return job
+
+    def open_folder(self) -> dict:
+        self._need()
+        os.startfile(str(self.root))  # noqa: S606 - the project's own folder, in File Explorer
+        return {"ok": True, "folder": str(self.root)}
+
     def remove_project(self, folder: Path) -> dict:
         if self.root is not None and Path(folder).resolve() == self.root:
             raise ValueError("that project is open - switch to another one first")
@@ -247,7 +361,8 @@ class ReviewApp:
                  "keep": ph.get("keep") is not False, "thumb": f"/api/photos/{ph['id']}/thumb"}
                 for ph in proj.get("photos") or []]
         return {"pad_before": self.cfg.pad_before, "pad_after": self.cfg.pad_after,
-                "settings": project.settings(proj), "clips": out, "photos": pics}
+                "settings": project.settings(proj), "clips": out, "photos": pics,
+                "folder": str(self.root), "new_videos": self.new_videos(proj)}
 
     # ---------------- reel ----------------
     @staticmethod
@@ -295,7 +410,7 @@ class ReviewApp:
                 "id": c["id"], "source": c["source"], "group": c.get("group", ""), "kind": c["kind"],
                 "included": reel.included(c), "keep": r.get("keep"), "labeled": bool(r.get("labeled")),
                 "spotlight": spot, "zoom": r.get("zoom") or 0, "hit_set": r.get("hit") is not None, "no_hit": bool(r.get("no_hit")),
-                "star": bool(r.get("star")), "big": reel.big_kind(c) or False, "recruit": c["id"] in recruit,
+                "star": bool(r.get("star")), "big": reel.big_kind(c) or False, "name": reel.display_name(c), "recruit": c["id"] in recruit,
                 # False: he isn't found at the snap, so this play won't freeze (None: unknown / not wanted)
                 "freeze_ok": camera.freeze_found(self.cache, c) if spot and s.get("freeze", True) else None,
                 "seconds": round(max(0.0, t1 - max(0.0, t0)) + (segment.FREEZE_S if spot and s.get("freeze") else 0), 2),
@@ -432,6 +547,13 @@ class ReviewApp:
             proj["settings"] = s
             project.save(self.root, proj)
         return {"order": s["order"]}
+
+    def big_preview(self, clip_id: str) -> str:
+        """A big play's effect, cut together as the reel will (reel.preview_big), made in its own process."""
+        from concurrent.futures import ProcessPoolExecutor
+        self._need()
+        with ProcessPoolExecutor(1) as ex:
+            return Path(ex.submit(reel.preview_big, str(self.root), clip_id).result()).name
 
     def render_segment(self, clip_id: str) -> str:
         self._need()
@@ -768,6 +890,11 @@ class ReviewApp:
                 patch["star"] = bool(patch["star"])
             if "big" in patch:                        # a big play's freeze: "trail", "3d", or not a big play
                 patch["big"] = patch["big"] if patch["big"] in ("trail", "3d", *impact.KINDS) else "trail" if patch["big"] else False
+            for k in ("trail_start", "trail_end"):    # where a ghost trail begins / where it freezes, when not the snap / the hit
+                if k in patch:
+                    patch[k] = None if patch[k] in (None, "") else round(max(0.0, float(patch[k])), 3)
+            if "big_text" in patch:                   # the words on a 3D freeze's tag
+                patch["big_text"] = " ".join(str(patch["big_text"] or "").split())[:40]
             if "no_hit" in patch:
                 patch["no_hit"] = bool(patch["no_hit"])
             if "hit" in patch:
@@ -893,6 +1020,8 @@ def make_handler(app: ReviewApp):
                 return self._file(STATIC / "review.html", "text/html; charset=utf-8")
             if path == "/api/projects":
                 return self._json(app.projects_info())
+            if path == "/api/project/play_counts":
+                return self._json(app.play_counts())
             if path == "/api/projects/setup":
                 return self._json(app.setup)
             if path == "/api/log":      # the Activity panel: what's running and what the app has printed
@@ -1026,6 +1155,10 @@ def make_handler(app: ReviewApp):
             if m:
                 app._need()
                 return self._file(app.cache / "photos" / m.group(1), "video/mp4")
+            m = re.fullmatch(r"/media/bigpreview/([a-z0-9-]+\.mp4)", path)
+            if m:
+                app._need()
+                return self._file(app.cache / "previews" / m.group(1), "video/mp4")
             m = re.fullmatch(r"/media/segment/([a-z0-9-]+\.mp4)", path)
             if m:
                 app._need()
@@ -1088,6 +1221,16 @@ def make_handler(app: ReviewApp):
                 return self._json(app.branding_info())
             if self.path == "/api/reel/order":
                 return self._json(app.set_order(json.loads(self.rfile.read(n) or b"{}").get("order", [])))
+            if self.path == "/api/project/split":
+                try:
+                    return self._json(app.split_videos((json.loads(self.rfile.read(n) or b"{}") or {}).get("clips") or []))
+                except ValueError as e:
+                    return self._json({"error": str(e)}, HTTPStatus.CONFLICT)
+            if self.path in ("/api/project/folder", "/api/project/add_new"):
+                try:
+                    return self._json(app.open_folder() if self.path.endswith("folder") else app.add_new_videos())
+                except ValueError as e:
+                    return self._json({"error": str(e)}, HTTPStatus.CONFLICT)
             if self.path == "/api/reel/reveal":
                 try:
                     body = json.loads(self.rfile.read(n) or b"{}")
@@ -1187,6 +1330,17 @@ def make_handler(app: ReviewApp):
                     return self._json(app.set_photo_keep(m.group(1), json.loads(self.rfile.read(n) or b"{}").get("keep", True)))
                 except KeyError:
                     return self.send_error(HTTPStatus.NOT_FOUND)
+            m = re.fullmatch(r"/api/clips/([a-z0-9-]+)/big_preview", self.path)
+            if m:
+                if app.building():
+                    return self._json({"error": "a reel is building - preview the effect when it's done"}, HTTPStatus.CONFLICT)
+                try:
+                    return self._json({"url": "/media/bigpreview/" + app.big_preview(m.group(1))})
+                except KeyError:
+                    return self.send_error(HTTPStatus.NOT_FOUND)
+                except Exception as e:  # noqa: BLE001 - show the reason on the page
+                    traceback.print_exc()
+                    return self._json({"error": str(e)}, HTTPStatus.INTERNAL_SERVER_ERROR)
             m = re.fullmatch(r"/api/clips/([a-z0-9-]+)/segment", self.path)
             if m:
                 try:

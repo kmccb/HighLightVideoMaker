@@ -39,6 +39,11 @@ def available() -> bool:
     return SEG.exists() and detect.available()
 
 
+def tag_text(clip: dict) -> str:
+    """The words on the 3D freeze's tag: what was typed for this play; blank = no tag."""
+    return " ".join(str((clip.get("review") or {}).get("big_text") or "").split())[:40].upper()
+
+
 def _key(root: Path, clip: dict, pl: dict | None, hit_t: float, secs: float, size=None) -> str:
     from . import segment
     r = clip.get("review") or {}
@@ -46,7 +51,7 @@ def _key(root: Path, clip: dict, pl: dict | None, hit_t: float, secs: float, siz
     pl = pl or {}
     payload = {"v": VERSION, "src": [src.stat().st_size, src.stat().st_mtime], "win": segment._window(clip),
                "hit": round(float(hit_t), 3), "spot": r.get("spotlight"), "zoom": r.get("zoom"), "crop": clip.get("crop"),
-               "secs": secs, "pl": [pl.get("color"), pl.get("name"), pl.get("number")]}
+               "secs": secs, "pl": [pl.get("color")], "text": tag_text(clip)}
     if size and tuple(size) != ghost.WIDE:
         payload["size"] = list(size)
     return hashlib.sha1(json.dumps(payload, sort_keys=True, default=str).encode()).hexdigest()[:12]
@@ -315,7 +320,7 @@ def render(root: Path, clip: dict, pl: dict | None, hit_t: float | None, secs: f
         g1 = np.exp(-kk ** 2 / (2 * (r * 0.9) ** 2))
         sprites[r] = np.outer(g1, g1)[..., None] * np.array([205, 228, 255], np.float32)    # warm white (BGR)
     # his name, pinned to him
-    tag_txt = ((f"#{pl['number']}  " if pl.get("number") else "") + (pl.get("name") or "").upper()).strip()
+    tag_txt = tag_text(clip)
     tag_bgr = tag_a = None
     if tag_txt:
         tf = graphics.font(54)

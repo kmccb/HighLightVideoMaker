@@ -74,7 +74,7 @@ def is_live_photo(p: Path) -> bool:
 
 
 def find_clips(root: Path) -> list[Path]:
-    skip = {"normalized", ".hlv_cache", "debug", "previews", "reel", "assets"}
+    skip = {"normalized", ".hlv_cache", "debug", "previews", "reel", "assets", "split originals"}
     return sorted(
         p for p in root.rglob("*")
         if p.is_file() and p.suffix.lower() in VIDEO_EXTS and not (skip & set(p.relative_to(root).parts))

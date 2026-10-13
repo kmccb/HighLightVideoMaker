@@ -35,13 +35,23 @@ def _signals(root: str, path: str, cfg: dict):
     return path, time.time() - t0
 
 
+def new_videos(root: Path, proj: dict) -> list[Path]:
+    """Videos in the project's folder that aren't plays of the project yet (put there after it was set up)."""
+    root = Path(root)
+    have = {c["source"].replace("\\", "/").lower() for c in proj.get("clips") or []}
+    return [p for p in find_clips(root) if p.relative_to(root).as_posix().lower() not in have]
+
+
 def run(folder: Path, player: str | None, music: str | None, progress=lambda step, done, total: None,
-        jobs: int = 3, log=print) -> dict:
+        jobs: int = 3, log=print, only: list[Path] | None = None, lock=None) -> dict:
     """Set the folder up as a project and register it. Clips that can't be read are skipped
-    (listed in the result); the rest carry on."""
+    (listed in the result); the rest carry on.
+    only: just these videos, added to a project that already exists (its settings are left alone).
+    lock: held while the project file is read, changed and saved (the app saves review marks under it)."""
+    from contextlib import nullcontext
     from .cli import CONFIG_FILENAME
     root = Path(folder).resolve()
-    paths = find_clips(root)
+    paths = list(only) if only is not None else find_clips(root)
     if not paths:
         raise ValueError("No videos in that folder (looked for .mov .mp4 .m4v .mkv .avi).")
     cfg = DetectConfig.load(root / CONFIG_FILENAME)
@@ -83,17 +93,22 @@ def run(folder: Path, player: str | None, music: str | None, progress=lambda ste
 
     # 3) detection from the cached signals; review data starts empty
     log("saving the project ...")
-    proj = project.load(root)
-    proj["config"] = cfg.to_dict()
-    for p in sorted(ok_paths):
-        info, cid, sig = load_clip(root, p, cfg, False)
-        project.merge_clip(proj, analyze(root, p, info, cid, sig, cfg))
-    if not proj["clips"]:
-        raise ValueError("None of the videos could be read.")
-    s = proj.get("settings") or {}
-    s.update({"player": player, "music": music, "scottforge_card": s.get("scottforge_card", True)})
-    proj["settings"] = s
-    project.save(root, proj)
-    library.add_project(root, player)
+    found = [(p, *load_clip(root, p, cfg, False)) for p in sorted(ok_paths)]
+    new = [analyze(root, p, info, cid, sig, cfg) for p, info, cid, sig in found]
+    with lock or nullcontext():
+        proj = project.load(root)
+        if only is None:
+            proj["config"] = cfg.to_dict()
+        for c in new:
+            project.merge_clip(proj, c)
+        if not proj["clips"]:
+            raise ValueError("None of the videos could be read.")
+        if only is None:
+            s = proj.get("settings") or {}
+            s.update({"player": player, "music": music, "scottforge_card": s.get("scottforge_card", True)})
+            proj["settings"] = s
+        project.save(root, proj)
+    if only is None:
+        library.add_project(root, player)
     progress("done", total, total)
-    return {"folder": str(root), "clips": len(proj["clips"]), "skipped": skipped}
+    return {"folder": str(root), "clips": len(proj["clips"]), "added": len(new), "skipped": skipped}

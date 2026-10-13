@@ -18,7 +18,7 @@ from xml.sax.saxutils import escape
 
 import numpy as np
 
-from . import colour, encoder, ghost, graphics, impact, recut, library, outro, parallax, photo_slide, photos, profiles, project, segment
+from . import colour, encoder, ghost, graphics, impact, recut, library, outro, parallax, photo_slide, photos, profiles, project, segment, slowmo
 
 # Beat choice: per second away from the play's natural timing, and extra per second of
 # stretching. With beats ~0.5 s apart, a beat one step further must be ~0.5 stronger.
@@ -130,26 +130,55 @@ def _render_one(root: str, clip: dict, pl: dict, settings: dict) -> str:
     return str(segment.render(Path(root), clip, pl, settings))
 
 
+def big_time(clip: dict, hit: float | None) -> float | None:
+    """The moment (source seconds) a big play's effect happens: its hit, or for a trail with an end
+    mark (review.trail_end) that mark, so a trail can run past the hit to where the run really ends."""
+    e = (clip.get("review") or {}).get("trail_end")
+    return float(e) if e is not None and big_kind(clip) == "trail" else hit
+
+
+def _big_in_play(lay: dict, clip: dict, hit: float | None, snap: float, big: bool = True) -> float:
+    """Seconds from the start of the play part to the big-play moment (the hit, unless a trail has
+    its own end mark); -1 = none. The reel's timing puts this moment on the beat."""
+    t = big_time(clip, hit) if big else hit
+    if t is None or t == hit:
+        return _hit_in_play(lay, hit, snap)
+    post = lay.get("post_t")
+    if post is None:                                             # a rendered segment: the same timeline it was made with
+        smo = lay.get("slowmo") or {}
+        post = slowmo.timeline(lay["split"], segment.extents(clip, clip["probe"]["duration"])[1], segment.FPS,
+                               smo.get("window"), float(smo.get("speed") or 1.0))
+    return sum(1 for x in post if x < t) / segment.FPS
+
+
 def _ghost_one(root: str, clip: dict, pl: dict, secs: float, period: float | None, size=None) -> str:
     from . import hits
-    p = ghost.render(Path(root), clip, pl, hits.hit_of(Path(root), clip)[0], secs, period, size=size)
+    p = ghost.render(Path(root), clip, pl, big_time(clip, hits.hit_of(Path(root), clip)[0]), secs, period, size=size)
     return str(p) if p else ""
 
 
 def _freeze3d_one(root: str, clip: dict, pl: dict, secs: float, size=None) -> str:
     from . import hits
-    p = parallax.render(Path(root), clip, pl, hits.hit_of(Path(root), clip)[0], secs, size=size)
+    p = parallax.render(Path(root), clip, pl, big_time(clip, hits.hit_of(Path(root), clip)[0]), secs, size=size)
     return str(p) if p else ""
 
 
 def _colour_one(root: str, clip: dict, seg: str, size=None) -> tuple[str, int] | None:
-    r = colour.render(Path(root), clip, Path(seg), size)
+    from . import hits
+    lay = segment.layout(Path(seg))
+    at = _big_in_play(lay, clip, hits.hit_of(Path(root), clip)[0], segment._window(clip)[2])
+    r = colour.render(Path(root), clip, Path(seg), size, hit_b=at if at > 0 else None)
     return (str(r[0]), r[1]) if r else None
 
 
 def _impact_one(root: str, clip: dict, seg: str, kind: str, period: float | None, size=None) -> str | None:
     p = impact.render(Path(root), clip, Path(seg), kind, period, size)
     return str(p) if p else None
+
+
+def display_name(clip: dict) -> str:
+    """What a play is called on screen: the name typed for it on the review page, else its file name."""
+    return " ".join(str((clip.get("review") or {}).get("notes") or "").split()) or clip["source"].split("/")[-1]
 
 
 def big_kind(clip: dict) -> str | None:
@@ -426,7 +455,7 @@ def build(root: Path, player_id: str | None = None, transition: str | None = Non
         # lead-in runs up to the freeze (the snap, or later if he was only found later)
         metas.append({"lay": lay, "lead_nom": lay.get("split", snap) - t_in,
                       "post_nom": lay.get("post_nom", t_out - lay.get("split", snap)),
-                      "hit": _hit_in_play(lay, hits.hit_of(root, c)[0], snap)})
+                      "hit": _big_in_play(lay, c, hits.hit_of(root, c)[0], snap, c["id"] in big and fx_on)})
         _big_meta(metas[-1], c["id"] in want_drop, ghost_paths.get(c["id"]), ghost_pops.get(c["id"]), ghost_s, fx_kind.get(c["id"]),
                   colour_runs.get(c["id"]),
                   (fx_clips[c["id"]], want_fx[c["id"]], impact.spec(want_fx[c["id"]], period)) if c["id"] in fx_clips else None)
@@ -551,6 +580,88 @@ def _big_meta(m: dict, drop: bool, ghost_clip: Path | None, pops: list | None, g
             m["extra"] = fx[2]["extra"] / segment.FPS            # ... and, for a triple hit or a replay, holds the reel up
 
 
+def preview_big(root: Path | str, clip_id: str) -> Path:
+    """One big play's effect on its own, cut together exactly as the reel will: three seconds into the
+    hit, the effect, a couple of seconds after, with the song (a beat on the hit) and the effect's
+    sounds. Uses and fills the same caches as the build, so nothing is made twice."""
+    from . import beats as beatmod, hits
+    root = Path(root)
+    proj = project.load(root)
+    settings = project.settings(proj)
+    pl = profiles.get(library.home(), settings.get("player"))
+    c = next((x for x in proj["clips"] if x["id"] == clip_id), None)
+    if c is None:
+        raise KeyError(clip_id)
+    kind = big_kind(c)
+    if kind is None:
+        raise ValueError("this play isn't a big play yet: pick a kind first")
+    cache = root / ".hlv_cache"
+    period = beat_period(root, settings)
+    banner = clip_id in banner_ids([x for x in ordered_clips(proj) if included(x)], settings)
+    seg = segment.render(root, c, pl, {**settings, "_banner": banner})
+    lay = segment.layout(seg)
+    hit = big_time(c, hits.hit_of(root, c)[0])                 # the hit, or a trail's own end mark
+    m = {"lay": lay, "hit": _big_in_play(lay, c, hits.hit_of(root, c)[0], segment._window(c)[2])}
+    if hit is None or m["hit"] <= 0:
+        raise ValueError("this play has no hit: press K on the moment first")
+    ghost_s = ghost.seconds(period)
+    gclip = pops = fxk = fx = None
+    why = ""
+    if kind == "trail":
+        gclip = ghost.render(root, c, pl, hit, ghost_s, period)
+        if gclip:
+            pops, fxk = ghost.pops_of(gclip), "trail"
+        else:
+            why = (ghost.status(root, c, pl, hit, ghost_s, period) or {}).get("none") or ""
+            kind = "3d" if parallax.available() else kind          # as in the build
+    if kind == "3d":
+        gclip = parallax.render(root, c, pl, hit, ghost_s)
+        fxk = "3d" if gclip else None
+    if kind in impact.KINDS:
+        f = impact.render(root, c, seg, kind, period)
+        fx = (f, kind, impact.spec(kind, period)) if f else None
+    col = colour.render(root, c, seg, hit_b=m["hit"]) if settings.get("colour", True) and parallax.available() else None
+    _big_meta(m, bool(settings.get("drop", True)), gclip, pops, ghost_s, fxk, col, fx)
+    if not (m.get("ghost") or m.get("fx")):
+        raise ValueError("the effect can't be made on this play" + (f": {why}" if why else ": the play ends too soon after the hit"))
+
+    a, f = lay["a_frames"] / segment.FPS, lay["f_frames"] / segment.FPS
+    hb = _fr(m["hit"])
+    run = m["colour"][1] / segment.FPS if m.get("colour") else 0.0
+    pre = _fr(max(0.0, min(3.0, hb - run)))
+    pieces = [(seg, a + f + hb - run - pre, pre)] if pre > 0 else []
+    if run:
+        pieces.append((m["colour"][0], 0.0, run))
+    if m.get("ghost"):
+        pieces.append((m["ghost"], 0.0, m["extra"]))
+    rep = 0.0
+    if m.get("fx"):
+        rep = m["fx"][2]["rep"] / segment.FPS
+        pieces.append((m["fx"][0], 0.0, rep + float(m.get("extra") or 0.0)))
+    tail = _fr(min(2.5, lay["b_frames"] / segment.FPS - hb - rep))
+    if tail > 0:
+        pieces.append((seg, a + f + hb + rep, tail))
+    th = pre + run
+    out = cache / "previews" / f"{clip_id}-big.mp4"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    events = [{"t": th, "drop": bool(m.get("drop")), "pops": m.get("pops"), "len": m.get("extra"),
+               "swing": m.get("kind") == "3d", "sounds": m["fx"][2]["sounds"] if m.get("fx") else None}]
+    sfx = ghost.sound_track(out.with_suffix(".wav"), th + float(m.get("extra") or 0) + 6, events)
+    music, ms = project.music_path(root, settings), 0.0
+    if settings.get("music_source") == "compose":
+        music = None
+    if music:                                            # a strong beat of the song on the hit
+        grid = beatmod.cached(music, cache)
+        bt, st = np.array(grid["beats"]), np.array(grid["strength"])
+        ok = np.where((bt >= float(settings.get("music_start") or 0) + 20) & (bt <= grid["duration"] - 30))[0]
+        if len(ok):
+            ms = max(0.0, float(bt[ok[int(np.argmax(st[ok][:160]))]]) - th)
+    _assemble([pieces], "cut", music, ms, {**settings, "music_end": None}, out, [None], sfx=sfx,
+              gaps=[(th - ghost.GAP, th)] if m.get("drop") else [])
+    out.with_suffix(".wav").unlink(missing_ok=True)
+    return out
+
+
 def _hit_in_play(lay: dict, hit: float | None, snap: float) -> float:
     """Seconds from the start of the play part to the hit; -1 = no hit (timing left alone)."""
     if hit is None:
@@ -651,18 +762,19 @@ def preview_plan(root: Path) -> dict:
         lay = segment.predict_layout(c, settings, hit, ft, c["id"] in with_banner)
         t_in, t_out, snap = segment._window(c)
         metas.append({"lay": lay, "lead_nom": lay["split"] - t_in, "post_nom": lay["post_nom"],
-                      "hit": _hit_in_play(lay, hit, snap)})
+                      "hit": _big_in_play(lay, c, hit, snap, c["id"] in big and fx_on)})
+        bt = big_time(c, hit) if c["id"] in big and fx_on else hit       # where the effect happens
         # A freeze not made yet is assumed to work out (the build makes it). A trail that can't be made
         # (he hardly moves) becomes a 3D freeze, as in the build.
         kind, made = big.get(c["id"]) if fx_on else None, {"none": "off"}
         fx = (None, kind, impact.spec(kind, period)) if kind in impact.KINDS else None
         if kind == "trail":
-            made = ghost.status(root, c, pl, hit, ghost_s, period)
+            made = ghost.status(root, c, pl, bt, ghost_s, period)
             if (made or {}).get("none") and can_3d:
                 kind = "3d"
         if kind == "3d":
-            made = parallax.status(root, c, pl, hit, ghost_s)
-        n_col = colour.frames(lay["hit_b"]) if c["id"] in big and settings.get("colour", True) and can_3d else 0
+            made = parallax.status(root, c, pl, bt, ghost_s)
+        n_col = colour.frames(metas[-1]["hit"] if bt != hit else lay["hit_b"]) if c["id"] in big and settings.get("colour", True) and can_3d else 0
         _big_meta(metas[-1], c["id"] in want_drop, None if (made or {}).get("none") else Path("freeze"),
                   (made or {}).get("pops"), ghost_s, kind, (None, n_col) if n_col else None, fx)
         pending += made is None and "ghost" in metas[-1]
@@ -683,7 +795,7 @@ def preview_plan(root: Path) -> dict:
               "burst": burst, "journey": jinfo["on"] and jplan is not None}]
     n = 0
     for k, (c, m, tm, x) in enumerate(zip(entries, metas, timing, extra), 1):
-        it = {"id": c["id"], "name": c["source"].split("/")[-1], "start": round(starts[k], 3),
+        it = {"id": c["id"], "name": c["source"].split("/")[-1] if photos.is_photo(c) else display_name(c), "start": round(starts[k], 3),
               "end": round(starts[k] + durs[k], 3), "beat": tm.get("beat"), "err": tm.get("err")}
         if m.get("photo"):
             items.append({**it, "kind": "photo"})

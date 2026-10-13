@@ -57,3 +57,16 @@ def test_journey_key_moment_is_the_hit_else_the_middle_click():
     clip["review"]["hit"] = None
     assert journey._key_time(None, clip) == 2.0
     assert journey._key_time(None, {"review": {"spotlight": []}}) is None
+
+
+def test_3d_tag_is_only_what_was_typed_for_the_play():
+    assert parallax.tag_text({}) == "" and parallax.tag_text({"review": {"big_text": "   "}}) == ""
+    assert parallax.tag_text({"review": {"big_text": " pick   six "}}) == "PICK SIX"
+    assert len(parallax.tag_text({"review": {"big_text": "x" * 90}})) == 40
+
+
+def test_ring_and_song_jump_are_off_until_ticked():
+    from hlv import project
+    s = project.settings({})
+    assert s["freeze_ring"] is False and s["recut"] is False
+    assert project.settings({"settings": {"freeze_ring": True, "recut": True}})["recut"] is True

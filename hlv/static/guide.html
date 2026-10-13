@@ -99,6 +99,10 @@ kbd { background: #0F1216; border-color: #2E3540; }
       <li>Choose the song: a music file, the player's last song, or paste a YouTube link.</li>
       <li>The app makes preview copies and finds the snap and end of every play. This takes a few minutes; you can watch the progress.</li>
     </ol>
+    <h3>Adding videos later</h3>
+    <p>On the review page, the line under the filters shows the project's folder. <b class="ui">Open folder</b> opens it in File Explorer. Copy the new videos (or photos) into it, in a game folder such as <b>Week 6</b> if you use those, then come back to the app: a yellow bar says how many new videos it found. Press <b class="ui">Add them</b>; the app makes their preview copies and finds the plays, which takes about a minute per video, and the page reloads with them at the end of the list. Your marks on the other plays are not touched. Photos are picked up by themselves.</p>
+    <h3>A video that is several plays cut together</h3>
+    <p>If a video is already a string of plays (a game's highlights you cut in another app), the app says so on the review page: a yellow bar under the filters reads "This video is 4 plays cut together". Press <b class="ui">Split into 4 plays</b>, or <b class="ui">Split all … videos like this</b>, and each play becomes its own video, so it can have its own trim, marks and effects. The original is moved to a folder called <b>split originals</b> inside the project folder; it is not deleted. Marks made on the whole video are not kept, so split first, then mark. It takes a minute or two per video.</p>
     <div class="tip">Clips from Google Drive: they are on your <b>G:</b> drive (Google Drive for desktop), so you can browse straight to <b>G:\My Drive</b>.</div>
   </section>
 
@@ -116,11 +120,12 @@ kbd { background: #0F1216; border-color: #2E3540; }
   <section id="review">
     <h2><span class="n">4</span>Check each play (review page)</h2>
     <p>The app guesses where each play starts (the snap, green) and ends (red). The snap is usually close; the end is worth a quick look.</p>
-    <p>The page has three parts: the <b>plays</b> on the left, the <b>video and timeline</b> in the middle, and the <b>settings for this play</b> on the right (Trim, Your player, Big moment, Notes), with <b class="ui">Reset</b> and <b class="ui">Confirm &amp; next</b> at the bottom.</p>
+    <p>The page has three parts: the <b>plays</b> on the left, the <b>video and timeline</b> in the middle, and the <b>settings for this play</b> on the right (Trim, Your player, Big moment, Name), with <b class="ui">Reset</b> and <b class="ui">Confirm &amp; next</b> at the bottom.</p>
     <ul>
       <li><b class="ui">Bigger video:</b> click the <b>«</b> at the top of the plays list to fold it down to a strip of thumbnails. Click it again to bring the full list back. An amber outline on a thumbnail means that play still needs you. The app remembers your choice.</li>
       <li><b class="ui">All / Needs you / In reel / Left out</b> above the list show only those plays. "Needs you" = in the reel but not confirmed, not clicked at the snap, or without a hit. The box above them filters by game, file name or note.</li>
-      <li>Each row shows a frame of the play, how long it runs in the reel, and what's set: spotlight, HIT, or what is missing.</li>
+      <li>Each row shows a frame of the play, how long it runs in the reel, and what's set: spotlight, HIT, a <b>⚡</b> if it is a big play (hover for the kind), or what is missing.</li>
+      <li><b class="ui">Name</b> (bottom of the right-hand panel): type what the play is, for example "Toe tap catch". That name then shows in place of the file name in the plays list, above the video, in Fix-ups, and in the Build screen. It isn't shown in the reel. Leave it empty to keep the file name; hovering over a name shows the file.</li>
       <li>The <b class="ui">In reel</b> switch above the video (or <kbd>X</kbd>) leaves a play out or puts it back.</li>
       <li>The keyboard button above the video (or <kbd>?</kbd>) shows every shortcut.</li>
     </ul>
@@ -207,7 +212,7 @@ kbd { background: #0F1216; border-color: #2E3540; }
           <li><b>The Journey</b>: an opening that goes from him as a little kid to now (<a href="#journey">section 11</a>).</li>
           <li><b>Intro timing</b>: <b>Steady beat</b>, or <b>Big hits</b> (the number, name and logo slam in on the song's heaviest moments).</li>
           <li><b>Into first play</b>: <b>Crossfade</b>, or the intro blows apart into <b>Bricks</b> or <b>Smoke</b> on a big hit of the song.</li>
-          <li><b>Transition</b> between plays (crossfade / cut / dip to black), <b>Name banner</b> (first play / every play / off), <b>Freeze intro</b> (freeze and spotlight on him at the snap), <b>Ring with spotlight</b>, <b>Photo length</b>.</li>
+          <li><b>Transition</b> between plays (crossfade / cut / dip to black), <b>Name banner</b> (first play / every play / off), <b>Freeze intro</b> (freeze and spotlight on him at the snap), <b>Ring with spotlight</b> (off unless you tick it), <b>Photo length</b>.</li>
           <li><b>Match cuts</b> (off unless you tick it): a play ends with your player on one spot of the screen and the next play opens with him on the same spot at the same size, so the cut feels like one shot. It only happens where he is marked near the end of one play and at the start of the next, so click him at the snap and near the end of plays to get more of them. <a href="#matchcuts">More about match cuts ▾</a></li>
         </ul></li>
       <li><b class="ui">Music</b>. <b>My song</b> (a file or a YouTube link; hits are synced to its beats) or <b>Made for this reel</b>: the app writes a Rock, Trap/rap or Cinematic track around your plays, with an impact on every hit; <b class="ui">▶ Hear style</b> plays a demo and <b class="ui">New take</b> gives a different key and chords. No copyright problems on Instagram/TikTok. Also <b>Game audio</b> level and <b>Sync hits to beat</b>.</li>
@@ -267,11 +272,12 @@ kbd { background: #0F1216; border-color: #2E3540; }
       <li><b class="ui">Review page</b>: on the right under <b>Big moment</b>, below the Hit button, set <b>⚡ Big play</b> to one of the six kinds below (<b>Off</b> makes it a normal play again).</li>
       <li><b class="ui">Fix-ups → Hit tab</b>: the <b>⚡ Big play</b> list under each play's filmstrip. A play that already has its hit is hidden there until you untick <b>only plays that still need it</b>.</li>
     </ul>
+    <p><b class="ui">▶ Preview this effect</b> (review page, under the picker) makes just that play's effect, with the song and its sounds, so you can see it without building the whole reel: three seconds into the hit, the effect, and what follows. A trail takes up to a minute or two the first time and a 3D freeze a couple of minutes; after that it's quick, and the build reuses what the preview made.</p>
     <p>The play needs a hit, and he needs to be clicked on it; the review page tells you if one is missing. In the Build screen's reel order, big plays show their kind, for example <b>⚡ TRAIL</b> or <b>⚡ REPLAY</b>.</p>
     <h3>For a run (a long gain, a return, a touchdown)</h3>
     <ul>
-      <li><b class="ui">Trail</b>: on the hit the picture freezes for about 4 seconds, pulls back, and copies of your player appear along the path he ran, popping in on the beat.</li>
-      <li><b class="ui">3D</b>: on the hit the picture freezes and the camera swings round him, with his name. If a trail can't be made (he hardly moved), the app makes a 3D freeze instead.</li>
+      <li><b class="ui">Trail</b>: on the hit the picture freezes for about 4 seconds, pulls back, and copies of your player appear along the path he ran, popping in on the beat. The trail runs from the snap to the hit unless you say otherwise: when the kind is Trail, two buttons appear under the picker on the review page. Move the video to where the trail should begin and press <b class="ui">Trail starts</b>; move it to where the run ends (the tackle, the goal line) and press <b class="ui">Trail ends</b>. The picture freezes at the end mark, and that moment lands on the beat in place of the hit. Both show on the timeline (TRAIL and FREEZE); the <b>✕</b> on a button puts it back on the snap or the hit. With an end mark the play doesn't need a hit. On a long run such as a kickoff return, where the camera pans a long way, the camera whips back to where the run began and then travels the whole run again as the copies land, ending on him.</li>
+      <li><b class="ui">3D</b>: on the hit the picture freezes and the camera swings round him. On the review page a box appears under the picker: type a few words there ("PICK SIX", "62 YARDS") and they show on a tag next to him; leave it empty for no tag. If a trail can't be made (he hardly moved), the app makes a 3D freeze instead.</li>
     </ul>
     <h3>For a hit (a tackle, a block, a collision)</h3>
     <ul>
@@ -281,12 +287,12 @@ kbd { background: #0F1216; border-color: #2E3540; }
       <li><b class="ui">Replay</b> (instant replay): just after the hit the tape runs back and the hit plays again in slow motion, pushed in on him, with a REPLAY tag. Adds about three and a half seconds.</li>
     </ul>
     <p>Triple and Replay hold the reel up by a whole number of beats, so the plays after them still land on the beat. In "Preview with the song" they show as a block on the lane; Shock and Impact don't change the timing, so there is nothing to see there until you build.</p>
-    <p>What a big play gets is set under <b class="ui">Motion</b> on the Build screen (all on to begin with; nothing happens until a play has ⚡):</p>
+    <p>What a big play gets is set under <b class="ui">Motion</b> on the Build screen (nothing happens until a play has ⚡):</p>
     <ul>
       <li><b class="ui">Effect on the hit</b>: the kind you picked for the play, from the six above.</li>
       <li><b class="ui">Only him in colour</b>: the second and a half before the hit drains to black and white, except your player. Colour comes back on the hit.</li>
       <li><b class="ui">Silence, then the drop</b>: all sound cuts out for a moment before the hit, then a boom lands on it.</li>
-      <li><b class="ui">Song jumps to a big moment</b>: after that silence the song comes back on one of its biggest moments (a chorus or a heavy hit) instead of just carrying on. Needs the drop, beat sync, and your own song.</li>
+      <li><b class="ui">Song jumps to a big moment</b>: after that silence the song comes back on one of its biggest moments (a chorus or a heavy hit) instead of just carrying on, so the music changes at each big play. Off unless you tick it. Needs the drop, beat sync, and your own song.</li>
     </ul>
     <div class="tip">Big plays add to the build: a trail about 15 seconds, a 3D freeze over a minute, the four hit effects a few seconds each, "only him in colour" about half a minute each. Vertical reels get their own tall version. Big-play effects are left out of the recruiting cut.</div>
     <div class="tip warn">Keep it to one or two plays per reel. If every play is a big play, none of them is.</div>

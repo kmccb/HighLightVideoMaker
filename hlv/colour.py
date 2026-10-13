@@ -33,19 +33,24 @@ def frames(hit_b: float | None) -> int:
     return n if n >= MIN_FRAMES else 0
 
 
-def render(root: Path, clip: dict, seg: Path, size: tuple[int, int] | None = None, log=print) -> tuple[Path, int] | None:
+def render(root: Path, clip: dict, seg: Path, size: tuple[int, int] | None = None, log=print,
+           hit_b: float | None = None) -> tuple[Path, int] | None:
     """Make (or reuse) the run-up for this play from its rendered segment `seg`: (clip, frames),
-    or None when there's no hit, too little before it, or the model is missing."""
+    or None when there's no hit, too little before it, or the model is missing.
+    hit_b: the moment it runs up to, in seconds from the start of the play part, when that isn't
+    the hit (a trail with its own end mark)."""
     from . import segment
     if not parallax.available():
         return None
     root, seg = Path(root), Path(seg)
     lay = segment.layout(seg)
-    n = frames(lay.get("hit_b"))
-    if not n or lay.get("hit") is None:
+    if hit_b is None:
+        hit_b = lay.get("hit_b") if lay.get("hit") is not None else None
+    n = frames(hit_b)
+    if not n:
         return None
     OW, OH = tuple(size) if size else ghost.WIDE
-    hbk = int(round(lay["hit_b"] * FPS))
+    hbk = int(round(hit_b * FPS))
     f0 = lay["a_frames"] + lay["f_frames"] + hbk - n
     out = root / CACHE_DIRNAME / "colour" / f"{seg.stem}-{f0}-{n}-v{VERSION}.mp4"
     if out.exists():

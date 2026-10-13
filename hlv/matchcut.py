@@ -22,7 +22,7 @@ import numpy as np
 from . import camera, encoder, ghost, slowmo
 from .pipeline import CACHE_DIRNAME
 
-VERSION = 1
+VERSION = 2
 FPS = 30
 EASE = 12             # frames of moving in (A) / back out (B)
 MAX_SCALE = 1.7       # never enlarge the rendered play more than this
@@ -107,7 +107,8 @@ def _clip(root: Path, play: _Play, f0: int, n: int, hold: int, scale: float, q: 
           anchor: tuple[float, float, float]) -> Path | None:
     """n frames of the segment from f0, eased to (tail) or from (head) holding him on q for `hold` frames."""
     OW, OH = play.size
-    key = hashlib.sha1(f"{VERSION}|{play.seg.stem}|{f0}|{n}|{hold}|{scale:.3f}|{q[0]:.1f}|{q[1]:.1f}|{tail}|{anchor[0]:.0f}|{anchor[1]:.0f}".encode()).hexdigest()[:12]
+    st = play.seg.stat()                      # the segment is a link named by its place in the reel: its size and date say which render it is
+    key = hashlib.sha1(f"{VERSION}|{play.seg.stem}|{st.st_size}|{st.st_mtime_ns}|{f0}|{n}|{hold}|{scale:.3f}|{q[0]:.1f}|{q[1]:.1f}|{tail}|{anchor[0]:.0f}|{anchor[1]:.0f}".encode()).hexdigest()[:12]
     out = Path(root) / CACHE_DIRNAME / "matchcut" / f"{play.clip['id']}-{key}.mp4"
     if out.exists():
         return out
